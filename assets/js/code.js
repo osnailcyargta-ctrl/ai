@@ -8,10 +8,10 @@
   const settings = () => { try { return JSON.parse(localStorage.getItem("sybau_settings") || "{}"); } catch (e) { return {}; } };
   const lang = () => (settings().lang === "en" ? "en" : "id");
   const T = {
-    id: { title: "sybau code", sub: "bikin program STS · dicek compiler STS asli", ph: "mau bikin apa? contoh: game hindarin meteor pake 3 nyawa", foot: "enter kirim · shift+enter baris baru · esc tutup",
+    id: { title: "sybau code", sub: "bikin program STS · dicek compiler STS asli", ph: "mau bikin apa? contoh: game hindarin meteor pake 3 nyawa", foot: "enter kirim · shift+enter baris baru · tab s di atas buat balik ngobrol",
       hello: "yo. gw sybau code. bilang mau program STS apa. gw riset dulu bendanya di wikipedia, ngedesain gamenya, nulis kodenya dari nol, compile, terus gw tes mainin sendiri. lu tinggal bengong 🥀",
       think: "mikir", dl: "download .sts", copy: "salin", copied: "kesalin", run: "jalanin", stop: "stop", ok: "lolos compiler STS", warn: "masih ada error", tests: "tes lolos", loading: "loading otak coding + compiler STS…" },
-    en: { title: "sybau code", sub: "writes STS programs · checked by the real STS compiler", ph: "what should i build? e.g. dodge falling meteors with 3 lives", foot: "enter send · shift+enter new line · esc close",
+    en: { title: "sybau code", sub: "writes STS programs · checked by the real STS compiler", ph: "what should i build? e.g. dodge falling meteors with 3 lives", foot: "enter send · shift+enter new line · tab s up top to go back to chat",
       hello: "yo. i'm sybau code. tell me what STS program u want. i research the things on wikipedia, design it, write it from scratch, compile it and play-test it myself. u just sit there 🥀",
       think: "thinking", dl: "download .sts", copy: "copy", copied: "copied", run: "run", stop: "stop", ok: "passed the STS compiler", warn: "still has errors", tests: "tests passed", loading: "loading coding brain + STS compiler…" },
   };
@@ -48,42 +48,26 @@
     }).join("\n");
   }
 
-  // ---------------------------------------------------------------- the window
+  // ---------------------------------------------------------------- the "sc" tab
   function build() {
-    const ov = el("div", "cx-overlay");
-    ov.hidden = true;
-    const win = el("div", "cx-win");
-    win.setAttribute("role", "dialog");
-    win.setAttribute("aria-modal", "true");
-    const head = el("div", "cx-head");
-    const dots = el("span", "dots"); dots.innerHTML = "<i></i><i></i><i></i>";
-    const ttl = el("span", "cx-title");
-    const close = el("button", "x", "esc");
-    close.type = "button";
-    close.addEventListener("click", hide);
-    head.append(dots, ttl, close);
+    const view = document.getElementById("code-view");
     const log = el("div", "cx-log");
     const form = el("form", "prompt cx-prompt");
     const input = el("textarea");
     input.rows = 1;
+    input.spellcheck = false;
+    input.setAttribute("aria-label", "sybau code");
     form.append(el("span", "caret", ">"), input);
     const foot = el("div", "cx-foot dim");
-    win.append(head, log, form, foot);
-    ov.appendChild(win);
-    document.body.appendChild(ov);
-    ov.addEventListener("mousedown", (e) => { if (e.target === ov) hide(); });
+    view.append(log, form, foot);
     form.addEventListener("submit", (e) => { e.preventDefault(); send(); });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-      if (e.key === "Escape") { e.preventDefault(); hide(); }
-    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
     input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; });
-    ui = { ov, win, ttl, log, input, foot };
+    log.addEventListener("click", () => { if (!window.getSelection().toString() && !(running && document.activeElement && document.activeElement.tagName === "CANVAS")) input.focus(); });
+    ui = { view, log, input, foot };
     relabel();
   }
   function relabel() {
-    ui.ttl.textContent = "";
-    ui.ttl.append(el("b", null, t().title), el("span", "dim", "  " + t().sub));
     ui.input.placeholder = t().ph;
     ui.foot.textContent = t().foot;
   }
@@ -108,10 +92,9 @@
     return loading;
   }
 
-  async function show() {
+  async function open() {
     if (!ui) build();
     relabel();
-    ui.ov.hidden = false;
     ui.input.focus();
     if (!ui.log.childElementCount) {
       const note = put(el("div", "line dim", t().loading));
@@ -119,7 +102,25 @@
       catch (e) { note.textContent = "error: " + e.message; note.className = "line red"; }
     }
   }
-  function hide() { if (ui) ui.ov.hidden = true; stopRun(); }
+
+  // ---------------------------------------------------------------- tabs: s (chat) | sc (code)
+  const TITLES = { s: ["sybau.ai", "— ~/ur-life (cooked)"], sc: ["sybau code", "— ~/projects (also cooked)"] };
+  function setTab(tab, remember = true) {
+    tab = tab === "sc" ? "sc" : "s";
+    document.body.dataset.tab = tab;
+    for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+    document.getElementById("screen").hidden = tab !== "s";
+    document.querySelector(".dock").hidden = tab !== "s";
+    document.getElementById("code-view").hidden = tab !== "sc";
+    const title = document.getElementById("win-title");
+    title.textContent = TITLES[tab][0] + " ";
+    title.appendChild(el("span", "dim", TITLES[tab][1]));
+    document.title = TITLES[tab][0];
+    if (remember) { try { localStorage.setItem("sybau_tab", tab); } catch (e) { /* ignore */ } if (location.hash !== "#" + tab) history.replaceState(null, "", tab === "sc" ? "#sc" : location.pathname + location.search); }
+    if (tab === "sc") open();
+    else { stopRun(); const i = document.getElementById("input"); if (i && !i.disabled) i.focus(); }
+  }
+  window.SybauCode = { setTab, focus: () => ui && ui.input.focus(), get tab() { return document.body.dataset.tab || "s"; } };
 
   async function send() {
     const text = ui.input.value.trim();
@@ -282,10 +283,14 @@
     running = null;
   }
 
+  for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey && e.altKey && !e.shiftKey && (e.code === "KeyM" || (e.key || "").toLowerCase() === "m")) {
       e.preventDefault();
-      if (ui && !ui.ov.hidden) hide(); else show();
-    } else if (e.key === "Escape" && ui && !ui.ov.hidden && !(running && document.activeElement && document.activeElement.tagName === "CANVAS")) hide();
+      setTab(document.body.dataset.tab === "sc" ? "s" : "sc");
+    }
   }, true);
+  let start = "s";
+  try { start = location.hash === "#sc" ? "sc" : location.hash === "#s" ? "s" : localStorage.getItem("sybau_tab") || "s"; } catch (e) { /* ignore */ }
+  setTab(start, false);
 })();

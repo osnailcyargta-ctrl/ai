@@ -27,7 +27,7 @@
       help: "/help buat bantuan, /settings buat pengaturan", cwd: "cwd: ~/ur-life (cooked)",
       tipsHead: "Tips biar ga keliatan cupu:",
       tips: ["Tanya apa aja: \"ibukota kazakhstan\", \"berapa umur elon musk\"", "\"gambar kucing\" (beta, 16x16, masih bego)",
-        "Upload file pake + file, terus /learn biar gw baca isinya", "/connect buat pake sybau di app lain", "Typo dikit, polisi grammar dateng"],
+        "Upload file pake + file, terus /learn biar gw baca isinya", "/connect buat pake sybau di app lain", "Typo dikit, polisi grammar dateng", "Tab sc di atas = sybau code, buat bikin game/program STS"],
       placeholder: "Coba \"ibukota kazakhstan\" atau \"roast gw\"", hint: "? buat shortcut", busyHint: "esc buat stop",
       verbs: ["Roasting", "Nge-judge", "Masak lu", "Mikirin hinaan", "Aura farming", "Ngetawain lu", "Ngumpulin dendam", "Fanum tax", "Mewing", "Crash out", "Ngeliatin typo lu"],
       searching: "Nyari di Wikipedia + Wikidata", interrupted: "Dihentiin. bagus, gw juga males jawab",
@@ -54,7 +54,7 @@
       help: "/help for help, /settings for settings", cwd: "cwd: ~/ur-life (cooked)",
       tipsHead: "Tips for getting started (and roasted):",
       tips: ["Ask anything: \"capital of kazakhstan\", \"how old is elon musk\"", "\"draw a cat\" (beta, 16x16, still dumb)",
-        "Upload a file with + file, then /learn so i read it", "/connect to use sybau in other apps", "Make a typo and the grammar police shows up"],
+        "Upload a file with + file, then /learn so i read it", "/connect to use sybau in other apps", "Make a typo and the grammar police shows up", "The sc tab up top = sybau code, it builds STS games/programs"],
       placeholder: "Try \"capital of kazakhstan\" or \"roast me\"", hint: "? for shortcuts", busyHint: "esc to interrupt",
       verbs: ["Roasting", "Judging", "Cooking u", "Yapping", "Aura farming", "Crashing out", "Fanum taxing", "Mewing", "Glazing (jk)", "Clowning", "Reading ur typos"],
       searching: "Searching Wikipedia + Wikidata", interrupted: "Interrupted by user. good, didn't wanna answer anyway",
@@ -659,11 +659,11 @@
   $("attach").addEventListener("click", () => $("file").click());
   $("file").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; attach(f); });
   let dragDepth = 0;
-  window.addEventListener("dragenter", (e) => { if ([...(e.dataTransfer.types || [])].includes("Files")) { dragDepth++; $("dropzone").hidden = false; e.preventDefault(); } });
+  window.addEventListener("dragenter", (e) => { if (!(window.SybauCode && window.SybauCode.tab === "sc") && [...(e.dataTransfer.types || [])].includes("Files")) { dragDepth++; $("dropzone").hidden = false; e.preventDefault(); } });
   window.addEventListener("dragover", (e) => { if ([...(e.dataTransfer.types || [])].includes("Files")) e.preventDefault(); });
   window.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $("dropzone").hidden = true; });
-  window.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; $("dropzone").hidden = true; const f = e.dataTransfer.files[0]; if (f) attach(f); });
-  document.addEventListener("paste", (e) => { const f = e.clipboardData && [...e.clipboardData.files][0]; if (f) { e.preventDefault(); attach(f); } });
+  window.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; $("dropzone").hidden = true; if (window.SybauCode && window.SybauCode.tab === "sc") return; const f = e.dataTransfer.files[0]; if (f) attach(f); });
+  document.addEventListener("paste", (e) => { if (window.SybauCode && window.SybauCode.tab === "sc") return; const f = e.clipboardData && [...e.clipboardData.files][0]; if (f) { e.preventDefault(); attach(f); } });
 
   // ---------------------------------------------------------------- input: history, autocomplete, keys
   const history = load("sybau_cmd_history", []);
@@ -869,7 +869,7 @@
     modal.hidden = false;
     list.children[0].focus();
   }
-  function closeSettings() { modal.hidden = true; input.focus(); }
+  function closeSettings() { modal.hidden = true; if (window.SybauCode && window.SybauCode.tab === "sc") window.SybauCode.focus(); else input.focus(); }
 
   modal.addEventListener("keydown", (e) => {
     const item = ITEMS[sIndex];

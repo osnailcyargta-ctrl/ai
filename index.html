@@ -16,7 +16,11 @@
   <div class="window">
     <header class="titlebar">
       <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="title">sybau.ai <span class="dim">— ~/ur-life (cooked)</span></span>
+      <nav class="tabs" role="tablist" aria-label="mode">
+        <button id="tab-s" class="tab" role="tab" aria-selected="true" aria-controls="screen" title="sybau: ngobrol / chat" data-tab="s">s</button>
+        <button id="tab-sc" class="tab" role="tab" aria-selected="false" aria-controls="code-view" title="sybau code: bikin program STS" data-tab="sc">sc</button>
+      </nav>
+      <span class="title" id="win-title">sybau.ai <span class="dim">— ~/ur-life (cooked)</span></span>
       <button id="settings-btn" class="tb-btn" title="settings (/settings)" aria-haspopup="dialog"><span class="tb-label">settings</span><span class="tb-short" aria-hidden="true">≡</span></button>
     </header>
 
@@ -41,6 +45,8 @@
         <span id="status" class="status"></span>
       </div>
     </div>
+
+    <section id="code-view" class="cx-view" role="tabpanel" aria-labelledby="tab-sc" hidden></section>
   </div>
 
   <div id="dropzone" class="dropzone" hidden><div>drop file di sini · png / jpg / txt / md / csv / json</div></div>
