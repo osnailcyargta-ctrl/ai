@@ -1,274 +1,650 @@
-/* app.js — UI glue. The brains live in brain.js + bot.js (+ grammar.js, search.js). */
+/* app.js — the terminal UI. Brains live in brain.js + bot.js (+ grammar.js, search.js). */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const chat = $("chat"), input = $("input"), form = $("composer"), sendBtn = $("send");
-  let bot = null, busy = false;
-
-  const HARD_ROASTS = new Set(["insult", "insult_long", "roast_me", "hate_ask", "brag", "challenge", "ask_opinion"]);
+  const screen = $("screen"), input = $("input"), form = $("prompt");
+  const suggestEl = $("suggest"), shortcutsEl = $("shortcuts"), hintEl = $("hint"), statusEl = $("status");
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  let bot = null, busy = false, interrupted = false;
   let storage = null;
   try { storage = window.localStorage; storage.getItem("x"); } catch (e) { storage = null; }
+  const load = (k, d) => { try { const v = storage && storage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } };
+  const save = (k, v) => { try { storage && storage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
 
+  // ---------------------------------------------------------------- settings
+  const settings = Object.assign({ lang: "auto", search: true, grammar: true, brain: false, theme: "auto" }, load("sybau_settings", {}));
+  const uiLang = () => (settings.lang === "en" ? "en" : "id");
+
+  const T = {
+    id: {
+      welcome: "Selamat datang di sybau.ai!", sub: "ai yang benci lu. dilatih dari nol, tanpa api key.",
+      help: "/help buat bantuan, /settings buat pengaturan", cwd: "cwd: ~/ur-life (cooked)",
+      tipsHead: "Tips biar ga keliatan cupu:",
+      tips: ["Kasih tau nama lu biar gw bisa nge-roast-nya", "Tanya apa aja: \"ibukota kazakhstan\", \"berapa umur elon musk\"",
+        "\"mending A atau B?\" dan gw bakal benci dua-duanya", "Typo dikit, polisi grammar dateng 📝"],
+      placeholder: "Coba \"ibukota kazakhstan\" atau \"roast gw\"", hint: "? buat shortcut", busyHint: "esc buat stop",
+      verbs: ["Roasting", "Nge-judge", "Masak lu", "Mikirin hinaan", "Aura farming", "Ngetawain lu", "Ngumpulin dendam", "Fanum tax", "Mewing", "Crash out", "Ngeliatin typo lu"],
+      searching: "Nyari di Wikipedia + Wikidata", interrupted: "Dihentiin. bagus, gw juga males jawab 🥀",
+      noResult: "Ga ketemu apa-apa", openGoogle: "buka di Google", readFull: "baca full",
+      restored: (n) => "dipulihin " + n + " pesan · gw inget semuanya 🥀",
+      unknownCmd: (c) => "Command ga dikenal: " + c + " · ketik /help",
+      set: (k, v) => "Set " + k + " → " + v,
+      sTitle: "Settings", sFoot: "↑↓ pilih · enter/spasi ganti · ←→ ganti · esc tutup",
+      sLang: ["Bahasa balesan", "auto = ngikutin bahasa lu"], sSearch: ["Auto search", "nanya fakta → otomatis cari di Wikipedia/Wikidata"],
+      sGrammar: ["Polisi grammar", "roast typo & salah ejaan"], sBrain: ["Tampilin otak", "liat intent, confidence, bahasa (debug)"],
+      sTheme: ["Tema", "auto ngikutin sistem"],
+      on: "on", off: "off", hate: "hate",
+      shortcuts: [["/", "buat command"], ["↑ ↓", "riwayat pesan"], ["esc", "stop jawaban"], ["tab", "lengkapin command"], ["ctrl + l", "bersihin layar"], ["shift + enter", "baris baru"]],
+    },
+    en: {
+      welcome: "Welcome to sybau.ai!", sub: "the ai that hates u. trained from scratch, no api key.",
+      help: "/help for help, /settings for settings", cwd: "cwd: ~/ur-life (cooked)",
+      tipsHead: "Tips for getting started (and roasted):",
+      tips: ["Tell me ur name so i can roast it", "Ask anything: \"capital of kazakhstan\", \"how old is elon musk\"",
+        "\"A or B?\" and i'll hate both", "Make a typo and the grammar police shows up 📝"],
+      placeholder: "Try \"capital of kazakhstan\" or \"roast me\"", hint: "? for shortcuts", busyHint: "esc to interrupt",
+      verbs: ["Roasting", "Judging", "Cooking u", "Yapping", "Aura farming", "Crashing out", "Fanum taxing", "Mewing", "Glazing (jk)", "Clowning", "Reading ur typos"],
+      searching: "Searching Wikipedia + Wikidata", interrupted: "Interrupted by user. good, didn't wanna answer anyway 🥀",
+      noResult: "No results", openGoogle: "open in Google", readFull: "read more",
+      restored: (n) => "restored " + n + " messages · i remember everything 🥀",
+      unknownCmd: (c) => "Unknown command: " + c + " · type /help",
+      set: (k, v) => "Set " + k + " to " + v,
+      sTitle: "Settings", sFoot: "↑↓ navigate · enter/space change · ←→ cycle · esc close",
+      sLang: ["Reply language", "auto = match whatever u type"], sSearch: ["Auto search", "factual questions → look up Wikipedia/Wikidata"],
+      sGrammar: ["Grammar police", "roast typos & bad spelling"], sBrain: ["Show brain", "intent, confidence, language (debug)"],
+      sTheme: ["Theme", "auto follows ur system"],
+      on: "on", off: "off", hate: "hate",
+      shortcuts: [["/", "for commands"], ["↑ ↓", "message history"], ["esc", "interrupt"], ["tab", "complete command"], ["ctrl + l", "clear screen"], ["shift + enter", "new line"]],
+    },
+  };
+  const t = () => T[uiLang()];
+
+  function applySettings() {
+    if (bot) bot.settings = { lang: settings.lang, search: settings.search, grammar: settings.grammar };
+    if (settings.theme === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", settings.theme);
+    document.body.classList.toggle("brain-on", !!settings.brain);
+    document.documentElement.lang = uiLang();
+    input.placeholder = t().placeholder;
+    if (!busy) hintEl.textContent = t().hint;
+    const mc = document.querySelector('meta[name="theme-color"]');
+    if (mc) mc.content = getComputedStyle(document.body).getPropertyValue("--bg").trim() || "#100e0e";
+    save("sybau_settings", settings);
+    refreshStatus();
+  }
+
+  // ---------------------------------------------------------------- rendering
   function el(tag, cls, text) {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
-    if (text !== undefined) n.textContent = text;
+    if (text !== undefined && text !== null) n.textContent = text;
     return n;
   }
-  function scrollDown() { chat.scrollTop = chat.scrollHeight; }
-  function push(node) { chat.appendChild(node); scrollDown(); return node; }
+  const atBottom = () => screen.scrollHeight - screen.scrollTop - screen.clientHeight < 80;
+  function scrollDown(force) { if (force || atBottom()) screen.scrollTop = screen.scrollHeight; }
+  function put(node) { const stick = atBottom(); screen.appendChild(node); if (stick) screen.scrollTop = screen.scrollHeight; return node; }
 
-  function addMessage(role, text, meta) {
-    const row = el("div", "msg " + role);
-    if (meta && meta.source === "safety") row.classList.add("safety");
-    else if (meta && HARD_ROASTS.has(meta.intent)) row.classList.add("hard");
-    row.appendChild(el("span", "who", role === "user" ? "LU" : meta && meta.source === "safety" ? "🌱 SERIUS SEBENTAR" : "🥀 SYBAU.AI"));
-    const bubble = el("div", "bubble", text);
-    if (role === "bot" && meta && meta.intent) {
-      const m = el("div", "meta");
-      const parts = [["intent", meta.intent]];
-      if (meta.confidence !== undefined) parts.push(["p", (meta.confidence * 100).toFixed(0) + "%"]);
-      if (meta.lang) parts.push(["lang", meta.lang]);
-      parts.push(["src", meta.source]);
-      parts.forEach(([k, v], i) => {
-        if (i) m.append(" · ");
-        m.append(k + "=");
-        m.appendChild(el("b", null, v));
-      });
-      if (meta.novel) { m.append(" "); m.appendChild(el("span", "novel", "✦ kalimat baru, ga ada di data")); }
-      if (meta.top && meta.top.length) m.title = meta.top.map((t) => t.tag + " " + (t.p * 100).toFixed(1) + "%").join("\n");
-      bubble.appendChild(m);
+  function welcome() {
+    const box = el("div", "welcome");
+    const hi = el("div", "line");
+    hi.append(el("span", "accent", "✻ "), el("span", "hi", t().welcome));
+    box.append(hi, el("div", "line dim", "  " + t().sub), el("div", "gap"),
+      el("div", "line dim", "  " + t().help), el("div", "gap"), el("div", "line dim", "  " + t().cwd));
+    put(box);
+    const tips = el("div", "tips");
+    tips.appendChild(el("div", "line dim", t().tipsHead));
+    t().tips.forEach((tip, i) => tips.appendChild(el("div", "line dim", (i + 1) + ". " + tip)));
+    put(tips);
+  }
+
+  function userEcho(text) {
+    const b = el("div", "u");
+    b.append(el("span", "gt", ">"), document.createTextNode(text));
+    return put(b);
+  }
+
+  function row(kind, dotChar) {
+    const r = el("div", "block row " + (kind || ""));
+    r.appendChild(el("span", "dot", dotChar || "⏺"));
+    const body = el("div", "txt");
+    r.appendChild(body);
+    put(r);
+    return { r, body };
+  }
+
+  function outBlock(parent, lines) {
+    // lines: array of Node|string. first gets the ⎿ elbow
+    const o = el("div", "out");
+    lines.forEach((ln, i) => {
+      o.appendChild(el("span", "elbow", i === 0 ? "⎿" : ""));
+      const b = el("div", "body");
+      if (typeof ln === "string") b.textContent = ln; else b.appendChild(ln);
+      o.appendChild(b);
+    });
+    (parent || screen).appendChild(o);
+    scrollDown();
+    return o;
+  }
+
+  function metaNode(meta) {
+    const m = el("div", "meta");
+    const parts = ["intent=" + meta.intent];
+    if (meta.confidence !== undefined) parts.push("p=" + (meta.confidence * 100).toFixed(0) + "%");
+    if (meta.lang) parts.push("lang=" + meta.lang);
+    parts.push("src=" + meta.source);
+    m.textContent = parts.join(" · ");
+    if (meta.novel) m.appendChild(el("span", "novel", "  ✦ new sentence (not in training data)"));
+    return m;
+  }
+
+  async function typeText(node, text, animate) {
+    if (!animate || reduced) { node.textContent = text; scrollDown(); return; }
+    const words = text.split(/(\s+)/);
+    const step = Math.max(8, Math.min(28, 900 / Math.max(1, words.length)));
+    let shown = "";
+    for (const w of words) {
+      if (interrupted) break;
+      shown += w;
+      node.textContent = shown;
+      scrollDown();
+      await sleep(step);
     }
-    row.appendChild(bubble);
-    return push(row);
+    node.textContent = interrupted ? shown : text;
   }
 
-  function addGrammar(g) {
-    const row = el("div", "msg bot grammar");
-    const pen = el("div", "pen");
-    pen.appendChild(el("div", "pen-tag", "📝 POLISI GRAMMAR"));
-    const fix = el("div", "pen-fix");
-    fix.appendChild(el("s", null, g.wrong));
-    fix.appendChild(el("span", "arrow", "→"));
-    fix.appendChild(el("span", "right", g.right));
-    pen.appendChild(fix);
-    if (g.text) pen.appendChild(el("p", null, g.text));
-    row.appendChild(pen);
-    return push(row);
+  async function botSay(text, meta, animate = true) {
+    const kind = meta && meta.source === "safety" ? "safety" : "";
+    const { r, body } = row(kind, meta && meta.source === "safety" ? "🌱" : "⏺");
+    const span = el("span");
+    body.appendChild(span);
+    await typeText(span, text, animate);
+    if (meta && meta.intent) body.appendChild(metaNode(meta));
+    return r;
   }
 
-  function addClipping(r) {
-    const row = el("div", "msg bot clip");
-    const c = el("div", "clipping");
-    const src = el("div", "clip-src");
-    src.appendChild(el("span", null, "✂ WIKIPEDIA · " + r.lang.toUpperCase()));
-    src.appendChild(el("span", null, new Date().toLocaleDateString("id-ID")));
-    c.appendChild(src);
-    const body = el("div", "clip-body");
-    if (r.thumb) {
-      const img = el("img");
-      img.src = r.thumb; img.alt = ""; img.loading = "lazy";
-      img.onerror = () => img.remove();
-      body.appendChild(img);
+  function sys(lines, kind) {
+    const r = el("div", "block");
+    outBlock(r, lines.map((l) => (typeof l === "string" ? el("span", kind || "dim", l) : l)));
+    return put(r);
+  }
+
+  const GLYPHS = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+  function spinner(label) {
+    const r = el("div", "block line spin");
+    const g = el("span", "glyph", "✻"), l = el("span", null, label + "…"), m = el("span", "meta-s", "");
+    r.append(g, l, document.createTextNode(" "), m);
+    put(r);
+    const t0 = Date.now();
+    let i = 0;
+    const tick = () => {
+      g.textContent = GLYPHS[i++ % GLYPHS.length];
+      m.textContent = "(" + Math.floor((Date.now() - t0) / 1000) + "s · " + t().busyHint + ")";
+    };
+    tick();
+    const id = setInterval(tick, 110);
+    return { stop() { clearInterval(id); r.remove(); } };
+  }
+
+  function link(text, href) {
+    const a = el("a", null, text);
+    a.href = href; a.target = "_blank"; a.rel = "noopener";
+    return a;
+  }
+
+  function renderSearch(res, query) {
+    const { r, body } = row("tool" + (res ? "" : " fail"));
+    const head = el("span");
+    head.append(el("span", "toolname", res && res.kind === "fact" ? "Wikidata" : "Search"), document.createTextNode("(" + query + ")"));
+    body.appendChild(head);
+    if (!res) {
+      outBlock(body, [el("span", "red", t().noResult), linksLine(null, SearchLib.googleUrl(query))]);
+      return r;
     }
-    const txt = el("div");
-    txt.appendChild(el("h4", null, r.title));
-    txt.appendChild(el("p", null, r.extract));
-    body.appendChild(txt);
-    c.appendChild(body);
-    const links = el("div", "clip-links");
-    const a1 = el("a", null, "BACA FULL ↗"); a1.href = r.url; a1.target = "_blank"; a1.rel = "noopener";
-    const a2 = el("a", "g", "GOOGLE ↗"); a2.href = r.google; a2.target = "_blank"; a2.rel = "noopener";
-    links.append(a1, a2);
-    c.appendChild(links);
-    row.appendChild(c);
-    return push(row);
+    const lines = [];
+    if (res.kind === "fact") {
+      const a = el("span");
+      a.append(el("span", "dim", res.relation + " " + res.subject + ": "), el("span", "wiki-title", res.answer));
+      lines.push(a);
+    } else {
+      const head2 = el("span");
+      head2.append(el("span", "wiki-title", res.title), el("span", "dim", "  wikipedia/" + res.lang));
+      lines.push(head2);
+    }
+    if (res.extract) {
+      const ex = el("span", "dim");
+      if (res.thumb) {
+        const img = el("img", "wiki-thumb");
+        img.src = res.thumb; img.alt = ""; img.loading = "lazy"; img.onerror = () => img.remove();
+        ex.appendChild(img);
+      }
+      ex.appendChild(document.createTextNode(res.extract));
+      lines.push(ex);
+    }
+    lines.push(linksLine(res.url, res.google || SearchLib.googleUrl(query)));
+    outBlock(body, lines);
+    return r;
   }
 
-  function addGoogleOnly(query) {
-    const row = el("div", "msg bot clip");
-    const c = el("div", "clipping");
-    c.appendChild(el("div", "clip-src", "✂ GA KETEMU DI WIKIPEDIA"));
-    const links = el("div", "clip-links");
-    const a = el("a", "g", "CARI \"" + query.toUpperCase() + "\" DI GOOGLE ↗");
-    a.href = SearchLib.googleUrl(query); a.target = "_blank"; a.rel = "noopener";
-    links.appendChild(a);
-    c.appendChild(links);
-    row.appendChild(c);
-    return push(row);
+  function linksLine(url, google) {
+    const s = el("span", "dim");
+    if (url) { s.append("↗ "); s.appendChild(link(t().readFull, url)); s.append("   "); }
+    s.append("↗ "); s.appendChild(link(t().openGoogle, google));
+    return s;
   }
 
-  function addNote(text) { push(el("div", "day-note", text)); }
-
-  function showTyping(label) {
-    const row = el("div", "msg bot typing");
-    row.appendChild(el("span", "who", "🥀 SYBAU.AI"));
-    row.appendChild(el("div", "bubble", label || "lagi ngetik roasting"));
-    return push(row);
+  function renderGrammar(g) {
+    const { r, body } = row("tool");
+    const head = el("span");
+    head.append(el("span", "toolname", "GrammarPolice"), document.createTextNode("(\"" + g.wrong + "\")"));
+    body.appendChild(head);
+    const diff = el("div");
+    diff.append(el("span", "diff del", "- " + g.wrong), el("span", "diff add", "+ " + g.right));
+    const lines = [diff];
+    if (g.text) lines.push(el("span", null, g.text));
+    outBlock(body, lines);
+    return r;
   }
 
-  function petals(n) {
-    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    for (let i = 0; i < n; i++) {
-      const p = el("div", "petal", Math.random() < 0.85 ? "🥀" : "💀");
-      p.style.left = Math.random() * 100 + "vw";
-      p.style.animationDuration = 2.2 + Math.random() * 2 + "s";
-      p.style.animationDelay = Math.random() * 0.5 + "s";
-      document.body.appendChild(p);
-      setTimeout(() => p.remove(), 5000);
+  // ---------------------------------------------------------------- status line
+  function refreshStatus() {
+    statusEl.textContent = "";
+    const flag = (name, on) => {
+      const s = el("span", "opt-flags");
+      s.append(name + " ", el("span", on ? "on" : "off", on ? "●" : "○"), "  ");
+      return s;
+    };
+    const lang = el("span", "opt-flags", "lang:" + settings.lang + "  ");
+    statusEl.append(lang, flag("search", settings.search), flag("grammar", settings.grammar));
+    if (bot) {
+      const d = bot.mem.data;
+      const v = Math.min(100, Math.round(60 + d.insults * 4 + d.compliments * 2 + (d.grammarCrimes || 0) * 2 + Math.min(d.messages, 40) * 0.5));
+      const bars = Math.round(v / 10);
+      statusEl.appendChild(el("span", "hate", t().hate + " " + "▰".repeat(bars) + "▱".repeat(10 - bars) + " " + v + "%"));
     }
   }
 
-  // ---------- hate meter ----------
-  const segs = $("hate-segs");
-  for (let i = 0; i < 20; i++) segs.appendChild(el("i"));
-  function hateLevel() {
+  // ---------------------------------------------------------------- commands
+  const BOOL = ["on", "off"];
+  const COMMANDS = [
+    { name: "/help", desc: { id: "liat semua command", en: "show all commands" }, run: cmdHelp },
+    { name: "/settings", alias: ["/config"], desc: { id: "buka pengaturan", en: "open settings" }, run: () => openSettings() },
+    { name: "/lang", choices: ["auto", "id", "en"], desc: { id: "bahasa balesan: auto | id | en", en: "reply language: auto | id | en" }, run: (a) => setOpt("lang", a, ["auto", "id", "en"]) },
+    { name: "/search", choices: BOOL, desc: { id: "auto search on | off", en: "auto search on | off" }, run: (a) => setOpt("search", a) },
+    { name: "/grammar", choices: BOOL, desc: { id: "polisi grammar on | off", en: "grammar police on | off" }, run: (a) => setOpt("grammar", a) },
+    { name: "/brain", choices: BOOL, desc: { id: "tampilin isi otak (debug)", en: "show the neural net's thoughts" }, run: (a) => setOpt("brain", a) },
+    { name: "/theme", choices: ["auto", "dark", "light"], desc: { id: "tema: auto | dark | light", en: "theme: auto | dark | light" }, run: (a) => setOpt("theme", a, ["auto", "dark", "light"]) },
+    { name: "/memory", desc: { id: "liat berkas lu yang gw simpen", en: "show what i remember about u" }, run: cmdMemory },
+    { name: "/stats", desc: { id: "spesifikasi otak gw", en: "model stats" }, run: cmdStats },
+    { name: "/roast", desc: { id: "minta di-roast", en: "get roasted" }, run: () => chat(uiLang() === "id" ? "roast gw" : "roast me", true) },
+    { name: "/clear", desc: { id: "bersihin layar (memori tetep)", en: "clear screen (keeps memory)" }, run: cmdClear },
+    { name: "/forget", desc: { id: "hapus semua memori soal lu", en: "wipe everything i know about u" }, run: cmdForget },
+    { name: "/exit", desc: { id: "keluar (coba aja)", en: "quit (try it)" }, run: () => sys([uiLang() === "id" ? "lu ga bisa kabur. tutup aja tab-nya kalo berani 🥀" : "u can't escape. close the tab if u dare 🥀"], "accent") },
+  ];
+  const findCmd = (name) => COMMANDS.find((c) => c.name === name || (c.alias || []).includes(name));
+
+  function cmdHelp() {
+    const tbl = el("div", "cmd-table");
+    for (const c of COMMANDS) tbl.append(el("span", "k", c.name + (c.choices ? " [" + c.choices.join("|") + "]" : "")), el("span", "dim", c.desc[uiLang()]));
+    const sc = el("div", "cmd-table");
+    for (const [k, v] of t().shortcuts) sc.append(el("span", "k", k), el("span", "dim", v));
+    sys([el("span", "bold", "sybau.ai · commands"), tbl, el("span", "bold", "shortcuts"), sc]);
+  }
+
+  function kvTable(pairs) {
+    const kv = el("div", "kv");
+    for (const [k, v] of pairs) kv.append(el("span", "k", k), el("span", null, v));
+    return kv;
+  }
+
+  function cmdMemory() {
     const d = bot.mem.data;
-    return Math.min(100, Math.round(60 + d.insults * 4 + d.compliments * 2 + (d.grammarCrimes || 0) * 2 + Math.min(d.messages, 40) * 0.5));
-  }
-  function refreshHate() {
-    const v = hateLevel();
-    [...segs.children].forEach((s, i) => s.classList.toggle("on", i < Math.round(v / 5)));
-    $("hate-value").textContent = v + "%";
-    $("hate").setAttribute("aria-valuenow", String(v));
+    const { body } = row("tool");
+    const head = el("span");
+    head.append(el("span", "toolname", "Read"), document.createTextNode("(~/.sybau/ur-file.json)"));
+    body.appendChild(head);
+    outBlock(body, [kvTable([
+      ["name", d.name || "—"], ["age", d.age || "—"], ["likes", d.likes.join(", ") || "—"], ["hates", d.hates.join(", ") || "—"],
+      ["searched", (d.searches || []).slice(0, 5).join(", ") || "—"], ["insults", d.insults + "x"], ["glazing", d.compliments + "x"],
+      ["grammar crimes", (d.grammarCrimes || 0) + "x" + ((d.grammarLog || []).length ? "  (" + d.grammarLog.slice(0, 3).join(", ") + ")" : "")],
+      ["messages", String(d.messages)], ["lang", d.lang || "—"], ["first seen", new Date(d.firstSeen).toLocaleDateString(uiLang() === "id" ? "id-ID" : "en-GB")],
+    ]), el("span", "dim", uiLang() === "id" ? "disimpen di localStorage browser lu doang. /forget buat hapus." : "stored only in ur browser's localStorage. /forget to wipe.")]);
   }
 
-  // ---------- case file ----------
-  function fillList(dl, pairs) {
-    dl.textContent = "";
-    for (const [k, v] of pairs) dl.append(el("dt", null, k), el("dd", null, v));
-  }
-  function refreshDrawer() {
-    const d = bot.mem.data;
-    $("case-no").textContent = "KASUS #" + String(d.firstSeen % 10000).padStart(4, "0");
-    fillList($("memory-list"), [
-      ["nama", d.name || "— (ga ngaku)"],
-      ["umur", d.age || "—"],
-      ["suka", d.likes.join(", ") || "—"],
-      ["benci", d.hates.join(", ") || "—"],
-      ["nyari", (d.searches || []).slice(0, 4).join(", ") || "—"],
-      ["ngehina gw", d.insults + "x"],
-      ["glazing gw", d.compliments + "x"],
-      ["total chat", String(d.messages)],
-      ["bahasa", d.lang === "id" ? "indo" : d.lang === "en" ? "english" : "—"],
-      ["kenal sejak", new Date(d.firstSeen).toLocaleDateString("id-ID")],
-    ]);
-    const ev = $("evidence");
-    ev.textContent = "";
-    const log = d.grammarLog || [];
-    if (!log.length) ev.appendChild(el("li", "none", "belum ada. tunggu aja."));
-    for (const g of log) ev.appendChild(el("li", null, g));
+  function cmdStats() {
     const b = bot.brain;
-    fillList($("brain-stats"), [
-      ["params", b.paramCount.toLocaleString("en-US")],
-      ["intent", String(b.clsTags.length)],
-      ["kosakata", b.vocab.length + " kata"],
-      ["grammar", bot.grammar ? "aktif (80rb kata)" : "ga ke-load"],
-      ["dilatih", b.trainedAt],
-      ["api key", "ga ada lol"],
-    ]);
-  }
-  function setDrawer(open) {
-    $("drawer").classList.toggle("open", open);
-    $("scrim").classList.toggle("open", open);
-    $("drawer").setAttribute("aria-hidden", String(!open));
-    if (open) refreshDrawer();
+    const { body } = row("tool");
+    const head = el("span");
+    head.append(el("span", "toolname", "Stats"), document.createTextNode("(model/brain.json)"));
+    body.appendChild(head);
+    outBlock(body, [kvTable([
+      ["params", b.paramCount.toLocaleString("en-US")], ["classifier", "MLP 4096 → 192 → " + b.clsTags.length + " intents"],
+      ["generator", "GRU " + b.H + " · vocab " + b.vocab.length + " · lang-conditioned"], ["grammar", bot.grammar ? "80k-word lexicon + rules" : "not loaded"],
+      ["search", "Wikipedia + Wikidata (no key)"], ["trained", b.trainedAt], ["api key", uiLang() === "id" ? "ga ada lol" : "none lol"],
+    ])]);
   }
 
-  // ---------- send ----------
-  async function send(text) {
-    text = text.trim();
-    if (!text || busy || !bot) return;
+  function cmdClear() {
+    screen.textContent = "";
+    welcome();
+  }
+
+  let forgetArmed = false;
+  function cmdForget(arg) {
+    if (arg === "yes" || arg === "ya" || forgetArmed) {
+      bot.mem.wipe();
+      forgetArmed = false;
+      cmdClear();
+      sys([uiLang() === "id" ? "memori udah dihapus 🔥 lu siapa ya? idc 🥀" : "memory wiped 🔥 who r u again? idc 🥀"], "accent");
+      refreshStatus();
+      return;
+    }
+    forgetArmed = true;
+    sys([uiLang() === "id" ? "yakin? ketik /forget lagi buat hapus semua (nama, kesukaan, riwayat chat)." : "sure? run /forget again to wipe everything (name, likes, chat history)."], "yellow");
+  }
+
+  function setOpt(key, arg, choices) {
+    choices = choices || BOOL;
+    let v;
+    if (!arg) {
+      v = choices === BOOL ? !settings[key] : choices[(choices.indexOf(settings[key]) + 1) % choices.length];
+    } else {
+      arg = arg.toLowerCase();
+      if (choices === BOOL) {
+        if (!["on", "off", "true", "false", "1", "0"].includes(arg)) return sys([uiLang() === "id" ? "pake: on / off" : "usage: on / off"], "red");
+        v = ["on", "true", "1"].includes(arg);
+      } else {
+        const map = { indo: "id", indonesia: "id", english: "en", inggris: "en", gelap: "dark", terang: "light" };
+        v = map[arg] || arg;
+        if (!choices.includes(v)) return sys([(uiLang() === "id" ? "pilihan: " : "options: ") + choices.join(" | ")], "red");
+      }
+    }
+    settings[key] = v;
+    applySettings();
+    sys([t().set(key, typeof v === "boolean" ? (v ? "on" : "off") : v)]);
+  }
+
+  function runCommand(text) {
+    const [name, ...rest] = text.trim().split(/\s+/);
+    const c = findCmd(name.toLowerCase());
+    if (name.toLowerCase() !== "/forget") forgetArmed = false;
+    if (!c) return sys([t().unknownCmd(name)], "red");
+    c.run(rest.join(" "));
+  }
+
+  // ---------------------------------------------------------------- chat
+  async function chat(text, noEcho) {
+    if (!noEcho) userEcho(text);
     busy = true;
-    sendBtn.disabled = true;
-    input.value = "";
-    addMessage("user", text);
-    let typing = showTyping();
+    interrupted = false;
+    form.classList.add("busy");
+    hintEl.textContent = t().busyHint;
+    const verbs = t().verbs;
+    let sp = spinner(verbs[Math.floor(Math.random() * verbs.length)]);
     const t0 = performance.now();
-    await sleep(30); // let the typing card paint before the nets run
+    await sleep(40);
     const res = bot.reply(text);
-    const wait = Math.max(0, Math.min(1300, 350 + (res.text || "").length * 11) - (performance.now() - t0));
-    await sleep(wait);
-    typing.remove();
-    if (res.text) {
-      const row = addMessage("bot", res.text, res.meta);
-      if (res.meta.intent === "insult_long") { petals(16); row.classList.add("shake"); }
-      else if (HARD_ROASTS.has(res.meta.intent)) petals(5);
-    }
+    const wait = Math.max(0, Math.min(1400, 450 + (res.text || "").length * 9) - (performance.now() - t0));
+    for (let w = 0; w < wait && !interrupted; w += 50) await sleep(50);
+    sp.stop();
 
-    if (res.search) {
-      typing = showTyping("nyari di wikipedia");
-      const result = await SearchLib.wikiSearch(res.search.query, res.search.lang);
-      typing.remove();
-      if (result) addClipping(result); else addGoogleOnly(res.search.query);
-      await sleep(250);
-      addMessage("bot", bot.searchFollowup(result, res.search.query, res.search.lang), { intent: result ? "search_done" : "search_fail", source: "gru", lang: res.search.lang });
+    if (interrupted) {
+      sys([t().interrupted], "red");
+    } else {
+      if (res.text) await botSay(res.text, res.meta);
+      if (res.search && !interrupted) {
+        sp = spinner(t().searching);
+        const result = await SearchLib.answer(res.search.question, res.search.lang);
+        sp.stop();
+        renderSearch(result, res.search.query);
+        if (!interrupted) {
+          await sleep(200);
+          await botSay(bot.searchFollowup(result, res.search.query, res.search.lang),
+            { intent: result ? "search_done" : "search_fail", source: "gru", lang: res.search.lang });
+        }
+      }
+      if (res.grammar && !interrupted) {
+        if (res.text) await sleep(300);
+        renderGrammar(res.grammar);
+      }
+      if (interrupted) sys([t().interrupted], "red");
     }
-    if (res.grammar) {
-      if (res.text) await sleep(450);
-      addGrammar(res.grammar);
-    }
-    refreshHate();
     busy = false;
-    sendBtn.disabled = false;
+    form.classList.remove("busy");
+    hintEl.textContent = t().hint;
+    refreshStatus();
+    scrollDown(true);
     input.focus();
   }
 
-  form.addEventListener("submit", (e) => { e.preventDefault(); send(input.value); });
-  $("chips").addEventListener("click", (e) => {
-    const chip = e.target.closest(".chip");
-    if (!chip) return;
-    const t = chip.textContent;
-    if (t.endsWith(" ")) { input.value = t; input.focus(); } // "nama gw " -> user finishes it
-    else send(t);
-  });
-  $("brain-toggle").addEventListener("click", (e) => {
-    const on = document.body.classList.toggle("brain-on");
-    e.currentTarget.setAttribute("aria-pressed", String(on));
-    scrollDown();
-    try { storage && storage.setItem("sybau_brain_on", on ? "1" : "0"); } catch (err) { /* ignore */ }
-  });
-  $("memory-open").addEventListener("click", () => setDrawer(true));
-  $("memory-close").addEventListener("click", () => setDrawer(false));
-  $("scrim").addEventListener("click", () => setDrawer(false));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") setDrawer(false); });
-  $("wipe").addEventListener("click", () => {
-    if (!confirm("bakar semua memori? gw bakal lupa lu (akhirnya)")) return;
-    bot.mem.wipe();
-    chat.textContent = "";
-    refreshDrawer();
-    refreshHate();
-    addMessage("bot", "berkas udah dibakar 🔥 lu siapa ya? idc 🥀");
-  });
+  // ---------------------------------------------------------------- input: history, autocomplete, keys
+  const history = load("sybau_cmd_history", []);
+  let hIndex = -1, hDraft = "";
+  let sugg = [], sel = 0;
 
-  try { if (storage && storage.getItem("sybau_brain_on") === "1") $("brain-toggle").click(); } catch (e) { /* ignore */ }
-
-  function restore(history) {
-    addNote("CHAT LAMA · GW INGET SEMUANYA 🥀");
-    for (const m of history.slice(-36)) {
-      if (m.kind === "grammar") addGrammar(m);
-      else if (m.kind === "search") addClipping(m.result);
-      else addMessage(m.role, m.text, m.meta);
-    }
+  function autoresize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 160) + "px";
   }
 
+  function computeSuggestions() {
+    const v = input.value;
+    if (!v.startsWith("/")) return [];
+    const m = v.match(/^(\/\S*)(?:\s+(\S*))?$/);
+    if (!m) return [];
+    if (m[2] === undefined && !/\s$/.test(v)) {
+      const q = m[1].toLowerCase();
+      return COMMANDS.filter((c) => c.name.startsWith(q) || (c.alias || []).some((a) => a.startsWith(q)))
+        .map((c) => ({ value: c.name, label: c.name, desc: c.desc[uiLang()], run: !c.choices }));
+    }
+    const c = findCmd(m[1].toLowerCase());
+    if (!c || !c.choices) return [];
+    const arg = (m[2] || "").toLowerCase();
+    return c.choices.filter((ch) => ch.startsWith(arg))
+      .map((ch) => ({ value: c.name + " " + ch, label: c.name + " " + ch, desc: (settings[c.name.slice(1)] === ch || (settings[c.name.slice(1)] === true && ch === "on") || (settings[c.name.slice(1)] === false && ch === "off")) ? "← now" : "", run: true }));
+  }
+
+  function renderSuggest() {
+    sugg = computeSuggestions();
+    if (!sugg.length) { suggestEl.hidden = true; return; }
+    sel = Math.min(sel, sugg.length - 1);
+    suggestEl.textContent = "";
+    sugg.forEach((s, i) => {
+      const o = el("div", "opt" + (i === sel ? " sel" : ""));
+      o.setAttribute("role", "option");
+      o.append(el("span", "c", s.label), el("span", null, s.desc));
+      o.addEventListener("mousedown", (e) => { e.preventDefault(); pickSuggestion(i, true); });
+      suggestEl.appendChild(o);
+    });
+    suggestEl.hidden = false;
+    shortcutsEl.hidden = true;
+  }
+
+  function pickSuggestion(i, execute) {
+    const s = sugg[i];
+    if (!s) return;
+    const c = findCmd(s.value.split(" ")[0]);
+    if (execute && s.run) {
+      input.value = s.value;
+      submit();
+    } else {
+      input.value = s.value + (c && c.choices && !s.value.includes(" ") ? " " : "");
+      sel = 0;
+      renderSuggest();
+    }
+    autoresize();
+  }
+
+  function submit() {
+    const text = input.value.replace(/\s+$/, "");
+    if (!text.trim() || busy || !bot) return;
+    input.value = "";
+    autoresize();
+    suggestEl.hidden = true;
+    shortcutsEl.hidden = true;
+    if (history[history.length - 1] !== text) { history.push(text); if (history.length > 50) history.shift(); save("sybau_cmd_history", history); }
+    hIndex = -1;
+    if (text.trim().startsWith("/")) { userEcho(text.trim()); runCommand(text.trim()); scrollDown(true); input.focus(); }
+    else chat(text.trim());
+  }
+
+  function renderShortcuts() {
+    shortcutsEl.textContent = "";
+    for (const [k, v] of t().shortcuts) { const s = el("span"); s.append(el("b", null, k), " " + v); shortcutsEl.appendChild(s); }
+  }
+
+  input.addEventListener("input", () => { sel = 0; renderSuggest(); autoresize(); if (input.value) shortcutsEl.hidden = true; });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (busy) { interrupted = true; e.preventDefault(); return; }
+      if (!suggestEl.hidden) { suggestEl.hidden = true; return; }
+      if (!shortcutsEl.hidden) { shortcutsEl.hidden = true; return; }
+    }
+    if (!suggestEl.hidden && sugg.length) {
+      if (e.key === "ArrowDown") { e.preventDefault(); sel = (sel + 1) % sugg.length; renderSuggest(); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); sel = (sel - 1 + sugg.length) % sugg.length; renderSuggest(); return; }
+      if (e.key === "Tab") { e.preventDefault(); pickSuggestion(sel, false); return; }
+      if (e.key === "Enter" && !e.shiftKey) {
+        const exact = sugg[sel] && sugg[sel].value === input.value.trim();
+        if (!exact) { e.preventDefault(); pickSuggestion(sel, true); return; }
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); return; }
+    if (e.key === "?" && !input.value) {
+      e.preventDefault();
+      renderShortcuts();
+      shortcutsEl.hidden = !shortcutsEl.hidden;
+      return;
+    }
+    if ((e.key === "l" || e.key === "L") && e.ctrlKey) { e.preventDefault(); cmdClear(); return; }
+    if (e.key === "ArrowUp" && history.length && !input.value.slice(0, input.selectionStart).includes("\n")) {
+      e.preventDefault();
+      if (hIndex === -1) { hDraft = input.value; hIndex = history.length; }
+      hIndex = Math.max(0, hIndex - 1);
+      input.value = history[hIndex];
+      autoresize();
+      return;
+    }
+    if (e.key === "ArrowDown" && hIndex !== -1 && !input.value.slice(input.selectionEnd).includes("\n")) {
+      e.preventDefault();
+      hIndex++;
+      if (hIndex >= history.length) { hIndex = -1; input.value = hDraft; } else input.value = history[hIndex];
+      autoresize();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && busy) interrupted = true;
+  });
+  form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+  screen.addEventListener("click", () => { if (!window.getSelection().toString()) input.focus(); });
+
+  // ---------------------------------------------------------------- settings modal
+  const modal = $("settings"), list = $("settings-list");
+  const ITEMS = [
+    { key: "lang", choices: ["auto", "id", "en"], label: () => t().sLang },
+    { key: "search", label: () => t().sSearch },
+    { key: "grammar", label: () => t().sGrammar },
+    { key: "brain", label: () => t().sBrain },
+    { key: "theme", choices: ["auto", "dark", "light"], label: () => t().sTheme },
+  ];
+  let sIndex = 0;
+
+  function valueNode(item) {
+    const v = settings[item.key];
+    const s = el("span", "val");
+    if (item.choices) {
+      s.append(el("span", "dim", "‹ "), el("span", "choice", item.key === "lang" ? ({ auto: "auto", id: "indonesia", en: "english" })[v] : v), el("span", "dim", " ›"));
+    } else s.appendChild(el("span", v ? "on" : "off", v ? "✔ " + t().on : "✘ " + t().off));
+    return s;
+  }
+
+  function renderSettings() {
+    $("settings-title").lastChild.textContent = " " + t().sTitle;
+    $("settings-foot").textContent = t().sFoot;
+    list.textContent = "";
+    ITEMS.forEach((item, i) => {
+      const b = el("button", "setting" + (i === sIndex ? " sel" : ""));
+      b.type = "button";
+      const [name, desc] = item.label();
+      const nm = el("span", "name", name);
+      nm.appendChild(el("span", "desc", desc));
+      b.append(el("span", "ptr", "❯"), nm, valueNode(item));
+      if (!item.choices) { b.setAttribute("role", "switch"); b.setAttribute("aria-checked", String(!!settings[item.key])); }
+      b.addEventListener("click", () => { sIndex = i; change(item, 1); });
+      b.addEventListener("focus", () => { sIndex = i; [...list.children].forEach((c, j) => c.classList.toggle("sel", j === i)); });
+      list.appendChild(b);
+    });
+  }
+
+  function change(item, dir) {
+    if (item.choices) {
+      const i = item.choices.indexOf(settings[item.key]);
+      settings[item.key] = item.choices[(i + dir + item.choices.length) % item.choices.length];
+    } else settings[item.key] = !settings[item.key];
+    applySettings();
+    renderSettings();
+    list.children[sIndex].focus();
+    const v = settings[item.key];
+    sys([t().set(item.key, typeof v === "boolean" ? (v ? "on" : "off") : v)]);
+  }
+
+  function openSettings() {
+    sIndex = 0;
+    renderSettings();
+    modal.hidden = false;
+    list.children[0].focus();
+  }
+  function closeSettings() { modal.hidden = true; input.focus(); }
+
+  modal.addEventListener("keydown", (e) => {
+    const item = ITEMS[sIndex];
+    if (e.key === "Escape") { e.preventDefault(); closeSettings(); }
+    else if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) { e.preventDefault(); sIndex = (sIndex + 1) % ITEMS.length; list.children[sIndex].focus(); }
+    else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) { e.preventDefault(); sIndex = (sIndex - 1 + ITEMS.length) % ITEMS.length; list.children[sIndex].focus(); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); change(item, 1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); change(item, -1); }
+  });
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeSettings(); });
+  $("settings-close").addEventListener("click", closeSettings);
+  $("settings-btn").addEventListener("click", openSettings);
+
+  // ---------------------------------------------------------------- restore + boot
+  function restore(h) {
+    const items = h.slice(-40);
+    for (const m of items) {
+      if (m.role === "user") userEcho(m.text);
+      else if (m.kind === "grammar") renderGrammar(m);
+      else if (m.kind === "search") renderSearch(m.result, m.result && (m.result.query || m.result.title));
+      else if (m.text) {
+        const { body } = row(m.meta && m.meta.source === "safety" ? "safety" : "", m.meta && m.meta.source === "safety" ? "🌱" : "⏺");
+        body.appendChild(el("span", null, m.text));
+        if (m.meta && m.meta.intent) body.appendChild(metaNode(m.meta));
+      }
+    }
+    sys([t().restored(items.filter((m) => m.role === "user").length)]);
+  }
+
+  applySettings();
   const grammarP = GrammarLib.loadGrammar("model/lexicon.json").catch(() => null);
   BrainLib.loadBrain("model/brain.json").then(async (brain) => {
+    $("boot-1").textContent = "  ⎿ " + brain.paramCount.toLocaleString("en-US") + " params · " + brain.clsTags.length + " intents · " + brain.vocab.length + " words";
     const grammar = await grammarP;
-    bot = new BotLib.RoastBot(brain, { storage, grammar });
+    $("boot-2").textContent = "  ⎿ grammar police " + (grammar ? "ready (80k words)" : "failed to load");
+    bot = new BotLib.RoastBot(brain, { storage, grammar, settings: { lang: settings.lang, search: settings.search, grammar: settings.grammar } });
+    await sleep(reduced ? 0 : 350);
+    screen.textContent = "";
+    welcome();
     const d = bot.mem.data;
     if (d.history.length) {
       restore(d.history);
-      addMessage("bot", d.name ? "oh " + d.name + " balik lagi. ugh 🥀" : "oh lu balik. ugh 🥀");
-    } else {
-      addMessage("bot", "yo. gw sybau.ai, neural net yang dilatih dari nol buat benci lu 🥀 kasih tau nama lu, suruh gw nyari sesuatu, atau ngomong apa aja yang cupu. typo dikit gw roast.");
+      await botSay(d.name ? (uiLang() === "id" ? "oh " + d.name + " balik lagi. ugh 🥀" : "oh " + d.name + " is back. ugh 🥀") : (uiLang() === "id" ? "oh lu balik. ugh 🥀" : "oh ur back. ugh 🥀"), null, false);
     }
-    refreshHate();
-    $("loader").classList.add("gone");
+    input.disabled = false;
+    applySettings();
     input.focus();
   }).catch((err) => {
-    $("loader-text").textContent = "otak gagal ke-load 💀 (" + err.message + "). kalo buka file langsung, pake server: python -m http.server";
+    $("boot-2").textContent = "  ⎿ error: brain failed to load (" + err.message + "). opening the file directly? run: python -m http.server";
+    $("boot-2").className = "line red";
   });
 })();

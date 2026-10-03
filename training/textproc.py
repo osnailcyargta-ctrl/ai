@@ -127,7 +127,7 @@ def gen_detokenize(tokens):
             continue
         if out and not glue and tok not in ",.!?:;":
             out += " "
-        glue = False
+        glue = tok == "/"  # "/settings", "/search on"
         out += tok
     return out
 

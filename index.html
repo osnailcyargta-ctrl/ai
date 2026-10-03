@@ -2,90 +2,56 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>sybau.ai 🥀</title>
-  <meta name="description" content="AI chatbot brainrot yang benci kamu. Neural net dilatih dari nol, jalan di browser, tanpa API key.">
-  <meta name="theme-color" content="#f2ede3" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#161412" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="AI chatbot brainrot yang benci kamu, dalam bentuk terminal. Neural net dilatih dari nol, jalan di browser, tanpa API key.">
+  <meta name="theme-color" content="#100e0e">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥀</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;800&family=Caveat:wght@700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,800;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
-  <div id="loader" class="loader">
-    <div class="loader-mark">SYBAU<span>.AI</span></div>
-    <div class="loader-rose" aria-hidden="true">🥀</div>
-    <p id="loader-text" class="mono">loading 2mb of pure hate…</p>
-  </div>
-
-  <div class="app">
-    <header class="masthead">
-      <div class="mast-row">
-        <div class="logo" aria-hidden="true">🥀</div>
-        <div class="mast-title">
-          <h1>SYBAU<span>.AI</span></h1>
-          <p class="tagline">ai yang benci lu · dilatih dari nol · tanpa api key</p>
-        </div>
-        <div class="mast-actions">
-          <button id="brain-toggle" class="tool" title="liat isi otak neural net-nya" aria-pressed="false"><span aria-hidden="true">🧠</span><span class="tool-label">OTAK</span></button>
-          <button id="memory-open" class="tool" title="apa aja yang gw inget soal lu"><span aria-hidden="true">🗂️</span><span class="tool-label">FILE LU</span></button>
-        </div>
-      </div>
-      <div class="ticker" aria-hidden="true">
-        <div class="ticker-track">
-          <span>STFU</span><span>IDC</span><span>SYBAU</span><span>TS PMO</span><span>WHO ASKED</span><span>U COOKED</span><span>MID</span><span>RATIO</span><span>TOUCH GRASS</span><span>AURA −1000</span><span>LIL BRO</span><span>NAH 🥀</span>
-          <span>STFU</span><span>IDC</span><span>SYBAU</span><span>TS PMO</span><span>WHO ASKED</span><span>U COOKED</span><span>MID</span><span>RATIO</span><span>TOUCH GRASS</span><span>AURA −1000</span><span>LIL BRO</span><span>NAH 🥀</span>
-        </div>
-      </div>
-      <div class="hate" role="meter" aria-label="hate level" aria-valuemin="0" aria-valuemax="100" id="hate">
-        <span class="hate-label">HATE LVL</span>
-        <div class="hate-segs" id="hate-segs"></div>
-        <span id="hate-value" class="hate-value">66%</span>
-      </div>
+  <div class="window">
+    <header class="titlebar">
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="title">sybau.ai <span class="dim">— ~/ur-life (cooked)</span></span>
+      <button id="settings-btn" class="tb-btn" title="settings (/settings)" aria-haspopup="dialog"><span aria-hidden="true">⚙</span> <span class="tb-label">settings</span></button>
     </header>
 
-    <main id="chat" class="chat" aria-live="polite"></main>
+    <main id="screen" class="screen" aria-live="polite">
+      <div id="boot" class="boot">
+        <div class="line"><span class="accent">✻</span> booting sybau.ai…</div>
+        <div class="line dim" id="boot-1">  ⎿ loading neural net weights (2.3mb of pure hate)</div>
+        <div class="line dim" id="boot-2"></div>
+      </div>
+    </main>
 
-    <div class="chips" id="chips">
-      <button class="chip">roast gw</button>
-      <button class="chip">mending iphone atau android?</button>
-      <button class="chip">cari elon musk</button>
-      <button class="chip">nama gw </button>
-      <button class="chip">gw suka </button>
-      <button class="chip">berapa 6*7</button>
-      <button class="chip">lu ai beneran?</button>
-      <button class="chip">gw lagi dirumah</button>
-      <button class="chip">lu inget apa tentang gw</button>
+    <div class="dock">
+      <form id="prompt" class="prompt" autocomplete="off">
+        <span class="caret" aria-hidden="true">&gt;</span>
+        <textarea id="input" rows="1" maxlength="400" spellcheck="false" aria-label="ketik pesan atau /command" disabled></textarea>
+      </form>
+      <div id="suggest" class="suggest" role="listbox" hidden></div>
+      <div id="shortcuts" class="shortcuts" hidden></div>
+      <div class="statusline">
+        <span id="hint" class="dim">? for shortcuts</span>
+        <span id="status" class="status"></span>
+      </div>
     </div>
-
-    <form id="composer" class="composer" autocomplete="off">
-      <input id="input" type="text" maxlength="400" placeholder="ketik sesuatu yang cupu…" aria-label="pesan">
-      <button id="send" class="send" type="submit">KIRIM</button>
-    </form>
   </div>
 
-  <aside id="drawer" class="drawer" aria-hidden="true">
-    <div class="file-tab">CASE FILE</div>
-    <div class="file-head">
-      <div>
-        <p class="mono file-no" id="case-no">KASUS #0000</p>
-        <h2>BERKAS TERSANGKA</h2>
+  <div id="settings" class="modal" hidden>
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="panel-head">
+        <span id="settings-title"><span class="accent">⚙</span> Settings</span>
+        <button id="settings-close" class="x" aria-label="close">esc</button>
       </div>
-      <button id="memory-close" class="close" aria-label="tutup">✕</button>
+      <div id="settings-list" class="settings-list"></div>
+      <div id="settings-foot" class="panel-foot dim"></div>
     </div>
-    <div class="stamp" aria-hidden="true">BERSALAH</div>
-    <dl id="memory-list" class="file-list"></dl>
-    <h3>BARANG BUKTI <span class="muted">(dosa grammar)</span></h3>
-    <ul id="evidence" class="evidence"></ul>
-    <button id="wipe" class="burn">🔥 BAKAR BERKAS</button>
-    <p class="mono small">disimpen di browser lu doang (localStorage). ga dikirim ke server mana pun.</p>
-    <h3>SPESIFIKASI OTAK</h3>
-    <dl id="brain-stats" class="file-list"></dl>
-    <p class="mono small">2 neural net dilatih pake numpy dari folder data/: classifier MLP (ngerti maksud lu) + GRU 256 unit (nulis balesan kata per kata, ngikutin bahasa lu). Search pake Wikipedia, grammar dicek pake 80rb kata.</p>
-  </aside>
-  <div id="scrim" class="scrim"></div>
+  </div>
 
   <script src="assets/js/brain.js"></script>
   <script src="assets/js/grammar.js"></script>

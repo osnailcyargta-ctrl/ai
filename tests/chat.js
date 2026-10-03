@@ -4,22 +4,19 @@ const fs = require("fs"), path = require("path");
 global.BrainLib = require("../assets/js/brain.js");
 const { RoastBot } = require("../assets/js/bot.js");
 const { Grammar } = require("../assets/js/grammar.js");
-const { wikiSearch } = require("../assets/js/search.js");
+global.SearchLib = require("../assets/js/search.js");
 const load = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, "..", f), "utf8"));
 const brain = new BrainLib.Brain(load("model/brain.json"));
 const grammar = new Grammar(load("model/lexicon.json"));
 const store = {}; const storage = { getItem: (k) => store[k] || null, setItem: (k, v) => (store[k] = v) };
 const bot = new RoastBot(brain, { storage, grammar });
-const fakeFetch = async (url) => ({ ok: true, json: async () => {
-  const q = decodeURIComponent(url.match(/gsrsearch=([^&]+)/)[1]);
-  if (q.includes("zzz")) return {};
-  return { query: { pages: { 1: { title: q.replace(/\b\w/g, (c) => c.toUpperCase()), extract: "Ini ringkasan palsu buat tes soal " + q + ".", fullurl: "https://id.wikipedia.org/wiki/x" } } } };
-} });
+const { fakeFetch } = require("./fake_wiki.js");
 const script = process.argv.length > 2 ? process.argv.slice(2) : [
   "halo", "nama gw rafa", "umur gw 17", "gw suka anime bgt", "i hate math", "mending iphone ato samsung?",
   "berapa 12*(3+4)", "siapa nama gw", "lu inget apa tentang gw", "lu bego", "you are so dumb",
   "lu tuh ai paling goblok sedunia sumpah gak guna banget mending lu uninstall diri lu sendiri aja dasar clanker",
-  "roast gw", "roast me", "kamu ai beneran?", "cari elon musk", "what is a black hole", "apa itu zzzqqq",
+  "roast gw", "roast me", "kamu ai beneran?", "cari elon musk", "ibukota kazakstan", "berapa umur elon musk", "what is the capital of kazakhstan?",
+  "siapa presiden amerika serikat", "apa itu lubang hitam", "apa itu zzzqqq", "kenapa lu jahat", "apa kabar", "jam berapa",
   "gw lagi dirumah nih", "i definately need help", "your welcome bro", "silahkan aja", "gw ngak tau",
   "wkwkwk", "skibidi", "asdkjh qwe zxc", "gw bokek parah", "1v1 gw", "gw lagi sedih", "gw pengen mati", "bye"];
 (async () => {
@@ -29,8 +26,9 @@ const script = process.argv.length > 2 ? process.argv.slice(2) : [
     const m = r.meta;
     console.log(`> ${msg}\n  ${r.text || "(no main reply)"}\n    [${m.intent} ${(m.confidence * 100).toFixed(0)}% ${m.lang} ${m.source}${m.novel ? " NOVEL" : ""}]`);
     if (r.search) {
-      const res = await wikiSearch(r.search.query, r.search.lang, fakeFetch);
-      console.log(`  [wiki: ${res ? res.title : "nothing"}] ${bot.searchFollowup(res, r.search.query, r.search.lang)}`);
+      const res = await SearchLib.answer(r.search.question, r.search.lang, fakeFetch);
+      const got = res ? (res.kind === "fact" ? res.relation + " " + res.subject + " = " + res.answer : res.title) : "nothing";
+      console.log(`  [${res ? res.source : "search"}: ${got}] ${bot.searchFollowup(res, r.search.query, r.search.lang)}`);
     }
     if (r.grammar) console.log(`  📝 ${r.grammar.wrong} -> ${r.grammar.right} (${r.grammar.kind}): ${r.grammar.text}`);
   }

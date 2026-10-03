@@ -100,7 +100,7 @@
         continue;
       }
       if (out && !glue && !",.!?:;".includes(tok)) out += " ";
-      glue = false;
+      glue = tok === "/"; // "/settings", "/search on"
       out += tok;
     }
     return out;

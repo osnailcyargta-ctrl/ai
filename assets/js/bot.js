@@ -14,6 +14,7 @@
   "use strict";
 
   const Lib = root.BrainLib || (typeof require === "function" ? require("./brain.js") : null);
+  const SLib = root.SearchLib || (typeof require === "function" ? require("./search.js") : null);
 
   const MEMORY_KEY = "sybau_memory_v1";
   const CONF_THRESHOLD = 0.42; // below this the bot admits it didn't understand
@@ -241,6 +242,8 @@
     constructor(brain, opts = {}) {
       this.brain = brain;
       this.grammar = opts.grammar || null;
+      // user settings: lang "auto" | "id" | "en", search on/off, grammar police on/off
+      this.settings = Object.assign({ lang: "auto", search: true, grammar: true }, opts.settings || {});
       this.mem = new Memory(opts.storage);
       this.rand = opts.rand || Math.random;
       this.now = opts.now || (() => new Date());
@@ -265,7 +268,7 @@
       const d = mem.data;
       d.messages += 1;
       d.lastSeen = Date.now();
-      const lang = this.detectLang(raw);
+      const lang = this.settings.lang === "id" || this.settings.lang === "en" ? this.settings.lang : this.detectLang(raw);
       d.lang = lang;
 
       const meta = { source: "gru", novel: false, confidence: 1, intent: null, top: [], lang };
@@ -297,7 +300,6 @@
         thing: facts.thing || null, choice: null, other: null, answer: null, query: null, title: null,
         wrong: null, right: null, count: null };
 
-      let search = null;
       switch (intent) {
         case "math":
           if (math) slots.answer = formatNumber(math.value, lang);
@@ -334,16 +336,30 @@
           }
           break;
         }
-        case "search": {
-          const q = parseSearchQuery(raw);
-          // no "cari / apa itu / who is" in the message and the net isn't sure -> don't search random chat
-          if (q && (q.cued || meta.confidence > 0.85)) {
-            slots.query = q.query;
-            search = { query: q.query, lang };
-            mem.addUnique("searches", q.query, 10);
-          } else intent = "fallback";
-          break;
-        }
+      }
+
+      // ---- auto search: a factual question gets looked up, no "cari ..." needed
+      let search = null;
+      if (intent !== "selfharm" && intent !== "math") {
+        const pq = SLib.parseQuestion(raw);
+        const sq = parseSearchQuery(raw);
+        const verb = /^\s*(?:tolong |coba |bro |bang )?(?:cari|cariin|search|google|googling|look ?up|wiki)\b/i.test(raw);
+        const factual = !!(pq.rel && pq.subject && !pq.personal);
+        const cued = !!(sq && sq.cued && (verb || !pq.personal) && pq.subject);
+        const generic = pq.isQuestion && pq.subject && !pq.personal && pq.subject.split(" ").length <= 6 &&
+          (["question", "fallback", "search"].includes(intent) || meta.confidence < 0.6);
+        const sure = intent === "search" && meta.confidence > 0.85 && pq.subject && !pq.personal;
+        if (factual || cued || generic || sure) {
+          const shown = pq.rel ? (lang === "id" ? pq.rel.id + " " : pq.rel.en + " of ") + pq.subject : pq.subject || (sq && sq.query) || raw;
+          slots.query = shown;
+          if (!this.settings.search) {
+            if (factual || cued || intent === "search") intent = "search_off";
+          } else {
+            intent = "search";
+            search = { query: shown, question: pq, lang };
+            mem.addUnique("searches", shown, 10);
+          }
+        } else if (intent === "search") intent = "fallback";
       }
       meta.intent = intent;
 
@@ -354,7 +370,7 @@
       } else {
         out = this._compose(intent, slots, meta, lang);
         // sometimes flex the memory with a callback line
-        const noCallback = ["fallback", "like_something", "hate_something", "ask_memory", "sad", "goodbye", "search"];
+        const noCallback = ["fallback", "like_something", "hate_something", "ask_memory", "sad", "goodbye", "search", "search_off"];
         if (!noCallback.includes(intent) && (d.likes.length || d.hates.length) && d.messages > 3 &&
             d.messages - (d.lastCallback || 0) >= 5 && rand() < 0.2) {
           const extra = this._compose("callback", slots, {}, lang, true);
@@ -364,7 +380,7 @@
 
       // grammar police
       let grammar = null;
-      if (this.grammar && intent !== "selfharm" && intent !== "sad") {
+      if (this.grammar && this.settings.grammar && intent !== "selfharm" && intent !== "sad") {
         const extraKnown = new Set([d.name, slots.query, slots.thing, slots.choice, slots.other]
           .filter(Boolean).flatMap((s) => s.split(" ")));
         const err = this.grammar.check(raw, { lang, extraKnown });
@@ -395,7 +411,8 @@
 
     /** after the browser finished the Wikipedia lookup */
     searchFollowup(result, query, lang) {
-      const slots = { name: this.mem.data.name ? cap(this.mem.data.name) : null, query, title: result ? result.title : null };
+      const title = !result ? null : result.kind === "fact" ? result.answer + " (" + result.relation + " " + result.subject + ")" : result.title;
+      const slots = { name: this.mem.data.name ? cap(this.mem.data.name) : null, query, title };
       const text = this._compose(result ? "search_done" : "search_fail", slots, {}, lang || this.mem.data.lang || "en");
       if (result) this.mem.data.history.push({ role: "bot", kind: "search", result });
       this.mem.data.history.push({ role: "bot", text, meta: { intent: result ? "search_done" : "search_fail", source: "gru" } });
