@@ -40,6 +40,27 @@
     while (!v) v = rand();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
+  // words that are never a drawing name (and would otherwise fuzzy-match one: "dong" ~ "dog")
+  const STOP = new Set(("a an the of me my some please pls plz and or with mix in on at x size image picture pixel pixels art px " +
+    "gw gue aku lu lo dong deh sih ya yah aja nih tuh coba tolong yang yg sama dan atau pake campur bikin bikinin buat buatin " +
+    "gambar gambarin lukis sketsa draw paint generate make satu sebuah dua kecil gede besar lucu jelek keren bang bro").split(" "));
+
+  /** Damerau-Levenshtein distance (typos: swap, missing, extra, wrong letter) */
+  function editDistance(a, b) {
+    const n = a.length, m = b.length;
+    if (!n) return m;
+    if (!m) return n;
+    const d = [];
+    for (let i = 0; i <= n; i++) { d.push(new Array(m + 1).fill(0)); d[i][0] = i; }
+    for (let j = 0; j <= m; j++) d[0][j] = j;
+    for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[n][m];
+  }
+
   function hexToRgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
 
   class PixelBrain {
@@ -81,24 +102,46 @@
       return out;
     }
 
-    /** words in a prompt -> matching labels */
+    /** words in a prompt -> {labels, fixes}. exact names first, then the closest name
+     *  in the database ("catt" -> cat, "kucingg" -> kucing): fixes = [{from, to}] */
     match(prompt) {
-      const t = " " + String(prompt).toLowerCase().replace(/[^a-z0-9 ]+/g, " ") + " ";
-      const hits = [];
-      for (const l of this.labels) {
-        for (const w of l.words) {
-          const i = t.indexOf(" " + w.toLowerCase() + " ");
-          if (i >= 0) { hits.push({ label: l, at: i }); break; }
+      const words = String(prompt).toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w && !STOP.has(w));
+      const all = [];
+      for (const l of this.labels) for (const w of l.words) all.push({ w: w.toLowerCase(), label: l });
+      const labels = [], fixes = [];
+      const add = (l) => { if (!labels.includes(l)) labels.push(l); };
+      for (const word of words) {
+        const exact = all.find((x) => x.w === word);
+        if (exact) { add(exact.label); continue; }
+        if (word.length < 3) continue;
+        const allowed = word.length >= 8 ? 2 : 1;
+        let best = null, bd = Infinity;
+        for (const x of all) {
+          if (Math.abs(x.w.length - word.length) > allowed) continue;
+          const d = editDistance(word, x.w);
+          if (d < bd || (d === bd && best && x.label.builtin && !best.label.builtin)) { bd = d; best = x; }
         }
+        // short words must at least start with the same letter ("sapi" is not "api")
+        if (best && bd <= allowed && (word.length >= 5 || word[0] === best.w[0])) { add(best.label); fixes.push({ from: word, to: best.w }); }
       }
-      return hits.sort((a, b) => a.at - b.at).map((h) => h.label);
+      if (!labels.length && words.length > 1) {
+        // "drag on" -> "dragon"
+        const glued = words.join("");
+        let best = null, bd = Infinity;
+        for (const x of all) { const d = editDistance(glued, x.w); if (d < bd) { bd = d; best = x; } }
+        if (best && bd <= 1) { add(best.label); fixes.push({ from: words.join(" "), to: best.w }); }
+      }
+      return { labels, fixes };
     }
 
     /** prompt -> {grid, size, labels, known} ; size 16 native, 32 = scale2x upscale */
     draw(prompt, opts = {}) {
       const rand = opts.rand || Math.random;
-      let labels = this.match(prompt);
+      const found = this.match(prompt);
+      let labels = found.labels;
       const known = labels.length > 0;
+      let fixed = String(prompt).toLowerCase();
+      for (const f of found.fixes) fixed = fixed.replace(f.from, f.to);
       let noise = opts.noise !== undefined ? opts.noise : 0.22;
       if (!known) {
         // never seen it -> mix 2 random drawings with extra chaos (beta energy)
@@ -115,7 +158,7 @@
       for (let i = 0; i < this.zdim; i++) z[i] += gauss(rand) * noise;
       let grid = this.decode(z), size = this.size;
       if (opts.size === 32) { grid = scale2x(grid, size); size = 32; }
-      return { grid, size, labels: labels.map((l) => l.name), known, z: Array.from(z) };
+      return { grid, size, labels: labels.map((l) => l.name), known, fixes: found.fixes, prompt: fixed.trim(), z: Array.from(z) };
     }
 
     /** RGBA pixels (any size, already resized to size x size) -> palette indices */
@@ -259,7 +302,7 @@
     return new PixelBrain(await res.json());
   }
 
-  const api = { PixelBrain, loadPixels, scale2x, describeImage };
+  const api = { PixelBrain, loadPixels, scale2x, describeImage, editDistance };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PixelLib = api;
 })(typeof self !== "undefined" ? self : this);

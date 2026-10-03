@@ -6,7 +6,7 @@ import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PARTS = ["assets/js/brain.js", "assets/js/grammar.js", "assets/js/search.js", "assets/js/pixels.js",
-         "assets/js/learn.js", "assets/js/github.js", "assets/js/bot.js"]
+         "assets/js/learn.js", "assets/js/bot.js"]
 
 head = """/*! sybau.ai SDK - a chatbot that hates you. trained from scratch, runs on your side, no server.
  *  docs: https://osnailcyargta-ctrl.github.io/ai/  (type /connect)

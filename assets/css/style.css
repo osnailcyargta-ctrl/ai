@@ -241,10 +241,4 @@ body.brain-on .meta { display: block; }
 .keybox code { color: var(--accent-2); font-weight: 800; }
 .btn { background: transparent; border: 1px solid var(--border); border-radius: 5px; padding: 1px 9px; font-size: 12px; color: var(--fg); }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
-.perm { border: 1px solid var(--yellow); border-radius: 8px; padding: 8px 12px; margin: 0 0 14px; }
-.perm .q { margin: 6px 0 4px; }
-.perm .opt { display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 1px 4px; color: var(--dim); }
-.perm .opt.sel { color: var(--fg); }
-.perm .opt.sel::before { content: "❯ "; color: var(--accent); }
-.perm .opt:not(.sel)::before { content: "  "; white-space: pre; }
-.tree .dir { color: var(--blue); }
+.dir { color: var(--blue); }

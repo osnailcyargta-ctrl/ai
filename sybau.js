@@ -798,6 +798,27 @@
     while (!v) v = rand();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
+  // words that are never a drawing name (and would otherwise fuzzy-match one: "dong" ~ "dog")
+  const STOP = new Set(("a an the of me my some please pls plz and or with mix in on at x size image picture pixel pixels art px " +
+    "gw gue aku lu lo dong deh sih ya yah aja nih tuh coba tolong yang yg sama dan atau pake campur bikin bikinin buat buatin " +
+    "gambar gambarin lukis sketsa draw paint generate make satu sebuah dua kecil gede besar lucu jelek keren bang bro").split(" "));
+
+  /** Damerau-Levenshtein distance (typos: swap, missing, extra, wrong letter) */
+  function editDistance(a, b) {
+    const n = a.length, m = b.length;
+    if (!n) return m;
+    if (!m) return n;
+    const d = [];
+    for (let i = 0; i <= n; i++) { d.push(new Array(m + 1).fill(0)); d[i][0] = i; }
+    for (let j = 0; j <= m; j++) d[0][j] = j;
+    for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[n][m];
+  }
+
   function hexToRgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
 
   class PixelBrain {
@@ -839,24 +860,46 @@
       return out;
     }
 
-    /** words in a prompt -> matching labels */
+    /** words in a prompt -> {labels, fixes}. exact names first, then the closest name
+     *  in the database ("catt" -> cat, "kucingg" -> kucing): fixes = [{from, to}] */
     match(prompt) {
-      const t = " " + String(prompt).toLowerCase().replace(/[^a-z0-9 ]+/g, " ") + " ";
-      const hits = [];
-      for (const l of this.labels) {
-        for (const w of l.words) {
-          const i = t.indexOf(" " + w.toLowerCase() + " ");
-          if (i >= 0) { hits.push({ label: l, at: i }); break; }
+      const words = String(prompt).toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w && !STOP.has(w));
+      const all = [];
+      for (const l of this.labels) for (const w of l.words) all.push({ w: w.toLowerCase(), label: l });
+      const labels = [], fixes = [];
+      const add = (l) => { if (!labels.includes(l)) labels.push(l); };
+      for (const word of words) {
+        const exact = all.find((x) => x.w === word);
+        if (exact) { add(exact.label); continue; }
+        if (word.length < 3) continue;
+        const allowed = word.length >= 8 ? 2 : 1;
+        let best = null, bd = Infinity;
+        for (const x of all) {
+          if (Math.abs(x.w.length - word.length) > allowed) continue;
+          const d = editDistance(word, x.w);
+          if (d < bd || (d === bd && best && x.label.builtin && !best.label.builtin)) { bd = d; best = x; }
         }
+        // short words must at least start with the same letter ("sapi" is not "api")
+        if (best && bd <= allowed && (word.length >= 5 || word[0] === best.w[0])) { add(best.label); fixes.push({ from: word, to: best.w }); }
       }
-      return hits.sort((a, b) => a.at - b.at).map((h) => h.label);
+      if (!labels.length && words.length > 1) {
+        // "drag on" -> "dragon"
+        const glued = words.join("");
+        let best = null, bd = Infinity;
+        for (const x of all) { const d = editDistance(glued, x.w); if (d < bd) { bd = d; best = x; } }
+        if (best && bd <= 1) { add(best.label); fixes.push({ from: words.join(" "), to: best.w }); }
+      }
+      return { labels, fixes };
     }
 
     /** prompt -> {grid, size, labels, known} ; size 16 native, 32 = scale2x upscale */
     draw(prompt, opts = {}) {
       const rand = opts.rand || Math.random;
-      let labels = this.match(prompt);
+      const found = this.match(prompt);
+      let labels = found.labels;
       const known = labels.length > 0;
+      let fixed = String(prompt).toLowerCase();
+      for (const f of found.fixes) fixed = fixed.replace(f.from, f.to);
       let noise = opts.noise !== undefined ? opts.noise : 0.22;
       if (!known) {
         // never seen it -> mix 2 random drawings with extra chaos (beta energy)
@@ -873,7 +916,7 @@
       for (let i = 0; i < this.zdim; i++) z[i] += gauss(rand) * noise;
       let grid = this.decode(z), size = this.size;
       if (opts.size === 32) { grid = scale2x(grid, size); size = 32; }
-      return { grid, size, labels: labels.map((l) => l.name), known, z: Array.from(z) };
+      return { grid, size, labels: labels.map((l) => l.name), known, fixes: found.fixes, prompt: fixed.trim(), z: Array.from(z) };
     }
 
     /** RGBA pixels (any size, already resized to size x size) -> palette indices */
@@ -1017,7 +1060,7 @@
     return new PixelBrain(await res.json());
   }
 
-  const api = { PixelBrain, loadPixels, scale2x, describeImage };
+  const api = { PixelBrain, loadPixels, scale2x, describeImage, editDistance };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PixelLib = api;
 })(typeof self !== "undefined" ? self : this);
@@ -1026,17 +1069,13 @@
 
 // ---- assets/js/learn.js
 (function (module) {
-/* learn.js — sybau learns from you (when the "learn" setting is on) and from files.
+/* learn.js — sybau learns from files you upload and /learn.
  *
- *  - taught replies:  "kalo gw bilang X bales Y" / "if i say X say Y" -> stored pair.
- *                     Later messages that are close enough to X (cosine similarity
- *                     on the same hashed features the classifier uses) get Y.
- *  - your words:      counts the words you use a lot; the bot mocks them back and the
- *                     grammar police stops flagging slang you use all the time.
- *  - files:           .txt/.md/.csv/.json -> "X => Y" lines become taught pairs,
- *                     intents-style JSON gets imported, everything else becomes a
- *                     little knowledge base the bot answers questions from.
- *  - images:          learned pixel codes (see pixels.js) are stored here too.
+ *  - text files:  .txt/.md/.csv/.json. "X => Y" lines become question/answer pairs,
+ *                 intents-style JSON gets imported, everything else becomes a little
+ *                 knowledge base the bot answers questions from (cosine similarity on
+ *                 the same hashed features the classifier uses).
+ *  - images:      learned pixel codes (see pixels.js) are stored here too.
  * Everything lives in localStorage on your device.
  */
 (function (root) {
@@ -1046,29 +1085,11 @@
   const KEY = "sybau_learned_v1";
   const DIM = 4096;
   const MAX_DOC_CHARS = 300000;
-  const STOP = new Set(("aku kamu gak tidak yang udah lagi sama dengan karena kenapa gimana itu ini ada mau jadi bisa juga aja sih dong deh nih tuh kok ya iya " +
-    "the a an is are was were to of in on for and or but you your i me my it this that be do does did have has not no yes so just like what how why who " +
-    "qmark bang num wkwk haha oke bro").split(" "));
-
-  const TEACH_RES = [
-    /^(?:kalo|kalau|klo|jika|if|when)\s+(?:gw|gue|aku|saya|i|ada yang|someone|orang|user)?\s*(?:bilang|ngomong|ketik|nanya|tanya|say|says|type|types|ask|asks)\s+["'“]?(.+?)["'”]?\s*,?\s+(?:lu|lo|kamu|you|u)?\s*(?:bales|balas|jawab|bilang|reply|say|answer|respond)(?:\s+(?:with|pake|dengan|aja))?\s+["'“]?(.+?)["'”]?\s*$/i,
-    /^(?:jawab|bales|balas|reply|say|answer)\s+["'“]?(.+?)["'”]?\s+(?:kalo|kalau|klo|if|when)\s+(?:gw|gue|aku|saya|i|ada yang|someone)?\s*(?:bilang|ngomong|ketik|say|says|type)\s+["'“]?(.+?)["'”]?\s*$/i,
-  ];
-
   function dot(a, b) {
     let s = 0;
     const [small, big] = a.size < b.size ? [a, b] : [b, a];
     for (const [k, v] of small) { const w = big.get(k); if (w) s += v * w; }
     return s;
-  }
-
-  function parseTeach(text) {
-    const t = String(text).trim();
-    let m = t.match(TEACH_RES[0]);
-    if (m) return { q: m[1].trim(), a: m[2].trim() };
-    m = t.match(TEACH_RES[1]);
-    if (m) return { q: m[2].trim(), a: m[1].trim() };
-    return null;
   }
 
   function chunkText(text) {
@@ -1090,7 +1111,7 @@
       this.data = this._load();
       this._index();
     }
-    _blank() { return { pairs: [], words: {}, docs: [], images: [], seen: 0 }; }
+    _blank() { return { pairs: [], docs: [], images: [] }; }
     _load() {
       try {
         const raw = this.storage && this.storage.getItem(KEY);
@@ -1108,7 +1129,7 @@
       for (const d of this.data.docs) for (const c of d.chunks) this.chunkIdx.push({ doc: d.name, text: c, vec: Lib.featurize(c, DIM) });
     }
 
-    // ---------------- taught pairs
+    // ---------------- question/answer pairs (from files)
     teach(q, a) {
       const nq = Lib.normalize(q).join(" ");
       this.data.pairs = this.data.pairs.filter((p) => Lib.normalize(p.q).join(" ") !== nq);
@@ -1128,23 +1149,6 @@
       });
       return bs >= threshold ? Object.assign({ score: bs }, best) : null;
     }
-
-    // ---------------- your words
-    observe(text) {
-      this.data.seen++;
-      for (const w of Lib.normalize(text)) {
-        if (w.length < 3 || STOP.has(w) || w.startsWith("emoji")) continue;
-        this.data.words[w] = (this.data.words[w] || 0) + 1;
-      }
-      const entries = Object.entries(this.data.words);
-      if (entries.length > 3000) this.data.words = Object.fromEntries(entries.sort((a, b) => b[1] - a[1]).slice(0, 2000));
-      if (this.data.seen % 5 === 0) this.save();
-    }
-    favoriteWord(minCount = 3, exclude = []) {
-      const e = Object.entries(this.data.words).filter(([w, c]) => c >= minCount && !exclude.includes(w)).sort((a, b) => b[1] - a[1]);
-      return e.length ? { word: e[0][0], count: e[0][1] } : null;
-    }
-    knownWords(minCount = 3) { return Object.entries(this.data.words).filter(([, c]) => c >= minCount).map(([w]) => w); }
 
     // ---------------- files
     /** learn a text file. returns a summary {pairs, chunks, kind} */
@@ -1209,166 +1213,14 @@
     }
 
     stats() {
-      return { pairs: this.data.pairs.length, words: Object.keys(this.data.words).length, docs: this.data.docs.length,
+      return { pairs: this.data.pairs.length, docs: this.data.docs.length,
         chunks: this.chunkIdx.length, images: this.data.images.length };
     }
   }
 
-  const api = { Learner, parseTeach, chunkText };
+  const api = { Learner, chunkText };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.LearnLib = api;
-})(typeof self !== "undefined" ? self : this);
-
-})(undefined);
-
-// ---- assets/js/github.js
-(function (module) {
-/* github.js — lets sybau look at and change your GitHub, straight from the browser.
- *
- * Uses the official GitHub REST API (api.github.com allows browser requests).
- * You give it YOUR personal access token (/github login TOKEN). The token is kept
- * only in this browser's localStorage and is only ever sent to api.github.com.
- * Every write (create repo / file / folder) asks for permission first in the UI.
- */
-(function (root) {
-  "use strict";
-  const API = "https://api.github.com";
-  const TOKEN_KEY = "sybau_github_token";
-
-  function b64utf8(s) {
-    if (typeof TextEncoder !== "undefined" && typeof btoa === "function") {
-      const bytes = new TextEncoder().encode(s);
-      let bin = "";
-      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-      return btoa(bin);
-    }
-    return Buffer.from(s, "utf8").toString("base64");
-  }
-  function unb64utf8(b) {
-    const clean = String(b).replace(/\s/g, "");
-    if (typeof atob === "function" && typeof TextDecoder !== "undefined") {
-      const bin = atob(clean), bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return new TextDecoder().decode(bytes);
-    }
-    return Buffer.from(clean, "base64").toString("utf8");
-  }
-
-  class GitHub {
-    constructor(opts = {}) {
-      this.storage = opts.storage || null;
-      this.fetch = opts.fetch || (typeof fetch !== "undefined" ? fetch.bind(root) : null);
-      this.token = opts.token || this._loadToken();
-      this.user = null;
-    }
-    _loadToken() { try { return (this.storage && this.storage.getItem(TOKEN_KEY)) || null; } catch (e) { return null; } }
-    setToken(t) {
-      this.token = t || null;
-      this.user = null;
-      try { if (this.storage) { if (t) this.storage.setItem(TOKEN_KEY, t); else this.storage.removeItem(TOKEN_KEY); } } catch (e) { /* ignore */ }
-    }
-    get connected() { return !!this.token; }
-
-    async _req(method, path, body) {
-      if (!this.token) throw new Error("no token. run /github login TOKEN");
-      const res = await this.fetch(API + path, {
-        method,
-        headers: { Authorization: "Bearer " + this.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
-          ...(body ? { "Content-Type": "application/json" } : {}) },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      let data = null;
-      try { data = await res.json(); } catch (e) { data = null; }
-      if (!res.ok) {
-        const msg = (data && data.message) || ("HTTP " + res.status);
-        const err = new Error(res.status === 401 ? "token invalid or expired (401)" : res.status === 404 ? "not found (404) - wrong name, or the token can't see it" :
-          res.status === 403 ? "forbidden (403): " + msg : res.status === 422 ? "rejected (422): " + msg : msg);
-        err.status = res.status;
-        throw err;
-      }
-      return data;
-    }
-
-    async whoami() {
-      if (!this.user) this.user = await this._req("GET", "/user");
-      return this.user;
-    }
-    async fullName(repo) {
-      if (repo.includes("/")) return repo;
-      const me = await this.whoami();
-      return me.login + "/" + repo;
-    }
-    async repos() {
-      const list = await this._req("GET", "/user/repos?per_page=30&sort=updated");
-      return list.map((r) => ({ name: r.full_name, private: r.private, description: r.description, url: r.html_url, updated: r.updated_at }));
-    }
-    async ls(repo, path = "") {
-      const full = await this.fullName(repo);
-      const data = await this._req("GET", "/repos/" + full + "/contents/" + encodeURI(path.replace(/^\/+/, "")));
-      if (Array.isArray(data)) return { repo: full, path, entries: data.map((e) => ({ name: e.name, type: e.type, size: e.size, path: e.path })).sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1)) };
-      return { repo: full, path, file: { name: data.name, size: data.size, text: data.encoding === "base64" ? unb64utf8(data.content) : "", url: data.html_url } };
-    }
-    async createRepo(name, opts = {}) {
-      const r = await this._req("POST", "/user/repos", { name, private: !!opts.private, auto_init: true, description: opts.description || "made by sybau.ai (it hates this repo already)" });
-      return { name: r.full_name, url: r.html_url, private: r.private };
-    }
-    async createFile(repo, path, content, message) {
-      const full = await this.fullName(repo);
-      const clean = path.replace(/^\/+/, "");
-      let sha;
-      try { const cur = await this._req("GET", "/repos/" + full + "/contents/" + encodeURI(clean)); if (cur && cur.sha && !Array.isArray(cur)) sha = cur.sha; } catch (e) { if (e.status !== 404) throw e; }
-      const r = await this._req("PUT", "/repos/" + full + "/contents/" + encodeURI(clean), {
-        message: message || (sha ? "update " : "create ") + clean + " (via sybau.ai)", content: b64utf8(content == null ? "" : content), ...(sha ? { sha } : {}) });
-      return { repo: full, path: clean, url: r.content && r.content.html_url, updated: !!sha };
-    }
-    async createFolder(repo, path) {
-      // git has no empty folders: a folder exists once it has a file in it
-      const clean = path.replace(/^\/+|\/+$/g, "");
-      const r = await this.createFile(repo, clean + "/.gitkeep", "", "create folder " + clean + " (via sybau.ai)");
-      return Object.assign(r, { folder: clean });
-    }
-  }
-
-  const REPO = "([\\w.-]+\\/[\\w.-]+|[\\w.-]+)";
-  /** natural language or /github args -> {action, repo, path, content, private} | null */
-  function parseGithub(text) {
-    const t = String(text).trim();
-    let m;
-    if ((m = t.match(new RegExp("^(?:tolong |coba )?(?:bikin|bikinin|buat|buatin|create|make|add|tambah(?:in)?)\\s+(?:file|berkas)\\s+(\\S+)\\s+(?:di|in|to|ke|on)\\s+(?:repo(?:sitory)?\\s+)?" + REPO + "(?:\\s+(?:isi(?:nya)?|with|content|dengan isi|berisi)\\s+([\\s\\S]+))?$", "i"))))
-      return { action: "mkfile", path: m[1], repo: m[2], content: m[3] || "" };
-    if ((m = t.match(new RegExp("^(?:tolong |coba )?(?:bikin|bikinin|buat|buatin|create|make|add|tambah(?:in)?)\\s+(?:folder|direktori|directory|dir)\\s+(\\S+)\\s+(?:di|in|to|ke|on)\\s+(?:repo(?:sitory)?\\s+)?" + REPO + "\\s*$", "i"))))
-      return { action: "mkdir", path: m[1], repo: m[2] };
-    if ((m = t.match(/^(?:tolong |coba )?(?:bikin|bikinin|buat|buatin|create|make)\s+(?:a\s+)?(?:new\s+)?(?:repo|repository)(?:\s+baru)?(?:\s+(?:namanya|bernama|called|named))?\s+([\w.-]+)(\s+(?:private|privat|pribadi))?\s*$/i)))
-      return { action: "mkrepo", repo: m[1], private: !!m[2] };
-    if (/\b(repo gw apa aja|repo aku apa aja|list repo|daftar repo|show my repos|my repos|my repositories|repo(?:sitory)? gw|repo saya)\b/i.test(t))
-      return { action: "repos" };
-    if ((m = t.match(new RegExp("^(?:liat|lihat|cek|buka|isi|show|list|open|what'?s in|whats in)\\s+(?:isi\\s+)?(?:repo(?:sitory)?|files in)\\s+" + REPO + "(?:\\/(\\S+))?(?:\\s+apa aja)?\\s*$", "i"))))
-      return { action: "ls", repo: m[1], path: m[2] || "" };
-    return null;
-  }
-
-  /** "/github ..." -> {action, ...} */
-  function parseGithubCommand(args) {
-    const [sub, ...rest] = String(args || "").trim().split(/\s+/);
-    const s = (sub || "").toLowerCase();
-    if (!s || s === "status" || s === "whoami") return { action: "whoami" };
-    if (s === "login" || s === "token") return { action: "login", token: rest[0] || "" };
-    if (s === "logout") return { action: "logout" };
-    if (s === "repos") return { action: "repos" };
-    if (s === "ls" || s === "cat") {
-      const target = rest[0] || "";
-      const parts = target.split("/");
-      return { action: "ls", repo: parts.slice(0, 2).join("/"), path: parts.slice(2).join("/") };
-    }
-    if (s === "mkrepo") return { action: "mkrepo", repo: rest[0], private: /^(private|privat)$/i.test(rest[1] || "") };
-    if (s === "mkfile") return { action: "mkfile", repo: rest[0], path: rest[1], content: rest.slice(2).join(" ") };
-    if (s === "mkdir") return { action: "mkdir", repo: rest[0], path: rest[1] };
-    return { action: "help" };
-  }
-
-  const api = { GitHub, parseGithub, parseGithubCommand, b64utf8, unb64utf8 };
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
-  else root.GitHubLib = api;
 })(typeof self !== "undefined" ? self : this);
 
 })(undefined);
@@ -1392,8 +1244,6 @@
 
   const Lib = root.BrainLib || (typeof require === "function" ? require("./brain.js") : null);
   const SLib = root.SearchLib || (typeof require === "function" ? require("./search.js") : null);
-  const LLib = root.LearnLib || (typeof require === "function" ? require("./learn.js") : null);
-  const GLib = root.GitHubLib || (typeof require === "function" ? require("./github.js") : null);
 
   const DRAW_RE = /^\s*(?:tolong\s+|coba\s+|bisa\s+|can you\s+|pls\s+)?(?:gambar(?:in|kan)?|lukis(?:in|kan)?|sketsa|draw|paint|bikin(?:in)?\s+(?:gambar|pixel art)|buat(?:in)?\s+(?:gambar|pixel art)|generate(?:\s+(?:gambar|image|an image|a picture))?|make\s+(?:a\s+|an\s+)?(?:picture|image|drawing)|pixel art)\b(?:\s+(?:of|me|a|an|gw|aku|dong|tentang|sebuah))*\s*/i;
   const DRAW_JUNK = /\b(?:16\s*x\s*16|32\s*x\s*32|16|32|pixel|pixels|px|dong|pls|please|plis|ya|sih|deh|bang|bro|ga|gak|image|gambar|picture)\b/gi;
@@ -1625,9 +1475,8 @@
       this.brain = brain;
       this.grammar = opts.grammar || null;
       this.learner = opts.learner || null;
-      this.githubConnected = opts.githubConnected || (() => false);
-      // user settings: lang "auto" | "id" | "en", search on/off, grammar police on/off, learn from the user on/off
-      this.settings = Object.assign({ lang: "auto", search: true, grammar: true, learn: false }, opts.settings || {});
+      // user settings: lang "auto" | "id" | "en", search on/off, grammar police on/off
+      this.settings = Object.assign({ lang: "auto", search: true, grammar: true }, opts.settings || {});
       this.mem = new Memory(opts.storage);
       this.rand = opts.rand || Math.random;
       this.now = opts.now || (() => new Date());
@@ -1746,36 +1595,24 @@
         } else if (intent === "search") intent = "fallback";
       }
 
-      // ---- learning, drawing, github: these override the classifier when they clearly apply
-      let draw = null, github = null, connect = false;
-      const learnOn = !!(this.learner && this.settings.learn);
+      // ---- drawing, connect key, uploaded files: these override the classifier when they clearly apply
+      let draw = null, connect = false;
       if (intent !== "selfharm") {
-        const taught = LLib.parseTeach(raw);
-        const gh = GLib.parseGithub(raw);
         const drawMatch = raw.match(DRAW_RE);
         const drawPrompt = drawMatch ? raw.slice(drawMatch[0].length).replace(DRAW_JUNK, " ").replace(/\s+/g, " ").trim() : "";
-        if (taught) {
-          search = null;
-          if (learnOn) { this.learner.teach(taught.q, taught.a); intent = "teach"; slots.thing = taught.q; slots.answer = taught.a; }
-          else intent = "learn_off";
-        } else if (gh || (intent === "github" && meta.confidence > 0.6)) {
-          search = null;
-          if (!this.githubConnected()) intent = "github_need_token";
-          else { intent = "github"; github = gh || { action: "repos" }; }
-        } else if (drawMatch && (intent === "draw" || !/\b(lu|lo|kamu|elu)\b/i.test(drawPrompt))) {
+        if (drawMatch && (intent === "draw" || !/\b(lu|lo|kamu|elu)\b/i.test(drawPrompt))) {
           search = null;
           intent = "draw";
           draw = { prompt: drawPrompt || raw, size: /\b32\s*x?\s*32\b|\b32\b/.test(raw) ? 32 : 16, lang };
         } else if (intent === "connect" && meta.confidence > 0.6) {
           connect = true;
-        } else if (intent !== "math") {
-          const hit = learnOn ? this.learner.matchPair(raw) : null;
-          if (hit) { intent = "taught"; slots.answer = hit.a; search = null; meta.source = "learned"; }
-          else if (this.learner) {
-            const kb = this.learner.searchDocs(raw);
-            const asks = !!search || /\?|\b(apa|siapa|kapan|berapa|dimana|gimana|kenapa|jelasin|what|who|when|where|how|why|explain)\b/i.test(raw);
-            if (kb && (kb.score > 0.55 || (asks && kb.score > 0.3))) { intent = "kb_answer"; slots.answer = kb.text; search = null; meta.kb = kb.doc; }
-          }
+        } else if (intent !== "math" && this.learner) {
+          // answers from files the user uploaded and /learn-ed ("q => a" lines or notes)
+          const hit = this.learner.matchPair(raw);
+          const kb = hit ? null : this.learner.searchDocs(raw);
+          const asks = !!search || /\?|\b(apa|siapa|kapan|berapa|dimana|gimana|kenapa|jelasin|what|who|when|where|how|why|explain)\b/i.test(raw);
+          if (hit) { intent = "kb_answer"; slots.answer = hit.a; search = null; meta.source = "file"; }
+          else if (kb && (kb.score > 0.55 || (asks && kb.score > 0.3))) { intent = "kb_answer"; slots.answer = kb.text; search = null; meta.kb = kb.doc; }
         }
       }
       meta.intent = intent;
@@ -1795,22 +1632,13 @@
           const extra = this._compose("callback", slots, {}, lang, true);
           if (extra) { out += " " + extra; d.lastCallback = d.messages; this._remember(extra); }
         }
-        // learning mode: remember the user's words, and sometimes throw them back
-        if (learnOn) {
-          this.learner.observe(raw);
-          const fav = this.learner.favoriteWord(3, [d.name].filter(Boolean));
-          if (fav && out && intent !== "taught" && intent !== "teach" && d.messages - (d.lastQuote || 0) >= 6 && rand() < 0.35) {
-            const q = this._compose("quote_mock", Object.assign({}, slots, { quote: fav.word, count: String(fav.count) }), {}, lang, true);
-            if (q) { out += " " + q; d.lastQuote = d.messages; this._remember(q); }
-          }
-        }
       }
 
       // grammar police
       let grammar = null;
       if (this.grammar && this.settings.grammar && intent !== "selfharm" && intent !== "sad") {
         const extraKnown = new Set([d.name, slots.query, slots.thing, slots.choice, slots.other]
-          .filter(Boolean).flatMap((s) => s.split(" ")).concat(learnOn ? this.learner.knownWords(3) : []));
+          .filter(Boolean).flatMap((s) => s.split(" ")));
         const err = this.grammar.check(raw, { lang, extraKnown });
         if (err) {
           d.grammarCrimes += 1;
@@ -1825,7 +1653,7 @@
 
       // didn't understand the message but caught a typo? the typo roast IS the reply
       if (grammar && grammar.text && intent === "fallback") out = null;
-      if (draw || github) grammar = null; // don't nitpick commands
+      if (draw) grammar = null; // don't nitpick drawing prompts
 
       d.history.push({ role: "user", text: raw });
       if (out) {
@@ -1835,7 +1663,7 @@
       if (grammar) d.history.push({ role: "bot", kind: "grammar", text: grammar.text, wrong: grammar.wrong, right: grammar.right });
       this._trim();
       mem.save();
-      return { text: out, meta, grammar, search, draw, github, connect };
+      return { text: out, meta, grammar, search, draw, connect };
     }
 
     _lang() { return this.settings.lang === "id" || this.settings.lang === "en" ? this.settings.lang : this.mem.data.lang || "en"; }
@@ -1853,11 +1681,9 @@
     drawFollowup(d, req) {
       const subject = (req && req.prompt) || "";
       this.mem.data.history.push({ role: "bot", kind: "image", grid: Array.from(d.grid).join(","), size: d.size, labels: d.labels, known: d.known });
-      // talk about it with the user's own words ("kucing", not the internal label "cat")
-      return this._say(d.known ? "draw" : "draw_unknown", { thing: subject || d.labels.join(" + ") || "that" });
+      // talk about it with the user's own words ("kucing", not the internal label "cat"), typos fixed
+      return this._say(d.known ? "draw" : "draw_unknown", { thing: (d.known && d.prompt) || subject || d.labels.join(" + ") || "that" });
     }
-    /** after a github action finished */
-    githubFollowup(ok, summary) { return this._say(ok ? "github_done" : "github_fail", { answer: summary }); }
     /** a file was opened: kind "image" | "text" */
     fileOpened(kind, summary) { return this._say(kind === "image" ? "file_image" : "file_text", { answer: summary }); }
     learnedImage(name) { return this._say("learned_image", { thing: name }); }
@@ -1983,12 +1809,11 @@
      * @param {"auto"|"id"|"en"} [opts.lang]
      * @param {boolean} [opts.search=true]   auto Wikipedia/Wikidata lookups
      * @param {boolean} [opts.grammar=true]  grammar police
-     * @param {boolean} [opts.learn=false]   learn from the user's words
      * @param {boolean|string} [opts.memory=true] true = localStorage (browser), false = forget on reload, string = storage namespace
      */
     constructor(opts = {}) {
       if (opts.connectKey !== CONNECT_KEY) throw new Error("sybau: invalid connectKey. copy it from /connect on the sybau.ai site");
-      this.opts = Object.assign({ lang: "auto", search: true, grammar: true, learn: false, memory: true }, opts);
+      this.opts = Object.assign({ lang: "auto", search: true, grammar: true, memory: true }, opts);
       this.baseUrl = (opts.baseUrl || scriptBase || DEFAULT_BASE).replace(/\/?$/, "/");
       let st = null;
       if (this.opts.memory !== false && typeof localStorage !== "undefined") {
@@ -2016,7 +1841,7 @@
       this.learner = new root.LearnLib.Learner(this.storage);
       if (this.pixels) this.pixels.addLearned(this.learner.data.images);
       this.bot = new root.BotLib.RoastBot(brain, { storage: this.storage, grammar, learner: this.learner,
-        settings: { lang: this.opts.lang, search: this.opts.search, grammar: this.opts.grammar, learn: this.opts.learn } });
+        settings: { lang: this.opts.lang, search: this.opts.search, grammar: this.opts.grammar } });
       return this;
     }
 
@@ -2035,10 +1860,9 @@
         const d = this.pixels.draw(res.draw.prompt, { size: res.draw.size });
         out.image = { size: d.size, labels: d.labels, known: d.known, text: this.pixels.toText(d.grid, d.size),
           dataUrl: this.pixels.toDataURL(d.grid, d.size, d.size === 16 ? 8 : 4), grid: Array.from(d.grid),
-          palette: this.pixels.palette.map((p) => p.hex) };
+          palette: this.pixels.palette.map((p) => p.hex), didYouMean: d.fixes.map((f) => f.to) };
         out.followup = this.bot.drawFollowup(d, res.draw);
       }
-      if (res.github) out.github = { note: "github actions need the full sybau.ai site (they ask for permission there)", action: res.github };
       // one string with everything, handy for simple apps
       out.full = [out.text, out.search ? (out.search.kind === "fact" ? out.search.relation + " " + out.search.subject + ": " + out.search.answer : out.search.title + " - " + out.search.extract) : null,
         out.followup, out.grammar ? out.grammar.text : null].filter(Boolean).join("\n");
@@ -2049,11 +1873,9 @@
     async draw(prompt, size = 16) {
       await this.ready();
       const d = this.pixels.draw(prompt, { size });
-      return { size: d.size, labels: d.labels, known: d.known, text: this.pixels.toText(d.grid, d.size), dataUrl: this.pixels.toDataURL(d.grid, d.size, d.size === 16 ? 8 : 4) };
+      return { size: d.size, labels: d.labels, known: d.known, didYouMean: d.fixes.map((f) => f.to), text: this.pixels.toText(d.grid, d.size), dataUrl: this.pixels.toDataURL(d.grid, d.size, d.size === 16 ? 8 : 4) };
     }
 
-    /** teach a reply: when the user says q, answer a */
-    async teach(q, a) { await this.ready(); this.learner.teach(q, a); }
     /** learn a text document (notes, "q => a" lines, intents json) */
     async learnText(name, text) { await this.ready(); return this.learner.learnText(name, text); }
     /** forget everything about this user */

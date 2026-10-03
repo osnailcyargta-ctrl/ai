@@ -14,10 +14,11 @@
   const save = (k, v) => { try { storage && storage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
 
   // ---------------------------------------------------------------- settings
-  const settings = Object.assign({ lang: "auto", search: true, grammar: true, learn: false, brain: false, theme: "auto" }, load("sybau_settings", {}));
+  const settings = Object.assign({ lang: "auto", search: true, grammar: true, brain: false, theme: "auto" }, load("sybau_settings", {}));
+  delete settings.learn; // old setting, removed
   const CONNECT_KEY = "sybau-ck-7f3a9c2e1b8d4f60a5e3"; // same everywhere, forever (see sdk/core.js)
   const SITE = location.origin + location.pathname.replace(/[^/]*$/, "");
-  let learner = null, github = null, pixels = null, pending = null; // pending = last uploaded file
+  let learner = null, pixels = null, pending = null; // pending = last uploaded file
   const uiLang = () => (settings.lang === "en" ? "en" : "id");
 
   const T = {
@@ -26,7 +27,7 @@
       help: "/help buat bantuan, /settings buat pengaturan", cwd: "cwd: ~/ur-life (cooked)",
       tipsHead: "Tips biar ga keliatan cupu:",
       tips: ["Tanya apa aja: \"ibukota kazakhstan\", \"berapa umur elon musk\"", "\"gambar kucing\" (beta, 16x16, masih bego)",
-        "Upload file pake + file, terus /learn biar gw belajar", "/connect buat pake sybau di app lain, /github buat repo lu", "Typo dikit, polisi grammar dateng"],
+        "Upload file pake + file, terus /learn biar gw baca isinya", "/connect buat pake sybau di app lain", "Typo dikit, polisi grammar dateng"],
       placeholder: "Coba \"ibukota kazakhstan\" atau \"roast gw\"", hint: "? buat shortcut", busyHint: "esc buat stop",
       verbs: ["Roasting", "Nge-judge", "Masak lu", "Mikirin hinaan", "Aura farming", "Ngetawain lu", "Ngumpulin dendam", "Fanum tax", "Mewing", "Crash out", "Ngeliatin typo lu"],
       searching: "Nyari di Wikipedia + Wikidata", interrupted: "Dihentiin. bagus, gw juga males jawab",
@@ -38,11 +39,9 @@
       sLang: ["Bahasa balesan", "auto = ngikutin bahasa lu"], sSearch: ["Auto search", "nanya fakta → otomatis cari di Wikipedia/Wikidata"],
       sGrammar: ["Polisi grammar", "roast typo & salah ejaan"], sBrain: ["Tampilin otak", "liat intent, confidence, bahasa (debug)"],
       sTheme: ["Tema", "auto ngikutin sistem"],
-      sLearn: ["Belajar dari lu", "inget kata-kata lu + bisa diajarin balesan"], sGithub: ["GitHub", "enter = cara connect / status"],
       sConnect: ["Connect key", "enter = liat key + kode buat app lain"],
       on: "on", off: "off", hate: "hate",
-      drawing: "Ngegambar", reading: "Baca file", learning: "Belajar", github: "Ngobrak-abrik GitHub",
-      permQ: "Lanjutin?", yes: "Ya", no: "Ga, batalin", denied: "Dibatalin. aman, repo lu ga gw sentuh",
+      drawing: "Ngegambar", reading: "Baca file", learning: "Belajar",
       learnHint: "ketik /learn NAMA buat gw pelajarin gambar ini (buat generator gambar)", learnHintText: "ketik /learn buat gw pelajarin file ini",
       nothingToLearn: "ga ada file buat dipelajarin. upload dulu (+ file / drag & drop / paste)",
       copied: "kesalin", copy: "salin", save: "simpen png",
@@ -53,7 +52,7 @@
       help: "/help for help, /settings for settings", cwd: "cwd: ~/ur-life (cooked)",
       tipsHead: "Tips for getting started (and roasted):",
       tips: ["Ask anything: \"capital of kazakhstan\", \"how old is elon musk\"", "\"draw a cat\" (beta, 16x16, still dumb)",
-        "Upload a file with + file, then /learn so i learn it", "/connect to use sybau in other apps, /github for ur repos", "Make a typo and the grammar police shows up"],
+        "Upload a file with + file, then /learn so i read it", "/connect to use sybau in other apps", "Make a typo and the grammar police shows up"],
       placeholder: "Try \"capital of kazakhstan\" or \"roast me\"", hint: "? for shortcuts", busyHint: "esc to interrupt",
       verbs: ["Roasting", "Judging", "Cooking u", "Yapping", "Aura farming", "Crashing out", "Fanum taxing", "Mewing", "Glazing (jk)", "Clowning", "Reading ur typos"],
       searching: "Searching Wikipedia + Wikidata", interrupted: "Interrupted by user. good, didn't wanna answer anyway",
@@ -65,11 +64,9 @@
       sLang: ["Reply language", "auto = match whatever u type"], sSearch: ["Auto search", "factual questions → look up Wikipedia/Wikidata"],
       sGrammar: ["Grammar police", "roast typos & bad spelling"], sBrain: ["Show brain", "intent, confidence, language (debug)"],
       sTheme: ["Theme", "auto follows ur system"],
-      sLearn: ["Learn from u", "remember ur words + can be taught replies"], sGithub: ["GitHub", "enter = how to connect / status"],
       sConnect: ["Connect key", "enter = show key + code for other apps"],
       on: "on", off: "off", hate: "hate",
-      drawing: "Drawing", reading: "Reading file", learning: "Learning", github: "Poking ur GitHub",
-      permQ: "Do you want to proceed?", yes: "Yes", no: "No, cancel", denied: "Cancelled. ur repo is safe from me (for now)",
+      drawing: "Drawing", reading: "Reading file", learning: "Learning",
       learnHint: "type /learn NAME so i learn this picture (for the image generator)", learnHintText: "type /learn so i learn this file",
       nothingToLearn: "nothing to learn. upload a file first (+ file / drag & drop / paste)",
       copied: "copied", copy: "copy", save: "save png",
@@ -79,7 +76,7 @@
   const t = () => T[uiLang()];
 
   function applySettings() {
-    if (bot) bot.settings = { lang: settings.lang, search: settings.search, grammar: settings.grammar, learn: settings.learn };
+    if (bot) bot.settings = { lang: settings.lang, search: settings.search, grammar: settings.grammar };
     if (settings.theme === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", settings.theme);
     document.body.classList.toggle("brain-on", !!settings.brain);
@@ -273,8 +270,7 @@
       return s;
     };
     const lang = el("span", "opt-flags", "lang:" + settings.lang + "  ");
-    statusEl.append(lang, flag("search", settings.search), flag("grammar", settings.grammar), flag("learn", settings.learn));
-    if (github && github.connected) statusEl.appendChild(el("span", "opt-flags", "gh ● "));
+    statusEl.append(lang, flag("search", settings.search), flag("grammar", settings.grammar));
     if (bot) {
       const d = bot.mem.data;
       const v = Math.min(100, Math.round(60 + d.insults * 4 + d.compliments * 2 + (d.grammarCrimes || 0) * 2 + Math.min(d.messages, 40) * 0.5));
@@ -297,11 +293,9 @@
     { name: "/stats", desc: { id: "spesifikasi otak gw", en: "model stats" }, run: cmdStats },
     { name: "/draw", desc: { id: "gambar pixel art: /draw kucing [32]", en: "draw pixel art: /draw cat [32]" }, run: (a) => chat((uiLang() === "id" ? "gambar " : "draw ") + (a || "random"), true) },
     { name: "/learn", desc: { id: "pelajarin file yang lu upload (/learn NAMA buat gambar)", en: "learn the uploaded file (/learn NAME for pictures)" }, run: cmdLearn },
-    { name: "/unlearn", desc: { id: "hapus semua yang gw pelajarin dari lu", en: "forget everything i learned from u" }, run: cmdUnlearn },
+    { name: "/unlearn", desc: { id: "hapus semua file & gambar yang gw pelajarin", en: "forget all learned files & pictures" }, run: cmdUnlearn },
     { name: "/upload", desc: { id: "upload file (png, jpg, txt, md, csv, json)", en: "upload a file (png, jpg, txt, md, csv, json)" }, run: () => $("file").click() },
-    { name: "/github", choices: ["login", "logout", "whoami", "repos", "ls", "mkrepo", "mkfile", "mkdir"], desc: { id: "connect + atur repo github lu", en: "connect + manage ur github repos" }, run: cmdGithub },
     { name: "/connect", desc: { id: "connect key + kode buat pake sybau di app lain", en: "connect key + code to use sybau in other apps" }, run: cmdConnect },
-    { name: "/learning", choices: BOOL, desc: { id: "belajar dari kata-kata lu on | off", en: "learn from ur words on | off" }, run: (a) => setOpt("learn", a) },
     { name: "/roast", desc: { id: "minta di-roast", en: "get roasted" }, run: () => chat(uiLang() === "id" ? "roast gw" : "roast me", true) },
     { name: "/clear", desc: { id: "bersihin layar (memori tetep)", en: "clear screen (keeps memory)" }, run: cmdClear },
     { name: "/forget", desc: { id: "hapus semua memori soal lu", en: "wipe everything i know about u" }, run: cmdForget },
@@ -430,7 +424,6 @@
         }
       }
       if (res.draw && !interrupted) await doDraw(res.draw);
-      if (res.github && !interrupted) await doGithub(res.github);
       if (res.connect && !interrupted) cmdConnect();
       if (res.grammar && !interrupted) {
         if (res.text) await sleep(300);
@@ -465,10 +458,10 @@
     return wrap;
   }
 
-  function renderPicture(grid, size, label) {
+  function renderPicture(grid, size, label, note) {
     const { r, body } = row("tool");
     toolHead(body, "Draw", (label || "?") + ", " + size + "x" + size);
-    outBlock(body, [pictureNode(grid, size, (label || "sybau").replace(/[^a-z0-9]+/gi, "-"))]);
+    outBlock(body, (note ? [el("span", "yellow", note)] : []).concat([pictureNode(grid, size, (label || "sybau").replace(/[^a-z0-9]+/gi, "-"))]));
     return r;
   }
 
@@ -478,144 +471,9 @@
     await sleep(reduced ? 0 : 450);
     const d = pixels.draw(req.prompt, { size: req.size });
     sp.stop();
-    renderPicture(d.grid, d.size, d.known ? d.labels.join(" + ") : req.prompt + " (??)");
+    const mean = d.fixes.length ? "did you mean " + d.fixes.map((f) => f.to).join(" + ") + "?" : null;
+    renderPicture(d.grid, d.size, d.known ? d.prompt || d.labels.join(" + ") : req.prompt + " (??)", mean);
     await botSay(bot.drawFollowup(d, req), { intent: d.known ? "draw" : "draw_unknown", source: "gru", lang: bot._lang() });
-  }
-
-  // ---------------------------------------------------------------- permission prompt (like a CLI asking before it edits stuff)
-  let permission = null;
-  function askPermission(title, lines) {
-    return new Promise((resolve) => {
-      const box = el("div", "perm");
-      box.appendChild(el("div", "bold", title));
-      for (const l of lines) box.appendChild(el("div", "dim", l));
-      box.appendChild(el("div", "q", t().permQ));
-      const opts = [t().yes, t().no].map((label, i) => {
-        const b = el("button", "opt" + (i === 0 ? " sel" : ""), (i + 1) + ". " + label);
-        b.type = "button";
-        b.addEventListener("click", () => done(i === 0));
-        box.appendChild(b);
-        return b;
-      });
-      put(box);
-      scrollDown(true);
-      let sel = 0;
-      const mark = () => opts.forEach((o, i) => o.classList.toggle("sel", i === sel));
-      function done(yes) {
-        permission = null;
-        opts.forEach((o) => (o.disabled = true));
-        box.appendChild(el("div", yes ? "green" : "red", yes ? "  ⎿ " + t().yes : "  ⎿ " + t().denied));
-        resolve(yes);
-      }
-      permission = (e) => {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); sel = 1 - sel; mark(); }
-        else if (e.key === "1" || e.key === "y") { e.preventDefault(); done(true); }
-        else if (e.key === "2" || e.key === "n" || e.key === "Escape") { e.preventDefault(); done(false); }
-        else if (e.key === "Enter") { e.preventDefault(); done(sel === 0); }
-      };
-    });
-  }
-  document.addEventListener("keydown", (e) => { if (permission) permission(e); }, true);
-
-  // ---------------------------------------------------------------- github
-  function githubHelp() {
-    const id = uiLang() === "id";
-    const tbl = el("div", "cmd-table");
-    for (const [k, v] of [["/github login TOKEN", id ? "connect pake token lu" : "connect with ur token"], ["/github whoami", id ? "cek akun" : "check account"],
-      ["/github repos", id ? "daftar repo lu" : "list ur repos"], ["/github ls owner/repo[/path]", id ? "liat isi repo / file" : "browse a repo / file"],
-      ["/github mkrepo NAME [private]", id ? "bikin repo" : "create a repo"], ["/github mkfile REPO PATH isi...", id ? "bikin / update file" : "create / update a file"],
-      ["/github mkdir REPO PATH", id ? "bikin folder" : "create a folder"], ["/github logout", id ? "hapus token" : "forget the token"]])
-      tbl.append(el("span", "k", k), el("span", "dim", v));
-    const how = id
-      ? ["Cara dapet token: github.com/settings/personal-access-tokens → Generate new token.", "Kasih izin: Contents (read & write) + Administration (read & write, buat bikin repo). Token classic juga bisa (scope: repo).",
-        "Token cuma disimpen di browser lu (localStorage) dan cuma dikirim ke api.github.com.", "Bisa juga pake bahasa biasa: \"liat repo user/nama\", \"bikin repo test\", \"bikin file a.md di repo test isi halo\"."]
-      : ["Get a token: github.com/settings/personal-access-tokens → Generate new token.", "Permissions: Contents (read & write) + Administration (read & write, to create repos). A classic token with the repo scope works too.",
-        "The token stays in this browser (localStorage) and is only sent to api.github.com.", "Plain language works too: \"show repo user/name\", \"create repo test\", \"create file a.md in test with hello\"."];
-    const st = github.connected ? (github.user ? "connected as @" + github.user.login : "token saved") : "not connected";
-    sys([el("span", "bold", "github · " + st), tbl].concat(how.map((h) => el("span", "dim", h))));
-  }
-
-  async function cmdGithub(args) {
-    const c = GitHubLib.parseGithubCommand(args);
-    if (c.action === "help") return githubHelp();
-    if (c.action === "login") {
-      if (!c.token) return githubHelp();
-      github.setToken(c.token);
-      const sp = spinner(t().github);
-      try { const me = await github.whoami(); sp.stop(); sys([el("span", "green", "connected as @" + me.login + (me.name ? " (" + me.name + ")" : ""))]); }
-      catch (e) { sp.stop(); github.setToken(null); sys(["login failed: " + e.message], "red"); }
-      refreshStatus();
-      return;
-    }
-    if (c.action === "logout") { github.setToken(null); refreshStatus(); return sys([uiLang() === "id" ? "token dihapus dari browser ini" : "token removed from this browser"]); }
-    if (c.action === "whoami") {
-      if (!github.connected) return githubHelp();
-      const sp = spinner(t().github);
-      try { const me = await github.whoami(); sp.stop(); sys([kvTable([["login", "@" + me.login], ["name", me.name || "-"], ["public repos", String(me.public_repos)], ["profile", me.html_url]])]); }
-      catch (e) { sp.stop(); sys([e.message], "red"); }
-      return;
-    }
-    return doGithub(c);
-  }
-
-  async function doGithub(a) {
-    if (!github.connected) return githubHelp();
-    const id = uiLang() === "id";
-    const writes = { mkrepo: "createRepo", mkfile: "createFile", mkdir: "createFolder" };
-    if ((a.action === "mkfile" || a.action === "mkdir" || a.action === "mkrepo") && (!a.repo || (a.action !== "mkrepo" && !a.path)))
-      return sys([id ? "kurang lengkap. contoh: /github mkfile user/repo path/file.md isi" : "missing parts. e.g. /github mkfile user/repo path/file.md content"], "red");
-    if (writes[a.action]) {
-      let full = a.repo;
-      try { if (a.action !== "mkrepo") full = await github.fullName(a.repo); } catch (e) { /* shown later */ }
-      const lines = a.action === "mkrepo" ? ["github.createRepo(\"" + a.repo + "\", " + (a.private ? "private" : "public") + ")"]
-        : a.action === "mkdir" ? ["github.createFolder(\"" + full + "\", \"" + a.path + "/\")", id ? "(git ga punya folder kosong, jadi gw bikin " + a.path + "/.gitkeep)" : "(git has no empty folders, so this creates " + a.path + "/.gitkeep)"]
-        : ["github.createFile(\"" + full + "\", \"" + a.path + "\")", (a.content ? "\"" + a.content.slice(0, 120) + (a.content.length > 120 ? "…" : "") + "\"" : id ? "(file kosong)" : "(empty file)")];
-      const title = a.action === "mkrepo" ? (id ? "Bikin repository" : "Create repository") : a.action === "mkdir" ? (id ? "Bikin folder" : "Create folder") : (id ? "Bikin / update file" : "Create / update file");
-      const ok = await askPermission(title, lines);
-      if (!ok) return;
-    }
-    const sp = spinner(t().github);
-    try {
-      let summary, lines = [];
-      if (a.action === "repos") {
-        const list = await github.repos();
-        lines = list.length ? list.map((x) => { const sp2 = el("span"); sp2.append(el("span", "dir", x.name), el("span", "dim", (x.private ? "  private" : "") + (x.description ? "  " + x.description : ""))); return sp2; }) : [id ? "(ga ada repo)" : "(no repos)"];
-        summary = list.length + " repo";
-      } else if (a.action === "ls") {
-        const res = await github.ls(a.repo, a.path);
-        if (res.entries) {
-          lines = res.entries.length ? res.entries.map((e) => el("span", e.type === "dir" ? "dir" : null, e.name + (e.type === "dir" ? "/" : "") + (e.type === "file" ? "  " + e.size + "b" : ""))) : ["(kosong)"];
-          summary = res.repo + (res.path ? "/" + res.path : "") + ": " + res.entries.length + (id ? " item" : " items");
-        } else {
-          const txt = res.file.text.split("\n");
-          lines = [el("span", "dim", res.file.name + " · " + res.file.size + " bytes"), el("span", "code", txt.slice(0, 60).join("\n") + (txt.length > 60 ? "\n…" : ""))];
-          summary = res.file.name + " (" + txt.length + (id ? " baris)" : " lines)");
-        }
-      } else if (a.action === "mkrepo") {
-        const res = await github.createRepo(a.repo, { private: a.private });
-        lines = [el("span", "green", (id ? "repo dibikin: " : "created: ") + res.name), link(res.url, res.url)];
-        summary = (id ? "repo " : "repo ") + res.name;
-      } else if (a.action === "mkfile") {
-        const res = await github.createFile(a.repo, a.path, a.content);
-        lines = [el("span", "green", (res.updated ? "updated: " : "created: ") + res.repo + "/" + res.path)].concat(res.url ? [link(res.url, res.url)] : []);
-        summary = res.repo + "/" + res.path;
-      } else if (a.action === "mkdir") {
-        const res = await github.createFolder(a.repo, a.path);
-        lines = [el("span", "green", (id ? "folder dibikin: " : "created folder: ") + res.repo + "/" + res.folder + "/")];
-        summary = (id ? "folder " : "folder ") + res.folder;
-      }
-      sp.stop();
-      const rr = row("tool");
-      toolHead(rr.body, "GitHub." + a.action, [a.repo, a.path].filter(Boolean).join(" "));
-      outBlock(rr.body, lines.map((l) => (typeof l === "string" ? el("span", null, l) : l)));
-      await botSay(bot.githubFollowup(true, summary), { intent: "github_done", source: "gru", lang: bot._lang() });
-    } catch (e) {
-      sp.stop();
-      const rr = row("tool fail");
-      toolHead(rr.body, "GitHub." + a.action, [a.repo, a.path].filter(Boolean).join(" "));
-      outBlock(rr.body, [el("span", "red", e.message)]);
-      await botSay(bot.githubFollowup(false, e.message), { intent: "github_fail", source: "gru", lang: bot._lang() });
-    }
   }
 
   // ---------------------------------------------------------------- connect key
@@ -717,7 +575,6 @@
         outBlock(body, [el("span", null, lines.length + (id ? " baris · " : " lines · ") + text.length + (id ? " karakter" : " chars")),
           el("span", "code", lines.slice(0, 10).join("\n").slice(0, 900) + (lines.length > 10 ? "\n…" : "")), el("span", "yellow", t().learnHintText)]);
         await botSay(bot.fileOpened("text", lines.length + (id ? " baris" : " lines")), { intent: "file_text", source: "gru", lang: bot._lang() });
-        if (settings.learn) await cmdLearn("", true);
       } else {
         throw new Error(id ? "format ga didukung. bisa: png, jpg, gif, webp, txt, md, csv, json" : "unsupported format. try png, jpg, gif, webp, txt, md, csv, json");
       }
@@ -756,7 +613,6 @@
         : sum.pairs + (id ? " pasangan tanya-jawab (" : " question/answer pairs (") + sum.kind + ")";
       outBlock(body, [el("span", "green", desc)].concat(sum.saveFailed ? [el("span", "red", id ? "storage browser penuh, sebagian ga kesimpen" : "browser storage full, some of it wasn't saved")] : []));
       if (!auto) await botSay(bot.fileOpened("text", desc), { intent: "file_text", source: "gru", lang: bot._lang() });
-      if (sum.pairs && !settings.learn) sys([id ? "catatan: pasangan tanya-jawab cuma dipake kalo mode belajar nyala (/learning on)" : "note: q/a pairs are only used when learning is on (/learning on)"], "yellow");
     }
     pending = null;
   }
@@ -841,10 +697,9 @@
     autoresize();
     suggestEl.hidden = true;
     shortcutsEl.hidden = true;
-    const secret = /^\/github\s+(login|token)\s+\S+/i.test(text.trim());
-    if (!secret && history[history.length - 1] !== text) { history.push(text); if (history.length > 50) history.shift(); save("sybau_cmd_history", history); }
+    if (history[history.length - 1] !== text) { history.push(text); if (history.length > 50) history.shift(); save("sybau_cmd_history", history); }
     hIndex = -1;
-    if (text.trim().startsWith("/")) { userEcho(secret ? text.trim().replace(/(login|token)\s+\S+/i, "$1 ••••••••") : text.trim()); runCommand(text.trim()); scrollDown(true); input.focus(); }
+    if (text.trim().startsWith("/")) { userEcho(text.trim()); runCommand(text.trim()); scrollDown(true); input.focus(); }
     else if (pending && /^(?:tolong\s+)?(?:pelajarin|pelajari|belajar|pahamin|learn|study)\b/i.test(text.trim())) { userEcho(text.trim()); cmdLearn(""); }
     else chat(text.trim());
   }
@@ -905,8 +760,6 @@
     { key: "lang", choices: ["auto", "id", "en"], label: () => t().sLang },
     { key: "search", label: () => t().sSearch },
     { key: "grammar", label: () => t().sGrammar },
-    { key: "learn", label: () => t().sLearn },
-    { key: "github", action: () => { closeSettings(); cmdGithub(""); }, label: () => t().sGithub, value: () => (github && github.connected ? (github.user ? "@" + github.user.login : "connected") : "not connected") },
     { key: "connect", action: () => { closeSettings(); cmdConnect(); }, label: () => t().sConnect, value: () => CONNECT_KEY.slice(0, 13) + "…" },
     { key: "brain", label: () => t().sBrain },
     { key: "theme", choices: ["auto", "dark", "light"], label: () => t().sTheme },
@@ -995,7 +848,6 @@
   const grammarP = GrammarLib.loadGrammar("model/lexicon.json").catch(() => null);
   const pixelsP = PixelLib.loadPixels("model/pixels.json").catch(() => null);
   learner = new LearnLib.Learner(storage);
-  github = new GitHubLib.GitHub({ storage });
   BrainLib.loadBrain("model/brain.json").then(async (brain) => {
     $("boot-1").textContent = "  ⎿ " + brain.paramCount.toLocaleString("en-US") + " params · " + brain.clsTags.length + " intents · " + brain.vocab.length + " words";
     const grammar = await grammarP;
@@ -1003,8 +855,8 @@
     pixels = await pixelsP;
     if (pixels) pixels.addLearned(learner.data.images);
     learner._index(); // re-index with the brain's slang table loaded
-    bot = new BotLib.RoastBot(brain, { storage, grammar, learner, githubConnected: () => github.connected,
-      settings: { lang: settings.lang, search: settings.search, grammar: settings.grammar, learn: settings.learn } });
+    bot = new BotLib.RoastBot(brain, { storage, grammar, learner,
+      settings: { lang: settings.lang, search: settings.search, grammar: settings.grammar } });
     await sleep(reduced ? 0 : 350);
     screen.textContent = "";
     welcome();

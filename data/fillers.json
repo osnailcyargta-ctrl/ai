@@ -1,5 +1,5 @@
 {
-  "_info": "Kata pengisi buat augmentasi data training. Pattern di intents.json yang punya {N} {T} {A} {B} {M} {Y} {Q} {D} {R} {F} bakal diisi random dari list ini pas training.",
+  "_info": "Kata pengisi buat augmentasi data training. Pattern di intents.json yang punya {N} {T} {A} {B} {M} {Y} {Q} {D} bakal diisi random dari list ini pas training.",
   "N": [
     "andi",
     "budi",
@@ -413,31 +413,5 @@
     "dragon",
     "mobil",
     "car"
-  ],
-  "R": [
-    "sybau-test",
-    "my-project",
-    "tugas-sekolah",
-    "website-gw",
-    "osnail/ai",
-    "rafa/game",
-    "budi/tugas",
-    "portfolio",
-    "skripsi",
-    "bot-roast",
-    "hello-world",
-    "web-gw"
-  ],
-  "F": [
-    "readme.md",
-    "index.html",
-    "src/main.py",
-    "docs",
-    "assets",
-    "notes.txt",
-    "src",
-    "tugas/bab1.md",
-    "app.js",
-    "style.css"
   ]
 }

@@ -15,8 +15,6 @@
 
   const Lib = root.BrainLib || (typeof require === "function" ? require("./brain.js") : null);
   const SLib = root.SearchLib || (typeof require === "function" ? require("./search.js") : null);
-  const LLib = root.LearnLib || (typeof require === "function" ? require("./learn.js") : null);
-  const GLib = root.GitHubLib || (typeof require === "function" ? require("./github.js") : null);
 
   const DRAW_RE = /^\s*(?:tolong\s+|coba\s+|bisa\s+|can you\s+|pls\s+)?(?:gambar(?:in|kan)?|lukis(?:in|kan)?|sketsa|draw|paint|bikin(?:in)?\s+(?:gambar|pixel art)|buat(?:in)?\s+(?:gambar|pixel art)|generate(?:\s+(?:gambar|image|an image|a picture))?|make\s+(?:a\s+|an\s+)?(?:picture|image|drawing)|pixel art)\b(?:\s+(?:of|me|a|an|gw|aku|dong|tentang|sebuah))*\s*/i;
   const DRAW_JUNK = /\b(?:16\s*x\s*16|32\s*x\s*32|16|32|pixel|pixels|px|dong|pls|please|plis|ya|sih|deh|bang|bro|ga|gak|image|gambar|picture)\b/gi;
@@ -248,9 +246,8 @@
       this.brain = brain;
       this.grammar = opts.grammar || null;
       this.learner = opts.learner || null;
-      this.githubConnected = opts.githubConnected || (() => false);
-      // user settings: lang "auto" | "id" | "en", search on/off, grammar police on/off, learn from the user on/off
-      this.settings = Object.assign({ lang: "auto", search: true, grammar: true, learn: false }, opts.settings || {});
+      // user settings: lang "auto" | "id" | "en", search on/off, grammar police on/off
+      this.settings = Object.assign({ lang: "auto", search: true, grammar: true }, opts.settings || {});
       this.mem = new Memory(opts.storage);
       this.rand = opts.rand || Math.random;
       this.now = opts.now || (() => new Date());
@@ -369,36 +366,24 @@
         } else if (intent === "search") intent = "fallback";
       }
 
-      // ---- learning, drawing, github: these override the classifier when they clearly apply
-      let draw = null, github = null, connect = false;
-      const learnOn = !!(this.learner && this.settings.learn);
+      // ---- drawing, connect key, uploaded files: these override the classifier when they clearly apply
+      let draw = null, connect = false;
       if (intent !== "selfharm") {
-        const taught = LLib.parseTeach(raw);
-        const gh = GLib.parseGithub(raw);
         const drawMatch = raw.match(DRAW_RE);
         const drawPrompt = drawMatch ? raw.slice(drawMatch[0].length).replace(DRAW_JUNK, " ").replace(/\s+/g, " ").trim() : "";
-        if (taught) {
-          search = null;
-          if (learnOn) { this.learner.teach(taught.q, taught.a); intent = "teach"; slots.thing = taught.q; slots.answer = taught.a; }
-          else intent = "learn_off";
-        } else if (gh || (intent === "github" && meta.confidence > 0.6)) {
-          search = null;
-          if (!this.githubConnected()) intent = "github_need_token";
-          else { intent = "github"; github = gh || { action: "repos" }; }
-        } else if (drawMatch && (intent === "draw" || !/\b(lu|lo|kamu|elu)\b/i.test(drawPrompt))) {
+        if (drawMatch && (intent === "draw" || !/\b(lu|lo|kamu|elu)\b/i.test(drawPrompt))) {
           search = null;
           intent = "draw";
           draw = { prompt: drawPrompt || raw, size: /\b32\s*x?\s*32\b|\b32\b/.test(raw) ? 32 : 16, lang };
         } else if (intent === "connect" && meta.confidence > 0.6) {
           connect = true;
-        } else if (intent !== "math") {
-          const hit = learnOn ? this.learner.matchPair(raw) : null;
-          if (hit) { intent = "taught"; slots.answer = hit.a; search = null; meta.source = "learned"; }
-          else if (this.learner) {
-            const kb = this.learner.searchDocs(raw);
-            const asks = !!search || /\?|\b(apa|siapa|kapan|berapa|dimana|gimana|kenapa|jelasin|what|who|when|where|how|why|explain)\b/i.test(raw);
-            if (kb && (kb.score > 0.55 || (asks && kb.score > 0.3))) { intent = "kb_answer"; slots.answer = kb.text; search = null; meta.kb = kb.doc; }
-          }
+        } else if (intent !== "math" && this.learner) {
+          // answers from files the user uploaded and /learn-ed ("q => a" lines or notes)
+          const hit = this.learner.matchPair(raw);
+          const kb = hit ? null : this.learner.searchDocs(raw);
+          const asks = !!search || /\?|\b(apa|siapa|kapan|berapa|dimana|gimana|kenapa|jelasin|what|who|when|where|how|why|explain)\b/i.test(raw);
+          if (hit) { intent = "kb_answer"; slots.answer = hit.a; search = null; meta.source = "file"; }
+          else if (kb && (kb.score > 0.55 || (asks && kb.score > 0.3))) { intent = "kb_answer"; slots.answer = kb.text; search = null; meta.kb = kb.doc; }
         }
       }
       meta.intent = intent;
@@ -418,22 +403,13 @@
           const extra = this._compose("callback", slots, {}, lang, true);
           if (extra) { out += " " + extra; d.lastCallback = d.messages; this._remember(extra); }
         }
-        // learning mode: remember the user's words, and sometimes throw them back
-        if (learnOn) {
-          this.learner.observe(raw);
-          const fav = this.learner.favoriteWord(3, [d.name].filter(Boolean));
-          if (fav && out && intent !== "taught" && intent !== "teach" && d.messages - (d.lastQuote || 0) >= 6 && rand() < 0.35) {
-            const q = this._compose("quote_mock", Object.assign({}, slots, { quote: fav.word, count: String(fav.count) }), {}, lang, true);
-            if (q) { out += " " + q; d.lastQuote = d.messages; this._remember(q); }
-          }
-        }
       }
 
       // grammar police
       let grammar = null;
       if (this.grammar && this.settings.grammar && intent !== "selfharm" && intent !== "sad") {
         const extraKnown = new Set([d.name, slots.query, slots.thing, slots.choice, slots.other]
-          .filter(Boolean).flatMap((s) => s.split(" ")).concat(learnOn ? this.learner.knownWords(3) : []));
+          .filter(Boolean).flatMap((s) => s.split(" ")));
         const err = this.grammar.check(raw, { lang, extraKnown });
         if (err) {
           d.grammarCrimes += 1;
@@ -448,7 +424,7 @@
 
       // didn't understand the message but caught a typo? the typo roast IS the reply
       if (grammar && grammar.text && intent === "fallback") out = null;
-      if (draw || github) grammar = null; // don't nitpick commands
+      if (draw) grammar = null; // don't nitpick drawing prompts
 
       d.history.push({ role: "user", text: raw });
       if (out) {
@@ -458,7 +434,7 @@
       if (grammar) d.history.push({ role: "bot", kind: "grammar", text: grammar.text, wrong: grammar.wrong, right: grammar.right });
       this._trim();
       mem.save();
-      return { text: out, meta, grammar, search, draw, github, connect };
+      return { text: out, meta, grammar, search, draw, connect };
     }
 
     _lang() { return this.settings.lang === "id" || this.settings.lang === "en" ? this.settings.lang : this.mem.data.lang || "en"; }
@@ -476,11 +452,9 @@
     drawFollowup(d, req) {
       const subject = (req && req.prompt) || "";
       this.mem.data.history.push({ role: "bot", kind: "image", grid: Array.from(d.grid).join(","), size: d.size, labels: d.labels, known: d.known });
-      // talk about it with the user's own words ("kucing", not the internal label "cat")
-      return this._say(d.known ? "draw" : "draw_unknown", { thing: subject || d.labels.join(" + ") || "that" });
+      // talk about it with the user's own words ("kucing", not the internal label "cat"), typos fixed
+      return this._say(d.known ? "draw" : "draw_unknown", { thing: (d.known && d.prompt) || subject || d.labels.join(" + ") || "that" });
     }
-    /** after a github action finished */
-    githubFollowup(ok, summary) { return this._say(ok ? "github_done" : "github_fail", { answer: summary }); }
     /** a file was opened: kind "image" | "text" */
     fileOpened(kind, summary) { return this._say(kind === "image" ? "file_image" : "file_text", { answer: summary }); }
     learnedImage(name) { return this._say("learned_image", { thing: name }); }

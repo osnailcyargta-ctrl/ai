@@ -1,14 +1,10 @@
-/* learn.js — sybau learns from you (when the "learn" setting is on) and from files.
+/* learn.js — sybau learns from files you upload and /learn.
  *
- *  - taught replies:  "kalo gw bilang X bales Y" / "if i say X say Y" -> stored pair.
- *                     Later messages that are close enough to X (cosine similarity
- *                     on the same hashed features the classifier uses) get Y.
- *  - your words:      counts the words you use a lot; the bot mocks them back and the
- *                     grammar police stops flagging slang you use all the time.
- *  - files:           .txt/.md/.csv/.json -> "X => Y" lines become taught pairs,
- *                     intents-style JSON gets imported, everything else becomes a
- *                     little knowledge base the bot answers questions from.
- *  - images:          learned pixel codes (see pixels.js) are stored here too.
+ *  - text files:  .txt/.md/.csv/.json. "X => Y" lines become question/answer pairs,
+ *                 intents-style JSON gets imported, everything else becomes a little
+ *                 knowledge base the bot answers questions from (cosine similarity on
+ *                 the same hashed features the classifier uses).
+ *  - images:      learned pixel codes (see pixels.js) are stored here too.
  * Everything lives in localStorage on your device.
  */
 (function (root) {
@@ -18,29 +14,11 @@
   const KEY = "sybau_learned_v1";
   const DIM = 4096;
   const MAX_DOC_CHARS = 300000;
-  const STOP = new Set(("aku kamu gak tidak yang udah lagi sama dengan karena kenapa gimana itu ini ada mau jadi bisa juga aja sih dong deh nih tuh kok ya iya " +
-    "the a an is are was were to of in on for and or but you your i me my it this that be do does did have has not no yes so just like what how why who " +
-    "qmark bang num wkwk haha oke bro").split(" "));
-
-  const TEACH_RES = [
-    /^(?:kalo|kalau|klo|jika|if|when)\s+(?:gw|gue|aku|saya|i|ada yang|someone|orang|user)?\s*(?:bilang|ngomong|ketik|nanya|tanya|say|says|type|types|ask|asks)\s+["'“]?(.+?)["'”]?\s*,?\s+(?:lu|lo|kamu|you|u)?\s*(?:bales|balas|jawab|bilang|reply|say|answer|respond)(?:\s+(?:with|pake|dengan|aja))?\s+["'“]?(.+?)["'”]?\s*$/i,
-    /^(?:jawab|bales|balas|reply|say|answer)\s+["'“]?(.+?)["'”]?\s+(?:kalo|kalau|klo|if|when)\s+(?:gw|gue|aku|saya|i|ada yang|someone)?\s*(?:bilang|ngomong|ketik|say|says|type)\s+["'“]?(.+?)["'”]?\s*$/i,
-  ];
-
   function dot(a, b) {
     let s = 0;
     const [small, big] = a.size < b.size ? [a, b] : [b, a];
     for (const [k, v] of small) { const w = big.get(k); if (w) s += v * w; }
     return s;
-  }
-
-  function parseTeach(text) {
-    const t = String(text).trim();
-    let m = t.match(TEACH_RES[0]);
-    if (m) return { q: m[1].trim(), a: m[2].trim() };
-    m = t.match(TEACH_RES[1]);
-    if (m) return { q: m[2].trim(), a: m[1].trim() };
-    return null;
   }
 
   function chunkText(text) {
@@ -62,7 +40,7 @@
       this.data = this._load();
       this._index();
     }
-    _blank() { return { pairs: [], words: {}, docs: [], images: [], seen: 0 }; }
+    _blank() { return { pairs: [], docs: [], images: [] }; }
     _load() {
       try {
         const raw = this.storage && this.storage.getItem(KEY);
@@ -80,7 +58,7 @@
       for (const d of this.data.docs) for (const c of d.chunks) this.chunkIdx.push({ doc: d.name, text: c, vec: Lib.featurize(c, DIM) });
     }
 
-    // ---------------- taught pairs
+    // ---------------- question/answer pairs (from files)
     teach(q, a) {
       const nq = Lib.normalize(q).join(" ");
       this.data.pairs = this.data.pairs.filter((p) => Lib.normalize(p.q).join(" ") !== nq);
@@ -100,23 +78,6 @@
       });
       return bs >= threshold ? Object.assign({ score: bs }, best) : null;
     }
-
-    // ---------------- your words
-    observe(text) {
-      this.data.seen++;
-      for (const w of Lib.normalize(text)) {
-        if (w.length < 3 || STOP.has(w) || w.startsWith("emoji")) continue;
-        this.data.words[w] = (this.data.words[w] || 0) + 1;
-      }
-      const entries = Object.entries(this.data.words);
-      if (entries.length > 3000) this.data.words = Object.fromEntries(entries.sort((a, b) => b[1] - a[1]).slice(0, 2000));
-      if (this.data.seen % 5 === 0) this.save();
-    }
-    favoriteWord(minCount = 3, exclude = []) {
-      const e = Object.entries(this.data.words).filter(([w, c]) => c >= minCount && !exclude.includes(w)).sort((a, b) => b[1] - a[1]);
-      return e.length ? { word: e[0][0], count: e[0][1] } : null;
-    }
-    knownWords(minCount = 3) { return Object.entries(this.data.words).filter(([, c]) => c >= minCount).map(([w]) => w); }
 
     // ---------------- files
     /** learn a text file. returns a summary {pairs, chunks, kind} */
@@ -181,12 +142,12 @@
     }
 
     stats() {
-      return { pairs: this.data.pairs.length, words: Object.keys(this.data.words).length, docs: this.data.docs.length,
+      return { pairs: this.data.pairs.length, docs: this.data.docs.length,
         chunks: this.chunkIdx.length, images: this.data.images.length };
     }
   }
 
-  const api = { Learner, parseTeach, chunkText };
+  const api = { Learner, chunkText };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.LearnLib = api;
 })(typeof self !== "undefined" ? self : this);

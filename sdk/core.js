@@ -39,12 +39,11 @@
      * @param {"auto"|"id"|"en"} [opts.lang]
      * @param {boolean} [opts.search=true]   auto Wikipedia/Wikidata lookups
      * @param {boolean} [opts.grammar=true]  grammar police
-     * @param {boolean} [opts.learn=false]   learn from the user's words
      * @param {boolean|string} [opts.memory=true] true = localStorage (browser), false = forget on reload, string = storage namespace
      */
     constructor(opts = {}) {
       if (opts.connectKey !== CONNECT_KEY) throw new Error("sybau: invalid connectKey. copy it from /connect on the sybau.ai site");
-      this.opts = Object.assign({ lang: "auto", search: true, grammar: true, learn: false, memory: true }, opts);
+      this.opts = Object.assign({ lang: "auto", search: true, grammar: true, memory: true }, opts);
       this.baseUrl = (opts.baseUrl || scriptBase || DEFAULT_BASE).replace(/\/?$/, "/");
       let st = null;
       if (this.opts.memory !== false && typeof localStorage !== "undefined") {
@@ -72,7 +71,7 @@
       this.learner = new root.LearnLib.Learner(this.storage);
       if (this.pixels) this.pixels.addLearned(this.learner.data.images);
       this.bot = new root.BotLib.RoastBot(brain, { storage: this.storage, grammar, learner: this.learner,
-        settings: { lang: this.opts.lang, search: this.opts.search, grammar: this.opts.grammar, learn: this.opts.learn } });
+        settings: { lang: this.opts.lang, search: this.opts.search, grammar: this.opts.grammar } });
       return this;
     }
 
@@ -91,10 +90,9 @@
         const d = this.pixels.draw(res.draw.prompt, { size: res.draw.size });
         out.image = { size: d.size, labels: d.labels, known: d.known, text: this.pixels.toText(d.grid, d.size),
           dataUrl: this.pixels.toDataURL(d.grid, d.size, d.size === 16 ? 8 : 4), grid: Array.from(d.grid),
-          palette: this.pixels.palette.map((p) => p.hex) };
+          palette: this.pixels.palette.map((p) => p.hex), didYouMean: d.fixes.map((f) => f.to) };
         out.followup = this.bot.drawFollowup(d, res.draw);
       }
-      if (res.github) out.github = { note: "github actions need the full sybau.ai site (they ask for permission there)", action: res.github };
       // one string with everything, handy for simple apps
       out.full = [out.text, out.search ? (out.search.kind === "fact" ? out.search.relation + " " + out.search.subject + ": " + out.search.answer : out.search.title + " - " + out.search.extract) : null,
         out.followup, out.grammar ? out.grammar.text : null].filter(Boolean).join("\n");
@@ -105,11 +103,9 @@
     async draw(prompt, size = 16) {
       await this.ready();
       const d = this.pixels.draw(prompt, { size });
-      return { size: d.size, labels: d.labels, known: d.known, text: this.pixels.toText(d.grid, d.size), dataUrl: this.pixels.toDataURL(d.grid, d.size, d.size === 16 ? 8 : 4) };
+      return { size: d.size, labels: d.labels, known: d.known, didYouMean: d.fixes.map((f) => f.to), text: this.pixels.toText(d.grid, d.size), dataUrl: this.pixels.toDataURL(d.grid, d.size, d.size === 16 ? 8 : 4) };
     }
 
-    /** teach a reply: when the user says q, answer a */
-    async teach(q, a) { await this.ready(); this.learner.teach(q, a); }
     /** learn a text document (notes, "q => a" lines, intents json) */
     async learnText(name, text) { await this.ready(); return this.learner.learnText(name, text); }
     /** forget everything about this user */
