@@ -294,3 +294,5 @@ body.brain-on .meta { display: block; }
 .cx-doc { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin: 0 0 16px 1.6em; }
 .cx-doc-body { white-space: pre-wrap; color: var(--dim); font-size: 12.5px; margin-top: 4px; }
 @media (max-width: 560px) { .cx-log { padding: 12px; } .cx-prompt { margin: 6px 12px 0; } .cx-code, .cx-doc { margin-left: 0; } }
+.cx-live .cx-pre { max-height: 240px; }
+.cx-live .cx-code-head { color: var(--accent); }

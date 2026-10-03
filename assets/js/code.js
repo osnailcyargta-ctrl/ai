@@ -86,10 +86,34 @@
         fetch("model/coder.json").then((r) => r.json()), fetch("data/sts/docs.md").then((r) => r.text()), fetch("data/sts/things.json").then((r) => r.json())]);
       const vm = await StsLib.StsVM.load(wasm);
       previewVM = await StsLib.StsVM.load(wasm2, { onPopup: (k, txt) => running && running.popup(k, txt), onBackground: (c) => { if (running) running.bg = c; } });
-      coder = new StsCoderLib.StsCoder({ coderModel: model, vm, docs, things, search: window.SearchLib });
+      let neuralModel = null;
+      try { neuralModel = await fetch("model/stscode.json").then((r) => (r.ok ? r.json() : null)); } catch (e) { neuralModel = null; }
+      coder = new StsCoderLib.StsCoder({ coderModel: model, vm, docs, things, search: window.SearchLib, neuralModel });
+      try { coder.loadState(JSON.parse(localStorage.getItem(MEM_KEY) || "null")); } catch (e) { /* ignore */ }
       return coder;
     })();
     return loading;
+  }
+
+  // ---------------------------------------------------------------- memory (survives a reload)
+  const MEM_KEY = "sybau_code_memory", LOG_KEY = "sybau_code_log";
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(LOG_KEY) || "[]"); } catch (e) { saved = []; }
+  function remember(entry) {
+    saved.push(entry);
+    if (saved.length > 40) saved = saved.slice(-40);
+    try {
+      localStorage.setItem(LOG_KEY, JSON.stringify(saved));
+      if (coder) localStorage.setItem(MEM_KEY, JSON.stringify(coder.saveState()));
+    } catch (e) { saved = saved.slice(-10); }
+  }
+  function replay() {
+    for (const e of saved) {
+      if (e.role === "u") { const u = el("div", "u"); u.append(el("span", "gt", ">"), document.createTextNode(e.text)); put(u); }
+      else if (e.role === "b") say(e.text);
+      else if (e.role === "code") put(codeBlock(e.res, e.res.program.roots.reduce((n, r) => n + r.code.split("\n").length, 0)));
+      else if (e.role === "doc") { const d = el("div", "cx-doc"); d.append(el("div", "bold", e.head), el("div", "cx-doc-body", e.body)); put(d); }
+    }
   }
 
   async function open() {
@@ -98,7 +122,11 @@
     ui.input.focus();
     if (!ui.log.childElementCount) {
       const note = put(el("div", "line dim", t().loading));
-      try { await ensure(); note.remove(); say(t().hello); }
+      try {
+        await ensure(); note.remove();
+        if (saved.length) { replay(); say(lang() === "id" ? "gw masih inget yang tadi. lanjut aja, atau ketik /new buat mulai baru 🥀" : "i still remember what we were doing. keep going, or type /new for a fresh start 🥀"); }
+        else say(t().hello);
+      }
       catch (e) { note.textContent = "error: " + e.message; note.className = "line red"; }
     }
   }
@@ -138,33 +166,50 @@
     think.append(sum, lines);
     put(think);
     const t0 = performance.now();
-    let res;
+    let res, live = null;
+    remember({ role: "u", text });
     try {
       await ensure();
-      res = await coder.handle(text, { experimental: !!settings().experimental, search: settings().search !== false, lang: lang(), onStep: (s) => { lines.appendChild(el("div", "line dim", s)); ui.log.scrollTop = ui.log.scrollHeight; } });
+      res = await coder.handle(text, { experimental: !!settings().experimental, search: settings().search !== false, lang: lang(), neural: settings().codeNeural !== false,
+        onStep: (s) => { lines.appendChild(el("div", "line dim", s)); ui.log.scrollTop = ui.log.scrollHeight; },
+        // the transformer "typing" its code, live
+        onCode: (attempt, toks, slots) => {
+          if (!live) { live = el("div", "cx-code cx-live"); live.append(el("div", "cx-code-head dim"), el("pre", "cx-pre")); put(live); }
+          live.firstChild.textContent = (lang() === "id" ? "✎ transformer lagi ngetik · percobaan " : "✎ transformer typing · attempt ") + attempt + " · " + toks.length + " token";
+          live.lastChild.innerHTML = highlight(StsTokLib.detokenize(toks, slots));
+          live.lastChild.scrollTop = live.lastChild.scrollHeight;
+          ui.log.scrollTop = ui.log.scrollHeight;
+        } });
     } catch (e) {
       lines.appendChild(el("div", "line red", "error: " + e.message));
       busy = false;
       return;
     }
+    if (live) live.remove();
     await sleep(Math.max(0, 500 - (performance.now() - t0)));
     sum.textContent = "✻ " + t().think + " · " + res.steps.length + (lang() === "id" ? " langkah · " : " steps · ") + ((performance.now() - t0) / 1000).toFixed(1) + "s";
     if (res.steps.length > 6) think.open = false;
     const L = LINES[res.lang === "en" ? "en" : "id"];
-    if (res.kind === "cant") {
+    if (res.kind === "cant" || res.kind === "memory") {
       say(res.text);
+      remember({ role: "b", text: res.text });
     } else if (res.kind === "docs") {
-      say(pick(L.docs));
+      const line = pick(L.docs);
+      say(line);
       const d = el("div", "cx-doc");
       d.append(el("div", "bold", res.head), el("div", "cx-doc-body", res.body));
       put(d);
+      remember({ role: "b", text: line }); remember({ role: "doc", head: res.head, body: res.body });
     } else {
       const n = res.program.roots.reduce((s, r) => s + r.code.split("\n").length, 0);
       const failed = (res.tests || []).filter((x) => !x.ok).length;
       let line = res.compiled === true ? (failed ? pick(L.tests).replace("{k}", failed) : res.fixes.length ? pick(L.fixed).replace("{k}", res.fixes.length) : pick(L.ok)) : res.compiled === "runtime" ? pick(L.runtime) : pick(L.fail);
       if (res.program && res.features.length === 1 && res.features[0] === "shapes" && /ga ada yang gw kenal|nothing i recognise/.test(res.steps.join(" "))) line = pick(L.guess);
+      if (res.neural) line = (res.lang === "en" ? "written by the transformer itself, token by token. " : "ini ditulis transformer-nya sendiri, token per token. ") + line;
       say(line.replace("{n}", n));
       put(codeBlock(res, n));
+      remember({ role: "b", text: line.replace("{n}", n) });
+      remember({ role: "code", res: { file: res.file, sts: res.sts, program: res.program, compiled: res.compiled, tests: res.tests, fixes: res.fixes, lang: res.lang } });
     }
     busy = false;
     ui.input.focus();

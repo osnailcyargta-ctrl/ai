@@ -42,7 +42,8 @@ CLS_HIDDEN = 320
 GEN_D = 160
 GEN_LAYERS = 4
 GEN_HEADS = 4
-GEN_DROPOUT = 0.1
+GEN_DROPOUT = 0.15
+GEN_REPEAT = 6                 # hand-written replies per epoch (the roast corpus is seen once)
 MAX_GEN_LEN = 48
 GEN_CTX = MAX_GEN_LEN + 4      # <i:tag> <l:lang> <s> ... </s>
 LANGS = ["en", "id"]
@@ -254,13 +255,49 @@ def train_classifier(X, y, n_classes, epochs, rng_np, evals=(), log=True):
 
 # ------------------------------------------------------------------ transformer generator (training/transformer.py)
 
-def build_generator_set(intents, extra):
+def roast_corpus(rng, per_lang=3000):
+    """thousands of different roasts built from parts (data/roast_parts.json), so the transformer
+    learns how a roast is put together and can write NEW ones instead of repeating 800 lines"""
+    path = os.path.join(DATA, "roast_parts.json")
+    if not os.path.exists(path):
+        return []
+    parts = json.load(open(path, encoding="utf-8"))
+    out = []
+    for lang in LANGS:
+        P = parts[lang]
+        for kind, n in (("patterns", per_lang), ("comeback", per_lang // 2)):
+            tag = "roast_me" if kind == "patterns" else "insult"
+            seen = set()
+            for _ in range(n * 3):
+                if len(seen) >= n:
+                    break
+                line = rng.choice(P[kind])
+                line = line.replace("{S}", rng.choice(P["subject"]), 1).replace("{L}", rng.choice(P["like"]), 1)
+                line = line.replace("{T}", rng.choice(P["then"]), 1).replace("{A}", rng.choice(P["adj"]), 1)
+                line = line.replace("{S}", rng.choice(P["subject"])).replace("{L}", rng.choice(P["like"])).replace("{A}", rng.choice(P["adj"]))
+                if lang == "en":
+                    line = re.sub(r"\bu is\b", "u are", line)
+                if line not in seen:
+                    seen.add(line)
+                    out.append((tag, lang, line))
+            # comebacks are roasts too
+            if kind == "patterns":
+                for line in list(seen)[: per_lang // 4]:
+                    out.append(("insult", lang, line))
+    return out
+
+
+def build_generator_set(intents, extra, rng=None):
     tags = [it["tag"] for it in intents]
     seqs = []
     for it in intents:
         lines = it["responses"] + (extra if it["tag"] == "roast_me" else [])
         for r in lines:
             seqs.append((tags.index(it["tag"]), LANGS.index(response_lang(r)), gen_tokenize(r)[:MAX_GEN_LEN]))
+    seqs = seqs * GEN_REPEAT     # the hand-written lines are seen several times per epoch
+    if rng is not None:
+        for tag, lang, line in roast_corpus(rng):
+            seqs.append((tags.index(tag), LANGS.index(lang), gen_tokenize(line)[:MAX_GEN_LEN]))
     counts = {}
     for _, _, toks in seqs:
         for tok in toks:
@@ -379,7 +416,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--cls-epochs", type=int, default=30)
-    ap.add_argument("--gen-epochs", type=int, default=120)
+    ap.add_argument("--gen-epochs", type=int, default=12)
     ap.add_argument("--skip-val", action="store_true")
     ap.add_argument("--cls-only", action="store_true")
     args = ap.parse_args()
@@ -411,7 +448,7 @@ def main():
         return
 
     print("== generator (transformer)")
-    gen_tags, vocab, seqs = build_generator_set(intents, extra)
+    gen_tags, vocab, seqs = build_generator_set(intents, extra, random.Random(args.seed + 1))
     n_id = sum(1 for _, l, _ in seqs if LANGS[l] == "id")
     print(f"  {len(seqs)} responses ({n_id} indonesian), vocab {len(vocab)}")
     GP = train_generator(gen_tags, vocab, seqs, args.gen_epochs, rng_np)

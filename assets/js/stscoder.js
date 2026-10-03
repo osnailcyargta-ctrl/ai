@@ -1150,6 +1150,67 @@
     }
   }
 
+  // ------------------------------------------------------------------ the code transformer's input
+  /** what the code model reads: request words (things -> slots) + what research says about each slot.
+   *  tools/make_sts_corpus.js builds its training data with this same function. */
+  function buildPrefix(A, know) {
+    const slots = A.things.slice(0, 4).map((th) => ({ key: camel(th.word), word: th.word }));
+    const words = A.t.trim().split(/\s+/).map((w) => { const i = slots.findIndex((x) => x.word === w); return i >= 0 ? "<t" + (i + 1) + ">" : w; });
+    const info = [];
+    slots.forEach((x, i) => { const k = know[x.word] || {}; info.push("<t" + (i + 1) + ">", "cat:" + (k.cat || "object")); if (k.color) info.push("col:" + k.color); });
+    // what the request reader understood (rules + neural reader): the kind of program asked for
+    const mech = [...A.mech].sort().map((m) => "mech:" + m);
+    return { slots, prefix: ["<req>", ...words, "</req>", ...mech, ...info, "<code>"] };
+  }
+
+  /** checks that work on ANY program (the neural one has no design to test against) */
+  function genericTests(vm, roots, L, pass) {
+    const code = roots.map((r) => r.code).join("\n");
+    const snap = (keys, frames, seed) => {
+      if (!vm.compile(roots).ok) return null;
+      vm.start(seed);
+      let err = null;
+      for (let f = 0; f < frames; f++) {
+        if (f === 5) keys.forEach((k) => vm.key(k, true));
+        const st = vm.tick(16);
+        if (st === Sts.STATE.ERROR) { err = vm.runtimeError() || "runtime error"; break; }
+        if (st === Sts.STATE.POPUP) vm.ackPopup();
+        if (st === Sts.STATE.ASK) vm.answer("1");
+        if (st === Sts.STATE.DONE) break;
+      }
+      const objs = vm.objects().map((o) => [o.kind, Math.round(o.x), Math.round(o.y)].join(","));
+      vm.stop();
+      return { err, objs };
+    };
+    const a = snap([], 60, 5);
+    pass(a && !a.err, L("jalan 1 detik tanpa error", "runs for a second without errors") + (a && a.err ? " — " + a.err : ""));
+    pass(a && a.objs.length > 0, L(`ada ${a ? a.objs.length : 0} objek di layar`, `${a ? a.objs.length : 0} objects on screen`));
+    if (/\bmove\(|setpos\(/.test(code) && /forever/.test(code)) {
+      const b = snap([], 20, 5);
+      pass(a && b && a.objs.join("|") !== b.objs.join("|"), L("ada yang gerak sendiri", "something moves by itself"));
+    }
+    if (/key\("(left|right|up|down|space)"\)/.test(code)) {
+      const c = snap(["right", "space"], 60, 5);
+      pass(a && c && a.objs.join("|") !== c.objs.join("|"), L("mencet tombol ngubah sesuatu di layar", "pressing keys changes something on screen"));
+    }
+    // random play
+    if (vm.compile(roots).ok) {
+      vm.start(9);
+      let err = null;
+      for (let f = 0; f < 300 && !err; f++) {
+        if (f % 9 === 0) vm.key(["left", "right", "up", "down", "space"][f % 5], f % 18 === 0);
+        if (f % 40 === 10) vm.click(60 + (f * 7) % 400, 80 + (f * 13) % 240);
+        const st = vm.tick(16);
+        if (st === Sts.STATE.ERROR) err = vm.runtimeError() || "runtime error";
+        if (st === Sts.STATE.POPUP) vm.ackPopup();
+        if (st === Sts.STATE.ASK) vm.answer("1");
+        if (st === Sts.STATE.DONE) break;
+      }
+      vm.stop();
+      pass(!err, L("dimainin acak 5 detik: ga ada error", "5 seconds of random play: no errors") + (err ? " — " + err : ""));
+    }
+  }
+
   // ------------------------------------------------------------------ STS questions (docs)
   function docSections(md) {
     return md.split(/\n## /).slice(1).map((s) => { const [head, ...rest] = s.split("\n"); return { head, body: rest.join("\n").trim() }; });
@@ -1166,6 +1227,7 @@
       this.rand = opts.rand || Math.random;
       this.last = null;
       this.cache = new Map();
+      this.neural = opts.neuralModel ? new (root.StsNeuralLib || require("./stsneural.js")).NeuralCoder(opts.neuralModel) : null;
     }
 
     _askDocs(text) {
@@ -1227,6 +1289,21 @@
     async handle(text, opts = {}) {
       const steps = [];
       const say = (s) => { steps.push(s); if (opts.onStep) opts.onStep(s); };
+      // memory: "tadi kita bikin apa?"
+      const low = text.toLowerCase();
+      if (/\b(lagi|tadi|barusan|kita|terakhir)\b.{0,20}\b(bikin|buat|ngoding|ngerjain|bikinin)\b.{0,8}\b(apa|apaan)\b|\bwhat (are|were|did) (we|u|you) (making|building|make|build)\b|\b(project|program|game)(nya)? (apa|yang tadi)\b/.test(low)) {
+        const id = !/\b(what|we|you|make|build)\b/.test(low);
+        const L2 = (a, b) => (id ? a : b);
+        if (!this.last) return { kind: "memory", steps, lang: id ? "id" : "en", text: L2("belum bikin apa-apa. lu aja belum nyuruh 🥀", "we haven't made anything yet. u haven't asked 🥀") };
+        const l = this.last;
+        const what = l.d && l.d.reasons ? l.d.reasons.slice(0, 4).join("; ") : [...(l.A.mech || [])].join(", ");
+        return { kind: "memory", steps, lang: id ? "id" : "en", text: L2(`tadi kita bikin "${l.title || "game"}" (${l.file || "program.sts"}) dari request: "${l.A.raw}". isinya: ${what}. mau gw ubah apa? 🥀`,
+          `we were making "${l.title || "a game"}" (${l.file || "program.sts"}) from: "${l.A.raw}". it has: ${what}. what should i change? 🥀`) };
+      }
+      if (/^\s*(\/new|\/reset|mulai (dari )?(baru|awal)|bikin (yang )?baru aja|start over|new project)\s*$/.test(low)) {
+        this.last = null;
+        return { kind: "memory", steps, lang: /start|new project/.test(low) ? "en" : "id", text: /start|new project/.test(low) ? "ok, fresh start. memory wiped 🥀" : "ok, mulai dari nol. memori project gw hapus 🥀" };
+      }
       const doc = this._askDocs(text);
       if (doc) {
         say("ini pertanyaan soal bahasa STS, bukan minta dibikinin. gw buka docs STS: \"" + doc.head + "\"");
@@ -1235,12 +1312,14 @@
       const useSearch = opts.search !== false;
       const lower = " " + text.toLowerCase() + " ";
       const isEdit = !!this.last && /\b(tambah\w*|add|ganti\w*|ubah|change|jadiin|hapus|remove|tanpa|without|make it|lebih|buang|kasih)\b/.test(lower) &&
-        !/\b(bikin(in)?|buat(in)?|make|create|build)\b.{0,20}\b(game|program|aplikasi|app|kuis|quiz)\b/.test(lower.replace(/make it/, ""));
+        !/\b(bikin(in)?|buat(in)?|make|create|build)\b.{0,20}\b(game|program|aplikasi|app|kuis|quiz)\b/.test(lower.replace(/make it/, ""))
+      // short follow-ups ("musuhnya 5", "lebih cepet", "warnanya biru") also edit the last program
+      const shortFollow = !!this.last && !isEdit && text.trim().split(/\s+/).length <= 6 && !/\b(bikin\w*|buat\w*|make|create|build|game|permainan)\b/.test(lower);
       let A = analyze(text, this.reader, this.kb, { experimental: opts.experimental });
       const L = (a, b) => (A.lang === "en" ? b : a);
-      say(L("1. baca permintaan", "1. reading the request") + (isEdit ? L(" (ngedit program yang tadi)", " (editing the last program)") : ""));
+      say(L("1. baca permintaan", "1. reading the request") + (isEdit || shortFollow ? L(` (ngedit "${this.last.title || "program"}" yang tadi)`, ` (editing "${this.last.title || "the program"}" from before)`) : ""));
       for (const n of A.notes) say("   ~ " + n);
-      if (isEdit) A = this._merge(this.last.A, A, lower);
+      if (isEdit || shortFollow) A = this._merge(this.last.A, A, lower);
       const mechs = [...A.mech];
       if (mechs.length) say(L("   jenis: ", "   kind: ") + mechs.map((f) => f + " (" + (A.why[f] || L("lanjutan", "kept")) + ")").join(", "));
       if (A.things.length) say(L("   benda yang lu sebut: ", "   things u mentioned: ") + A.things.map((th) => th.word + (th.roles.length ? " [" + th.roles.join("/") + "]" : "") + (th.count ? " ×" + th.count : "") + (th.color ? " " + colorName(th.color, A.lang) : "")).join(", "));
@@ -1274,6 +1353,7 @@
           "honestly i don't get what u want to build. describe the game: who u play as, what's in it, what u do (collect, dodge, shoot, jump, guess...), how u win or lose. e.g. \"a cat collecting fish while a dog chases it, 3 lives\" 🥀") };
       }
 
+      if (opts.neural && this.neural) return this._neural(A, know, steps, say, opts);
       say(L("3. desain", "3. design"));
       const d = design(A, know, this.rand);
       for (const r of d.reasons) say("   - " + r);
@@ -1309,8 +1389,64 @@
         } else say(L("   nyerah setelah 8 kali benerin", "   gave up after 8 fixes"));
       }
       const sts = toSts(prog, name);
-      this.last = { A, d, sts };
+      this.last = { A, d, sts, title: prog.title, file: name + ".sts" };
       return { kind: "code", steps, program: prog, design: d, sts, file: name + ".sts", compiled, fixes, tests, features: [...A.mech], lang: A.lang };
+    }
+
+    /** memory that survives a reload (code.js keeps it in localStorage) */
+    saveState() {
+      if (!this.last) return null;
+      const l = this.last;
+      return { A: Object.assign({}, l.A, { mech: [...l.A.mech] }), reasons: l.d && l.d.reasons, sts: l.sts, title: l.title, file: l.file, neural: !!l.neural };
+    }
+    loadState(st) {
+      if (!st || !st.A) return;
+      const A = Object.assign({}, st.A, { mech: new Set(st.A.mech || []) });
+      this.last = { A, d: st.reasons ? { reasons: st.reasons } : null, sts: st.sts, title: st.title, file: st.file, neural: st.neural };
+    }
+
+    /** the code transformer writes the program itself, token by token */
+    async _neural(A, know, steps, say, opts) {
+      const L = (a, b) => (A.lang === "en" ? b : a);
+      const { slots, prefix } = buildPrefix(A, know);
+      const unk = this.neural.unknown(prefix.slice(1, prefix.indexOf("</req>"))).filter((w) => !/^<t\d>$/.test(w));
+      say(L(`3. transformer nulis kodenya sendiri, token per token (${(this.neural.params / 1e6).toFixed(1)} juta parameter, tanpa desain/template)`, `3. the transformer writes the code itself, token by token (${(this.neural.params / 1e6).toFixed(1)}M params, no design/template)`));
+      say("   input: " + prefix.join(" "));
+      if (unk.length) say(L("   kata yang belum pernah dia liat: ", "   words it has never seen: ") + unk.join(", ") + L(" (dia tetep nyoba dari sisa kalimat + riset)", " (it still tries, from the rest + the research)"));
+      let best = null;
+      for (let attempt = 1; attempt <= (opts.attempts || 3); attempt++) {
+        const t0 = Date.now();
+        const w = await this.neural.write(prefix, slots, { rand: this.rand, temperature: [0.25, 0.45, 0.65][attempt - 1] || 0.6, onToken: opts.onCode ? (toks) => opts.onCode(attempt, toks, slots) : null });
+        const roots = [{ index: 0, name: "main", code: w.code }];
+        const lines = w.code.split("\n").length;
+        say(L(`   percobaan ${attempt}: nulis ${w.tokens.length} token (${lines} baris) dalam ${((Date.now() - t0) / 1000).toFixed(1)}s`, `   attempt ${attempt}: wrote ${w.tokens.length} tokens (${lines} lines) in ${((Date.now() - t0) / 1000).toFixed(1)}s`));
+        const fixes = [];
+        let compiled = false;
+        if (this.vm) {
+          for (let k = 0; k < 10; k++) {
+            const res = this.vm.compile(roots);
+            if (res.ok) { compiled = true; break; }
+            const fix = repair(roots, res);
+            fixes.push(fix);
+            say("     ✎ " + L("baris ", "line ") + res.line + ": " + res.error + " → " + fix);
+          }
+        }
+        const tests = [];
+        if (compiled) {
+          say(L("     compiler STS: lolos ✓" + (fixes.length ? ` (setelah ${fixes.length} benerin)` : ""), "     STS compiler: passed ✓" + (fixes.length ? ` (after ${fixes.length} fixes)` : "")));
+          genericTests(this.vm, roots, L, (ok, msg) => { tests.push({ ok, msg }); say("     " + (ok ? "✓ " : "✗ ") + msg); });
+        } else if (this.vm) say(L("     ga lolos compiler", "     didn't compile"));
+        const score = (compiled ? 10 : 0) + tests.filter((x) => x.ok).length * 2 - fixes.length - (tests.some((x) => !x.ok) ? 3 : 0);
+        if (!best || score > best.score) best = { roots, tests, fixes, compiled, score, attempt };
+        if (compiled && !fixes.length && tests.every((x) => x.ok)) break;
+      }
+      const title = ((best.roots[0].code.match(/draw text "([^"]{2,40})" 2\d/) || [])[1]) || "sybau neural";
+      const prog = { roots: best.roots, stage: { w: 520, h: 360 }, title };
+      const name = camel(title).slice(0, 24) || "sybauNeural";
+      say(L(`   dipake: percobaan ${best.attempt}`, `   using attempt ${best.attempt}`));
+      const sts = toSts(prog, name);
+      this.last = { A, d: null, sts, neural: true, title, file: name + ".sts" };
+      return { kind: "code", neural: true, steps, program: prog, design: null, sts, file: name + ".sts", compiled: best.compiled ? (best.tests.some((x) => !x.ok && / — /.test(x.msg)) ? "runtime" : true) : false, fixes: best.fixes, tests: best.tests, features: [...A.mech], lang: A.lang };
     }
 
     /** "game pacman": look the game up, then read its description like a request */
@@ -1420,7 +1556,7 @@
     }
   }
 
-  const api = { StsCoder, analyze, design, makeQuiz, readText, repair, toSts, RequestReader, Knowledge, editDistance, selfTest };
+  const api = { StsCoder, analyze, design, makeQuiz, mathQuiz, readText, repair, toSts, RequestReader, Knowledge, editDistance, selfTest, camelKey: camel, buildPrefix, genericTests };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.StsCoderLib = api;
 })(typeof self !== "undefined" ? self : this);

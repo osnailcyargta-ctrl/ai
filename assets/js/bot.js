@@ -20,7 +20,11 @@
   const DRAW_JUNK = /\b(?:16\s*x\s*16|32\s*x\s*32|16|32|pixel|pixels|px|dong|pls|please|plis|ya|sih|deh|bang|bro|ga|gak|image|gambar|picture)\b/gi;
 
   const MEMORY_KEY = "sybau_memory_v1";
-  const CONF_THRESHOLD = 0.42; // below this the bot admits it didn't understand
+  const CONF_THRESHOLD = 0.42;
+  // replies that carry facts from tools (or safety info) are never "free-written"
+  // roasts are written fresh when "generative roast" is on (the rest has too few examples to free-write well)
+  const GEN_INTENTS = new Set(["roast_me", "insult", "insult_long"]);
+  const NO_GEN = new Set(["selfharm", "search", "search_done", "search_fail", "search_off", "math", "time", "date", "ask_memory", "kb_answer", "ask_name", "tell_age"]); // below this the bot admits it didn't understand
   const LONG_ROAST_WORDS = 14; // insults this long get "stfu i ain't reading allat"
   const N_CANDIDATES = 10;
 
@@ -575,15 +579,32 @@
       return ok ? text : null;
     }
 
+    /** share of a reply's 4-word runs that also appear in the training replies (0 = all new) */
+    _overlap(tokens) {
+      if (!this._grams) {
+        this._grams = new Set();
+        for (const line of this.brain.trainingLines) { const w = Lib.genTokenize(line); for (let i = 0; i + 4 <= w.length; i++) this._grams.add(w.slice(i, i + 4).join(" ")); }
+      }
+      if (tokens.length < 4) return this.brain.trainingLines.has(Lib.detokenize(tokens)) ? 1 : 0;
+      let hit = 0, n = 0;
+      for (let i = 0; i + 4 <= tokens.length; i++) { n++; if (this._grams.has(tokens.slice(i, i + 4).join(" "))) hit++; }
+      return hit / n;
+    }
+
     _compose(intent, slots, meta, lang = "en", strict = false) {
       const brain = this.brain, recent = new Set(this.mem.data.botRecent);
+      // generative mode: the transformer has to come up with a NEW sentence (no stock lines)
+      const gen = this.settings.roastGen && GEN_INTENTS.has(intent);
       const cands = [];
-      for (let i = 0; i < N_CANDIDATES; i++) {
-        const g = brain.generate(intent, lang, 0.85, this.rand);
+      for (let i = 0; i < (gen ? 28 : N_CANDIDATES); i++) {
+        const g = brain.generate(intent, lang, gen ? 0.85 + (i % 3) * 0.07 : 0.85, this.rand, gen ? 0.95 : 0.92);
         if (!g || !g.tokens.length) continue;
-        const filled = this._fill(g.text, slots, lang, strict);
+        if (gen && /\bwhose (ur|u)\b|\bu is\b/.test(g.text)) continue;
+        if (gen && brain.trainingLines.has(g.text)) continue;   // a copy of the training data: not allowed
+        const filled = (this._fill(g.text, slots, lang, strict) || "").replace(/ _ /g, "_");
         if (!filled || recent.has(filled)) continue;
         let score = g.logp;
+        if (gen) score -= 2.5 * this._overlap(g.tokens) + (g.tokens.length < 4 ? 1 : 0);
         if (this.recentRaw.includes(g.text)) score -= 1.5;
         // the generator is conditioned on language, but double-check and prefer a match
         if (Lib.detectLang(Lib.normalize(g.text.replace(/\{\w+\}/g, " "))) !== lang) score -= 0.6;
@@ -594,9 +615,14 @@
         const best = cands[Math.floor(this.rand() * Math.min(3, cands.length))];
         this.recentRaw.unshift(best.raw);
         if (this.recentRaw.length > 12) this.recentRaw.length = 12;
-        meta.source = "transformer";
+        meta.source = gen ? "transformer-gen" : "transformer";
         meta.novel = !brain.trainingLines.has(best.raw);
         return best.text;
+      }
+      if (gen) {   // nothing new came out: try once more the normal way (still the transformer)
+        const keep = this.settings.roastGen;
+        this.settings.roastGen = false;
+        try { return this._compose(intent, slots, meta, lang, strict); } finally { this.settings.roastGen = keep; }
       }
       // generator couldn't produce something fillable -> retrieve from training data, same language first
       const all = brain.responses[intent] || [];

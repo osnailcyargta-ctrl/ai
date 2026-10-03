@@ -14,6 +14,7 @@ Chatbot brainrot yang **benci kamu**. Beda dari AI lain yang baik dan selalu set
 - **Belajar dari file**: abis upload, ketik `/learn` (atau "pelajarin file ini"). Baris `pertanyaan => jawaban` jadi jawaban, JSON format intents di-import, catatan biasa jadi "basis pengetahuan" yang bisa ditanya ("siapa raja zorg?" → dijawab dari file lu). Gambar: `/learn NAMA`, bot nyari kode laten baru buat gambar itu (gradient descent di browser), terus bisa "gambar NAMA". `/unlearn` buat hapus semuanya.
 - **Connect key** (`/connect`): pake sybau di HTML/app lain. Lihat bagian *Connect key* di bawah.
 - **Mode eksperimental** (⚙ settings, default mati): kalo sybau gak punya data buat kata/kalimat lu, dia nyoba mahamin dulu baru jawab: benerin typo & huruf molor ("gabutt bgtt" → "gabut banget"), nyari contoh training yang artinya paling deket, dan kalo masih gak ngerti, nyari arti katanya di Wikipedia. Proses mikirnya keliatan di blok *thinking*.
+- **Roast generatif** (⚙ settings, default nyala): transformer-nya wajib ngarang kalimat baru. Kalimat yang sama persis kayak data training dibuang, yang mirip banget dikurangin nilainya. Biar dia beneran bisa ngarang (bukan ngafalin 800 kalimat), dia dilatih juga pake ribuan roast yang dirakit dari potongan (`data/roast_parts.json`: subjek, perbandingan, punchline), jadi yang dia pelajarin pola bikin roast-nya.
 - **Tanpa API key**: semua jalan di browser lu. Gak ada server, gak ada ChatGPT.
 - **Punya memori**: inget nama, umur, hal yang lu suka/benci, yang pernah lu cari, berapa kali lu ngehina dia, dosa grammar lu, dan history chat (disimpen di `localStorage` browser lu).
 - **Jujur**: kalo gak ngerti, dia bilang gak ngerti. Jawaban matematika, jam, tanggal, memori, dan hasil search diambil dari tools/data beneran, bukan dikarang.
@@ -45,6 +46,15 @@ Jujur aja: hasil Google gak bisa diambil dari situs statis tanpa API key. Google
 Batasannya: pertanyaan yang gak ada di Wikipedia/Wikidata (berita hari ini, harga, cuaca, pertanyaan "kenapa" yang rumit) gak bakal kejawab bagus.
 
 ### Gimana sybau nulis kode STS
+
+Ada 2 cara, dipilih di ⚙ settings (**sybau code: AI murni**, default nyala):
+
+**1. AI murni (transformer nulis kodenya sendiri).** Transformer kedua (`training/train_code.py`, ~2 juta parameter, 4 layer, konteks 384 token) nulis program STS **token per token**: tiap keyword, angka, kurung, indentasi keluar dari neural net-nya, keliatan live pas dia "ngetik". Inputnya request lu jadi token (`<req> game <t1> lempar <t2> ke <t3> </req> <t1> cat:person ...`): benda yang lu sebut diganti slot `<t1>`, `<t2>`, dan hasil riset Wikipedia/database ngasih tau slot itu apa (monster, buah, senjata). Makanya dia bisa nulis kode buat kata yang belum pernah dia liat, terus namanya dibalikin. Dia dilatih kayak model kode beneran: dari korpus ribuan program STS (`node tools/make_sts_corpus.js` → `data/sts/corpus.jsonl`, semuanya udah lolos compiler). Tiap request dia nulis sampe 3 percobaan, masing-masing di-compile pake compiler STS asli (error dibenerin otomatis) terus dites (jalan tanpa error, ada objek, ada yang gerak, tombol ngaruh), yang paling bagus dipake. Jujurnya: model 2 juta parameter yang dilatih dari korpus sintetis masih sering bikin kode yang aneh atau mirip program yang dia pelajarin. Hasil tesnya ditampilin apa adanya.
+
+**2. Perencana (AI murni dimatiin).** Nyusun desain dulu (siapa pemainnya, gerakan tiap benda, aturan menang/kalah), terus `stsgen.js` nulis kodenya fungsi per fungsi dan dites kelakuannya. Lebih rapi dan lebih bisa diandelin, tapi strukturnya lebih kebaca.
+
+sybau code juga **punya memori**: chat, kode, dan project terakhir disimpen di browser, jadi abis reload dia masih inget. Tanya "tadi kita bikin apa?" buat liat, follow-up pendek ("musuhnya 5", "lebih cepet") langsung ngedit project yang tadi, `/new` buat mulai baru.
+
 
 Bukan nempel program jadi. Tiap request dipecah jadi **benda** ("ninja", "zombie", "shuriken") dan **apa yang dilakuin ke benda itu** (dimainin, dihindarin, dikumpulin, ditembak, ngejar lu, ditangkep, diklik). Tiap benda diriset dulu: artikel Wikipedia-nya dibaca ("Zombi adalah mayat hidup ... berjalan lambat" → monster, lambat → ngejar pelan), ditambah database offline `data/sts/things.json` kalau search mati. Dari situ dibikin desain (siapa pemainnya, kontrolnya, gerakan tiap benda, apa yang terjadi kalau kena, cara menang/kalah), terus `stsgen.js` nulis kodenya: variabel, satu fungsi per kelakuan, objek, event, loop. Kuis soal topik ("kuis tentang majapahit") soalnya dibikin dari kalimat artikel Wikipedia-nya (isian tahun/nama/angka + benar-salah). Abis di-compile pake compiler STS asli, programnya dijalanin tanpa layar dan dites: pemain gerak kalo tombolnya dipencet? musuh beneran gerak? nyentuh musuh beneran ngurangin nyawa? peluru beneran nambah skor? Yang gagal dilaporin jujur.
 
@@ -140,11 +150,14 @@ tests/                  cek JS == Python, akurasi, grammar, simulasi chat
 pip install -r requirements.txt
 python training/train.py          # chatbot: gradient check, validasi, training, export
 python training/train_coder.py    # pembaca request kode STS
+node tools/make_sts_corpus.js && python training/train_code.py   # transformer penulis kode STS (~80 menit)
 OMP_NUM_THREADS=1 python training/train_pixels.py   # generator gambar (~1 menit; 1 thread malah lebih cepet)
 python tools/build_sdk.py         # bikin ulang sybau.js kalo ada file assets/js yang diubah
 python tests/parity.py            # pastiin JS ngitung sama persis kayak Python (butuh node)
 node tests/grammar.js             # cek polisi grammar (gak boleh salah roast kalimat bener)
 node tests/search.js              # tes jawaban pertanyaan (pake Wikipedia/Wikidata palsu, tests/fake_wiki.js)
+node tests/neural.js              # transformer nulis program STS sendiri: berapa yang lolos compiler + tes
+node tests/codetok.js             # tokenizer kode STS bolak-balik tanpa rusak
 node tests/coder.js               # 36 request STS: lolos compiler + lolos tes kelakuan (pake Wikipedia palsu)
 node tests/chat.js                # simulasi obrolan di terminal (search pake Wikipedia palsu)
 python -m http.server 8765 & node tests/sdk.js   # SDK sybau.js dari "app lain"
