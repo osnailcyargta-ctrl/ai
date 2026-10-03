@@ -20,7 +20,7 @@ const requests = process.argv.length > 2 ? process.argv.slice(2) : [
   let seed = 7; const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const coder = new StsCoder({ coderModel: JSON.parse(fs.readFileSync(path.join(__dirname, "../model/coder.json"), "utf8")), vm, rand,
     things: JSON.parse(fs.readFileSync(path.join(__dirname, "../data/sts/things.json"), "utf8")), search: SearchLib, fetch: fakeFetch,
-    neuralModel: JSON.parse(fs.readFileSync(path.join(__dirname, "../model/stscode.json"), "utf8")) });
+    neuralModel: JSON.parse(fs.readFileSync(process.env.CODEMODEL || path.join(__dirname, "../model/stscode.json"), "utf8")) });
   let compiled = 0, clean = 0, allPass = 0;
   const t0 = Date.now();
   for (const r of requests) {

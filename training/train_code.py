@@ -23,7 +23,7 @@ import time
 import numpy as np
 
 import transformer as tfm
-from train import Adam, quant
+from train import Adam, quant, dequant
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CORPUS = os.path.join(ROOT, "data", "sts", "corpus.jsonl")
@@ -48,7 +48,12 @@ def main():
     ap.add_argument("--epochs", type=int, default=6)
     ap.add_argument("--seed", type=int, default=3)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--resume", action="store_true", help="keep training model/stscode.json (new tokens get fresh rows)")
+    ap.add_argument("--lr", type=float, default=1e-3)
     args = ap.parse_args()
+    args.prev_epochs = 0
+    if args.resume and os.path.exists(OUT):
+        args.prev_epochs = json.load(open(OUT, encoding="utf-8")).get("epochs", 0)
     rng = np.random.default_rng(args.seed)
     tfm.gradient_check(act=ACT)
     data = load()
@@ -65,6 +70,23 @@ def main():
     print(f"{len(seqs)} programs, vocab {len(vocab)}, {sum(len(c) for _, c in seqs):,} code tokens")
 
     P = tfm.init(len(vocab), CTX, D, LAYERS, rng)
+    if args.resume and os.path.exists(OUT):
+        old = json.load(open(OUT, encoding="utf-8"))
+        ov = {w: i for i, w in enumerate(old["vocab"])}
+        for k in P:
+            W = dequant(old[k]).astype(np.float32)
+            if k == "E":
+                for w, i in w2i.items():
+                    if w in ov: P[k][i] = W[ov[w]]
+            elif k == "Wy":
+                for w, i in w2i.items():
+                    if w in ov: P[k][:, i] = W[:, ov[w]]
+            elif k == "by":
+                for w, i in w2i.items():
+                    if w in ov: P[k][i] = W[ov[w]]
+            else:
+                P[k] = W.reshape(P[k].shape)
+        print(f"resumed from {OUT} ({old.get('epochs')} epochs, {sum(1 for w in vocab if w in ov)}/{len(vocab)} tokens known)")
     nparams = sum(v.size for v in P.values())
     print(f"model: {LAYERS} layers, {HEADS} heads, d={D}, ctx {CTX}, {nparams:,} params")
     opt = Adam(P, lr=1e-3, b2=0.98)
@@ -113,7 +135,7 @@ def main():
                 if start:   # a window from the middle: its first token has no real context
                     mask[b, len(pre) - 1] = 0
             warm = max(1, total_steps // 25)
-            opt.lr = 1e-3 * min(1.0, (step + 1) / warm) * (0.08 + 0.92 * 0.5 * (1 + np.cos(np.pi * min(1.0, step / total_steps))))
+            opt.lr = args.lr * min(1.0, (step + 1) / warm) * (0.08 + 0.92 * 0.5 * (1 + np.cos(np.pi * min(1.0, step / total_steps))))
             loss, g = tfm.loss_and_grads(P, inp, tgt, mask, HEADS, 0.1, rng, act=ACT)
             opt.step(g, clip=1.0)
             step += 1
@@ -122,7 +144,7 @@ def main():
             if step % 50 == 0:
                 print(f"  step {step}/{total_steps}  loss {tot / nb:.4f}  lr {opt.lr:.2e}  ({time.time() - t0:.0f}s)", flush=True)
         print(f"== epoch {ep}  loss/token {tot / nb:.4f}  ({time.time() - t0:.0f}s)", flush=True)
-        save(P, vocab, nparams, ep)
+        save(P, vocab, nparams, ep + (args.prev_epochs if args.resume else 0))
     print("done")
 
 

@@ -76,7 +76,7 @@ const prefixOf = (A, know) => Coder.buildPrefix(A, know);
     if (!vm.compile(prog.roots).ok) { failed++; continue; }
     const { slots, prefix } = prefixOf(A, know);
     const toks = Tok.tokenize(code, slots);
-    if (toks.length > 4200) continue;
+    if (toks.length > 6500) continue;
     out.push({ request: req, slots, prefix, code, n: toks.length, stage: prog.stage });
     if (out.length % 500 === 0) console.log(out.length, "programs");
   }

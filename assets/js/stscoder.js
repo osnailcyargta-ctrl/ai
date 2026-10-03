@@ -994,6 +994,23 @@
     const lines = r.code.split("\n");
     const li = Math.max(0, (err.line || 1) - 1);
     let m;
+    if ((m = /'(\w+)' is never given a value/.exec(err.error)) && new RegExp("\\b" + m[1] + "\\s*\\(").test(r.code) && !new RegExp("^\\s*def\\s+" + m[1] + "\\b", "m").test(roots.map((x) => x.code).join("\n"))) {
+      // a call to a function that was never written: drop the calls (a 'var' would crash when called)
+      const name = m[1];
+      let n = 0;
+      for (const rr of roots) {
+        const ls = rr.code.split("\n");
+        for (let i = 0; i < ls.length; i++) if (new RegExp("\\b" + name + "\\s*\\(").test(ls[i]) && !/^\s*\/\//.test(ls[i])) {
+          const ind = ls[i].match(/^\s*/)[0], orig = ls[i].trim();
+          ls[i] = ind + "// " + orig + "   // (sybau: fungsi '" + name + "' ga pernah ditulis)";
+          n++;
+          // it was a block header ("if f():"): an always-false header keeps the block under it valid
+          if (/:$/.test(orig)) { ls.splice(i + 1, 0, ind + "if 0 == 1:"); i++; }
+        }
+        rr.code = ls.join("\n");
+      }
+      return "fungsi '" + name + "' dipanggil tapi ga pernah ditulis, " + n + " panggilan gw buang";
+    }
     if ((m = /'(\w+)' is never given a value/.exec(err.error))) {
       roots[0].code = `var ${m[1]} = 0\n` + roots[0].code;
       return "variabel '" + m[1] + "' belum dikasih nilai, gw tambahin 'var " + m[1] + " = 0'";
@@ -1423,7 +1440,7 @@
         const fixes = [];
         let compiled = false;
         if (this.vm) {
-          for (let k = 0; k < 10; k++) {
+          for (let k = 0; k < 16; k++) {
             const res = this.vm.compile(roots);
             if (res.ok) { compiled = true; break; }
             const fix = repair(roots, res);
@@ -1436,9 +1453,16 @@
           say(L("     compiler STS: lolos ✓" + (fixes.length ? ` (setelah ${fixes.length} benerin)` : ""), "     STS compiler: passed ✓" + (fixes.length ? ` (after ${fixes.length} fixes)` : "")));
           genericTests(this.vm, roots, L, (ok, msg) => { tests.push({ ok, msg }); say("     " + (ok ? "✓ " : "✗ ") + msg); });
         } else if (this.vm) say(L("     ga lolos compiler", "     didn't compile"));
-        const score = (compiled ? 10 : 0) + tests.filter((x) => x.ok).length * 2 - fixes.length - (tests.some((x) => !x.ok) ? 3 : 0);
+        // relevance: does the program actually use what was asked for?
+        const low = w.code.toLowerCase();
+        const used = slots.filter((x) => low.includes(String(x.key).toLowerCase())).length;
+        const words = A.t.trim().split(/\s+/).filter((x) => x.length > 3 && !/^(bikin|game|buat|yang|pake|dong|make|with|the)$/.test(x));
+        const echoed = words.filter((x) => low.includes(x)).length;
+        const relevance = used * 3 + Math.min(4, echoed);
+        if (slots.length || words.length) say(L(`     relevan: ${used}/${slots.length} benda dipake, ${echoed}/${words.length} kata request muncul`, `     relevance: ${used}/${slots.length} things used, ${echoed}/${words.length} request words appear`));
+        const score = (compiled ? 10 : 0) + tests.filter((x) => x.ok).length * 2 - fixes.length - (tests.some((x) => !x.ok) ? 3 : 0) + relevance;
         if (!best || score > best.score) best = { roots, tests, fixes, compiled, score, attempt };
-        if (compiled && !fixes.length && tests.every((x) => x.ok)) break;
+        if (compiled && !fixes.length && tests.every((x) => x.ok) && used === slots.length && (echoed > 0 || !words.length)) break;
       }
       const title = ((best.roots[0].code.match(/draw text "([^"]{2,40})" 2\d/) || [])[1]) || "sybau neural";
       const prog = { roots: best.roots, stage: { w: 520, h: 360 }, title };
