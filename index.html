@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-  <title>sybau.ai 🥀</title>
+  <title>sybau.ai</title>
   <meta name="description" content="AI chatbot brainrot yang benci kamu, dalam bentuk terminal. Neural net dilatih dari nol, jalan di browser, tanpa API key.">
   <meta name="theme-color" content="#100e0e">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥀</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' rx='3' fill='%23100e0e'/%3E%3Cpath d='M5 4h6v2H7v1h4v5H5v-2h4V9H5z' fill='%23e2607a'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,800;1,400&display=swap" rel="stylesheet">
@@ -17,13 +17,13 @@
     <header class="titlebar">
       <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="title">sybau.ai <span class="dim">— ~/ur-life (cooked)</span></span>
-      <button id="settings-btn" class="tb-btn" title="settings (/settings)" aria-haspopup="dialog"><span aria-hidden="true">⚙</span> <span class="tb-label">settings</span></button>
+      <button id="settings-btn" class="tb-btn" title="settings (/settings)" aria-haspopup="dialog"><span class="tb-label">settings</span><span class="tb-short" aria-hidden="true">≡</span></button>
     </header>
 
     <main id="screen" class="screen" aria-live="polite">
       <div id="boot" class="boot">
         <div class="line"><span class="accent">✻</span> booting sybau.ai…</div>
-        <div class="line dim" id="boot-1">  ⎿ loading neural net weights (2.3mb of pure hate)</div>
+        <div class="line dim" id="boot-1">  ⎿ loading neural net weights (3mb of pure hate)</div>
         <div class="line dim" id="boot-2"></div>
       </div>
     </main>
@@ -35,17 +35,20 @@
       </form>
       <div id="suggest" class="suggest" role="listbox" hidden></div>
       <div id="shortcuts" class="shortcuts" hidden></div>
+      <input id="file" type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp,.txt,.md,.csv,.json,.tsv,.log,.html,.js,.py,text/plain">
       <div class="statusline">
-        <span id="hint" class="dim">? for shortcuts</span>
+        <span class="left"><button id="attach" class="attach" type="button" title="upload file (png, jpg, txt, md, csv, json)">+ file</button><span id="hint" class="dim">? for shortcuts</span></span>
         <span id="status" class="status"></span>
       </div>
     </div>
   </div>
 
+  <div id="dropzone" class="dropzone" hidden><div>drop file di sini · png / jpg / txt / md / csv / json</div></div>
+
   <div id="settings" class="modal" hidden>
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="panel-head">
-        <span id="settings-title"><span class="accent">⚙</span> Settings</span>
+        <span id="settings-title"><span class="accent">*</span> Settings</span>
         <button id="settings-close" class="x" aria-label="close">esc</button>
       </div>
       <div id="settings-list" class="settings-list"></div>
@@ -56,6 +59,9 @@
   <script src="assets/js/brain.js"></script>
   <script src="assets/js/grammar.js"></script>
   <script src="assets/js/search.js"></script>
+  <script src="assets/js/pixels.js"></script>
+  <script src="assets/js/learn.js"></script>
+  <script src="assets/js/github.js"></script>
   <script src="assets/js/bot.js"></script>
   <script src="assets/js/app.js"></script>
 </body>

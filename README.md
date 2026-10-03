@@ -1,6 +1,6 @@
 # sybau.ai 🥀
 
-Chatbot brainrot yang **benci kamu**. Beda dari AI lain yang baik dan selalu setuju sama apapun pilihan lu, yang ini nge-roast semua pilihan lu, ngomong pake slang TikTok 2026 (stfu, idc, sybau, ts pmo, who asked, cooked, mid, aura, lil bro, clanker…) dan selalu pake 🥀 kalo lagi nge-roast. Semua ini buat **lucu-lucuan doang**.
+Chatbot brainrot yang **benci kamu**. Beda dari AI lain yang baik dan selalu setuju sama apapun pilihan lu, yang ini nge-roast semua pilihan lu dan ngomong pake slang TikTok 2026 (stfu, idc, sybau, ts pmo, who asked, cooked, mid, aura, lil bro, clanker…). Balesannya sengaja tanpa emoji. Semua ini buat **lucu-lucuan doang**.
 
 - **AI beneran, bukan n-gram**: 2 neural network yang dilatih dari nol pake Python + numpy (backprop ditulis manual, ada gradient check, gak pake PyTorch/TensorFlow).
 - **Ngerti bahasa Indonesia**: termasuk bahasa gaul & singkatan (`gk`, `bgt`, `yg`, `gw/gue/aku`, `lu/lo/km`, `wkwk`...). Bales pake bahasa yang lu pake: ngetik Indo dibales Indo, ngetik English dibales English.
@@ -8,6 +8,16 @@ Chatbot brainrot yang **benci kamu**. Beda dari AI lain yang baik dan selalu set
 - **Tombol ⚙ settings** di atas (atau `/settings`): bahasa balesan (auto / indo / english), auto search on/off, polisi grammar on/off, tampilin otak (debug), tema (auto / gelap / terang). Disimpen di browser.
 - **Auto search, gak perlu bilang "cari"**: nanya aja. "ibukota kazakstan" → **Astana**, "berapa umur elon musk" → umurnya dihitung dari tanggal lahir, "siapa presiden amerika serikat" → yang *sekarang*, "jumlah penduduk indonesia" → data terbaru. Pertanyaan fakta dijawab dari **Wikidata** (database fakta di balik Wikipedia), pertanyaan "apa itu X" dijawab pake ringkasan **Wikipedia**. Toleran typo ("kazakstan" tetep ketemu). Abis itu tetep nge-roast lu karena gak bisa googling sendiri.
 - **Polisi grammar**: typo, salah ejaan, atau grammar jelek langsung di-roast ("your welcome", "definately", "silahkan", "dirumah" → "di rumah", "di makan" → "dimakan", typo kayak "beljar"). Dia juga ngitung udah berapa kali lu salah.
+- **Generator gambar (beta)**: "gambar kucing", "draw a skull", "gambar kucing api" (dicampur), "/draw naga 32". Neural net decoder yang dilatih dari 31 sprite di `data/sprites.txt`, gambar 16×16 (32×32 = di-upscale pake Scale2x). Datanya masih dikit jadi hasilnya masih bego, sesuai label beta.
+- **Upload file**: tombol **+ file**, drag & drop, atau paste. PNG/JPG/GIF/WebP dibuka: ukuran, warna dominan, kecerahan, dan versi 16×16 yang "diliat" bot. TXT/MD/CSV/JSON dibaca dan ditampilin cuplikannya.
+- **Belajar** (setting *Belajar dari lu* / `/learning on`):
+  - ngajarin balesan: "kalo gw bilang pagi bales pagi juga cupu" / "if i say X say Y"
+  - nginget kata-kata yang sering lu pake, terus diledekin balik ("'anjir' lagi. kosakata lu cuma segitu ya"); slang lu juga gak dihitung typo lagi
+  - `/learn` file teks: baris `pertanyaan => jawaban` jadi balesan yang diajarin, JSON format intents di-import, catatan biasa jadi "basis pengetahuan" yang bisa ditanya ("siapa raja zorg?" → dijawab dari file lu)
+  - `/learn NAMA` gambar: bot nyari kode laten baru buat gambar itu (gradient descent di browser), terus bisa "gambar NAMA"
+  - `/unlearn` buat hapus semuanya
+- **GitHub**: `/github login TOKEN`, terus "liat repo user/nama", "bikin repo test", "bikin file a.md di repo test isi halo", "bikin folder docs di test", "repo gw apa aja" (atau `/github ls|mkrepo|mkfile|mkdir`). Tiap aksi nulis **minta izin dulu** (1. Ya / 2. Ga). Token cuma disimpen di browser lu dan cuma dikirim ke `api.github.com`.
+- **Connect key** (`/connect`): pake sybau di HTML/app lain. Lihat bagian *Connect key* di bawah.
 - **Tanpa API key**: semua jalan di browser lu. Gak ada server, gak ada ChatGPT.
 - **Punya memori**: inget nama, umur, hal yang lu suka/benci, yang pernah lu cari, berapa kali lu ngehina dia, dosa grammar lu, dan history chat (disimpen di `localStorage` browser lu).
 - **Jujur**: kalo gak ngerti, dia bilang gak ngerti. Jawaban matematika, jam, tanggal, memori, dan hasil search diambil dari tools/data beneran, bukan dikarang.
@@ -30,7 +40,7 @@ pesan user ─► normalisasi slang (gk→gak, lu→kamu, wkwkwk→wkwk) + detek
 3. **Grammar checker** (`assets/js/grammar.js`): aturan frasa/kata salah dari `data/grammar_rules.json`, aturan di-/ke- bahasa Indonesia, dan pengecek typo pake 80 ribu kata paling umum (Indo + English): kata yang gak dikenal tapi beda 1 huruf dari kata umum = typo. Slang, singkatan chat, dan ketawa (wkwk) gak dihitung typo.
 4. **Search** (`assets/js/search.js`): parser pertanyaan Indo/English ngenalin ~35 jenis relasi (ibu kota, presiden, CEO, pendiri, penduduk, mata uang, bahasa, luas, tinggi, umur, lahir, tempat lahir, meninggal, pasangan, penemu, penulis, sutradara, benua, didirikan, agama, klub, kantor pusat…). Subjeknya dicari di Wikipedia (redirect + "did you mean" buat typo) → ID Wikidata-nya → properti yang ditanya (yang masih berlaku, bukan yang udah lewat; populasi diambil yang paling baru). Kalo bukan pertanyaan fakta, ambil ringkasan Wikipedia. Search otomatis jalan kalo pesannya pertanyaan dan bukan soal lu/gw (pertanyaan kayak "kenapa lu jahat" tetep dibales roast, bukan di-search).
 
-Total ~1,7 juta parameter, `model/brain.json` ~2,3 MB (int8 quantized) + `model/lexicon.json` ~650 KB.
+Total ~1,7 juta parameter chatbot + ~670 ribu parameter generator gambar. `model/brain.json` ~2,4 MB, `model/pixels.json` ~950 KB, `model/lexicon.json` ~650 KB (int8 quantized).
 
 ### Kenapa Wikipedia/Wikidata, bukan Google langsung?
 
@@ -42,6 +52,48 @@ Batasannya: pertanyaan yang gak ada di Wikipedia/Wikidata (berita hari ini, harg
 
 **Soal "kys"**: bot ini gak pernah bilang kys. Kalau lu ngetik itu ke dia, dia cuma bales roast biasa. Dan kalau ada yang beneran ngomong soal pengen bunuh diri / nyakitin diri sendiri, bot berhenti bercanda dan ngasih info bantuan (Indonesia: 119 ext 8).
 
+## Connect key: pake sybau di app lain
+
+Ketik `/connect` (atau Settings → Connect key). Key-nya selalu sama, di mana aja, kapan aja:
+
+```
+sybau-ck-7f3a9c2e1b8d4f60a5e3
+```
+
+**HTML mana pun:**
+
+```html
+<script src="https://osnailcyargta-ctrl.github.io/ai/sybau.js"></script>
+<script>
+  const sybau = new Sybau({ connectKey: "sybau-ck-7f3a9c2e1b8d4f60a5e3" });
+  sybau.chat("halo").then((r) => console.log(r.full));
+  // r = { text, intent, lang, search, followup, grammar, image, full }
+</script>
+```
+
+**Widget chat siap pakai:**
+
+```html
+<iframe src="https://osnailcyargta-ctrl.github.io/ai/embed.html?key=sybau-ck-7f3a9c2e1b8d4f60a5e3" width="420" height="600" style="border:0"></iframe>
+```
+
+Halaman induk juga bisa ngirim pesan ke widget: `iframe.contentWindow.postMessage({ type: "sybau:chat", text: "halo" }, "*")`, terus balesannya dateng sebagai `{ type: "sybau:reply", reply }`.
+
+**Node.js 18+:** download `sybau.js`, terus
+
+```js
+const { Sybau } = require("./sybau.js");
+const sybau = new Sybau({ connectKey: "sybau-ck-7f3a9c2e1b8d4f60a5e3" });
+const r = await sybau.chat("roast me");
+```
+
+Opsi: `lang` (`"auto"|"id"|"en"`), `search`, `grammar`, `learn`, `memory` (`false` = gak nyimpen apa-apa), `baseUrl`. Fungsi lain: `sybau.draw("kucing")`, `sybau.teach(q, a)`, `sybau.learnText(nama, isi)`, `sybau.reset()`.
+
+**Jujur soal cara kerjanya:** ini beda sama API key Claude. GitHub Pages cuma bisa nyimpen file, gak bisa jalanin server, jadi gak ada server sybau yang bisa dipanggil. `sybau.js` download otak sybau (`model/*.json`, GitHub Pages ngizinin diambil dari situs mana aja) terus ngejalanin neural net-nya **di dalem app lu sendiri**. Untungnya: gratis, gak ada limit, gak bisa down selama github.io idup. Batasannya:
+- cuma jalan di lingkungan JavaScript (web page apa aja, Node.js, Electron, dll). App Python/Java/dll belum bisa langsung pake.
+- connect key-nya bukan rahasia (keliatan di kode), cuma buat ngecek lu pake sybau yang bener.
+- fitur GitHub gak ada di SDK, harus di situs sybau yang asli (karena butuh izin dari lu).
+
 ## Struktur folder
 
 ```
@@ -49,11 +101,13 @@ data/                 data training (edit ini buat ngubah kepribadian)
   intents.json          patterns (contoh chat user) + responses (contoh jawaban bot), 55 intent
   fillers.json          kata pengisi buat augmentasi ({N} nama, {T} hal, {A}/{B} pilihan, {M} matematika, {Y} umur, {Q} topik search)
   roasts.txt            roast tambahan, satu per baris
+  sprites.txt           31 gambar pixel 16x16 (teks) buat ngelatih generator gambar
   slang_id.json         kamus slang/singkatan Indonesia + kata penanda bahasa Indonesia
   grammar_rules.json    aturan grammar & ejaan yang di-roast
   lexicon/              80rb kata paling umum (en + id), buat cek typo
 training/
   train.py              training kedua network (numpy) -> model/brain.json + model/lexicon.json
+  train_pixels.py       training generator gambar (numpy) -> model/pixels.json
   textproc.py           normalisasi teks + hashing (dicerminkan persis di brain.js)
 model/                  hasil training (dipake website)
 assets/js/
@@ -61,7 +115,13 @@ assets/js/
   bot.js                memori, tools, pipeline balesan
   grammar.js            polisi grammar
   search.js             parser pertanyaan + Wikidata/Wikipedia
+  pixels.js             generator gambar + baca gambar upload-an
+  learn.js              mode belajar (balesan, kata-kata lu, file)
+  github.js             GitHub REST API
   app.js                UI terminal (commands, autocomplete, settings)
+sdk/core.js             SDK publik (connect key)
+sybau.js                bundle SDK (dibikin tools/build_sdk.py, jangan diedit langsung)
+embed.html              widget chat buat iframe
 index.html, assets/css/style.css
 tests/                  cek JS == Python, akurasi, grammar, simulasi chat
 ```
@@ -70,15 +130,19 @@ tests/                  cek JS == Python, akurasi, grammar, simulasi chat
 
 ```bash
 pip install -r requirements.txt
-python training/train.py          # ~6-8 menit di CPU: gradient check, validasi, training, export
+python training/train.py          # chatbot: gradient check, validasi, training, export
+OMP_NUM_THREADS=1 python training/train_pixels.py   # generator gambar (~1 menit; 1 thread malah lebih cepet)
+python tools/build_sdk.py         # bikin ulang sybau.js kalo ada file assets/js yang diubah
 python tests/parity.py            # pastiin JS ngitung sama persis kayak Python (butuh node)
 node tests/grammar.js             # cek polisi grammar (gak boleh salah roast kalimat bener)
 node tests/search.js              # tes jawaban pertanyaan (pake Wikipedia/Wikidata palsu, tests/fake_wiki.js)
 node tests/chat.js                # simulasi obrolan di terminal (search pake Wikipedia palsu)
+node tests/github.js              # fitur GitHub (pake GitHub API palsu, tests/fake_github.js)
+python -m http.server 8765 & node tests/sdk.js   # SDK sybau.js dari "app lain"
 node tests/chat.js "roast gw" "mending kucing atau anjing?" "cari jakarta"
 ```
 
-Mau nambah slang atau roast? Tambahin aja ke `data/intents.json` / `data/roasts.txt` / `data/slang_id.json`, jalanin `train.py`, commit folder `model/`.
+Mau nambah slang atau roast? Tambahin aja ke `data/intents.json` / `data/roasts.txt` / `data/slang_id.json`, jalanin `train.py`, commit folder `model/`. Mau nambah gambar? Gambar 16×16 pake huruf palette di `data/sprites.txt`, jalanin `train_pixels.py`.
 
 ## Jalanin lokal
 

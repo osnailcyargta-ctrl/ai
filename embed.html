@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sybau.ai widget</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;800&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg: #100e0e; --fg: #e9e4dd; --dim: #8d867d; --faint: #4b4541; --accent: #e2607a; --user: #221e1d; --red: #ee7a85; --green: #84c995; }
+    @media (prefers-color-scheme: light) { :root { --bg: #fbf8f4; --fg: #24201e; --dim: #7a726a; --faint: #c9c1b8; --accent: #b8233c; --user: #eee8e1; --red: #b8303d; --green: #2f7d45; } }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.5 "JetBrains Mono", ui-monospace, monospace; }
+    body { display: flex; flex-direction: column; }
+    header { padding: 8px 12px; border-bottom: 1px solid var(--faint); font-weight: 800; } header span { color: var(--accent); }
+    #log { flex: 1; overflow-y: auto; padding: 10px 12px; }
+    .u { background: var(--user); padding: 3px 8px; margin: 0 0 10px; white-space: pre-wrap; } .u::before { content: "> "; color: var(--dim); }
+    .b { display: grid; grid-template-columns: 1.4em 1fr; margin: 0 0 10px; white-space: pre-wrap; } .b::before { content: "●"; }
+    .o { color: var(--dim); margin: -6px 0 10px 1.4em; white-space: pre-wrap; } .o::before { content: "⎿  "; }
+    .err { color: var(--red); }
+    img { image-rendering: pixelated; width: 96px; height: 96px; display: block; }
+    form { display: flex; gap: 8px; margin: 8px 12px 12px; border: 1px solid var(--faint); border-radius: 8px; padding: 8px 10px; }
+    form::before { content: ">"; font-weight: 800; }
+    input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <header><span>*</span> sybau.ai <small style="color:var(--dim);font-weight:400">widget</small></header>
+  <div id="log"><div class="o">loading brain…</div></div>
+  <form id="f"><input id="i" placeholder="ngomong apa aja..." autocomplete="off" disabled></form>
+  <script src="sybau.js"></script>
+  <script>
+    (function () {
+      const log = document.getElementById("log"), input = document.getElementById("i");
+      const add = (cls, text) => { const d = document.createElement("div"); d.className = cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; };
+      const key = new URLSearchParams(location.search).get("key") || "";
+      let sybau;
+      try { sybau = new Sybau({ connectKey: key, memory: "widget" }); }
+      catch (e) { log.textContent = ""; add("o err", e.message + " (add ?key=YOUR_CONNECT_KEY to the iframe url)"); return; }
+      sybau.ready().then(() => { log.textContent = ""; add("b", "yo. gw sybau.ai. ngomong apa aja, nanti gw roast"); input.disabled = false; input.focus(); })
+        .catch((e) => { log.textContent = ""; add("o err", e.message); });
+      // other pages can talk to the widget too: iframe.contentWindow.postMessage({ type: "sybau:chat", text: "halo" }, "*")
+      window.addEventListener("message", async (ev) => {
+        if (!ev.data || ev.data.type !== "sybau:chat") return;
+        const r = await sybau.chat(String(ev.data.text || ""));
+        ev.source && ev.source.postMessage({ type: "sybau:reply", id: ev.data.id, reply: r }, "*");
+      });
+      document.getElementById("f").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        add("u", text);
+        input.disabled = true;
+        try {
+          const r = await sybau.chat(text);
+          if (r.text) add("b", r.text);
+          if (r.search) add("o", r.search.kind === "fact" ? r.search.relation + " " + r.search.subject + ": " + r.search.answer : r.search.title + " - " + r.search.extract);
+          if (r.image && r.image.dataUrl) { const o = add("o", ""); const img = document.createElement("img"); img.src = r.image.dataUrl; o.appendChild(img); }
+          if (r.followup) add("b", r.followup);
+          if (r.grammar) add("o", "- " + r.grammar.wrong + "  + " + r.grammar.right + "  " + r.grammar.text);
+        } catch (err) { add("o err", err.message); }
+        input.disabled = false;
+        input.focus();
+      });
+    })();
+  </script>
+</body>
+</html>
