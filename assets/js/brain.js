@@ -12,9 +12,24 @@
     ["🙏", " emojipray "], ["🤡", " emojiclown "],
   ];
 
+  let SLANG = {}, MARKERS = new Set();
+  function setTextConfig(cfg) {
+    SLANG = (cfg && cfg.slang) || {};
+    MARKERS = new Set((cfg && cfg.markers) || []);
+  }
+
+  const WK_RE = /^(?:[wk]{4,}|(?:a?wk)+[a-z]?|(?:wk)+)$/;
+  const HAHA_RE = /^(?:ha|he|hi|ah|hah)+h?$/;
+  function canon(tok) {
+    if (tok.length >= 4 && tok.includes("w") && tok.includes("k") && WK_RE.test(tok)) return "wkwk";
+    if (tok.length >= 4 && HAHA_RE.test(tok)) return "haha";
+    return Object.prototype.hasOwnProperty.call(SLANG, tok) ? SLANG[tok] : tok;
+  }
+
   function normalize(text) {
     let t = String(text).toLowerCase();
     for (const [emo, word] of EMOJI_WORDS) t = t.split(emo).join(word);
+    t = t.replace(/([a-z]+)2(?![0-9])/g, "$1 $1"); // kata2 -> kata kata
     t = t.replace(/([0-9])\s*-\s*(?=[0-9])/g, "$1 minus ");
     t = t.replace(/([0-9])\s*x\s*(?=[0-9])/g, "$1 times ");
     t = t.replace(/[0-9]+(\.[0-9]+)?/g, " num ");
@@ -24,7 +39,17 @@
     t = t.replace(/['’]/g, "");
     t = t.replace(/[^a-z\s]/g, " ");
     t = t.replace(/(.)\1{2,}/g, "$1$1");
-    return t.split(/\s+/).filter(Boolean);
+    return t.split(/\s+/).filter(Boolean).map(canon);
+  }
+
+  /** "id" if the normalized tokens look Indonesian, else "en" */
+  const NON_WORDS = new Set(["qmark", "bang", "num", "plus", "minus", "times", "div", "pow", "eq"]);
+  function detectLang(tokens) {
+    const words = tokens.filter((t) => !NON_WORDS.has(t) && !t.startsWith("emoji"));
+    if (!words.length) return "en";
+    let score = 0;
+    for (const t of words) if (MARKERS.has(t)) score++;
+    return score >= Math.max(1, 0.25 * words.length) ? "id" : "en";
   }
 
   function fnv1a(s) {
@@ -45,6 +70,10 @@
       for (let j = 0; j + 3 <= padded.length; j++) feats.push("c|" + padded.slice(j, j + 3));
       if (i + 1 < tokens.length) feats.push("b|" + tok + "|" + tokens[i + 1]);
     }
+    if (tokens.length) {
+      feats.push("s|" + tokens[0]);
+      feats.push("n|" + Math.min(tokens.length, 8));
+    }
     return feats;
   }
 
@@ -62,9 +91,16 @@
   }
 
   function detokenize(tokens) {
-    let out = "";
+    let out = "", openQuote = false, glue = false;
     for (const tok of tokens) {
-      if (out && !",.!?:;".includes(tok)) out += " ";
+      if (tok === "'" || tok === '"') {
+        if (!openQuote) { out += (out ? " " : "") + tok; glue = true; }
+        else out += tok;
+        openQuote = !openQuote;
+        continue;
+      }
+      if (out && !glue && !",.!?:;".includes(tok)) out += " ";
+      glue = false;
       out += tok;
     }
     return out;
@@ -119,6 +155,7 @@
 
   class Brain {
     constructor(json) {
+      setTextConfig(json.text);
       const c = json.classifier;
       this.featDim = c.feat_dim;
       this.clsTags = c.tags;
@@ -131,8 +168,9 @@
       this.H = g.hidden;
       this.maxLen = g.max_len;
       this.genTags = g.tags;
+      this.langs = g.langs || ["en", "id"];
       this.vocab = g.vocab;
-      for (const k of ["E", "C", "Wx", "Uh", "Wy"]) this[k] = dequant(g[k]);
+      for (const k of ["E", "C", "L", "Wx", "Uh", "Wy"]) this[k] = dequant(g[k]);
       this.bx = dequant(g.bx).data;
       this.bh = dequant(g.bh).data;
       this.by = dequant(g.by).data;
@@ -144,7 +182,7 @@
         for (const r of json.responses[tag]) this.trainingLines.add(detokenize(genTokenize(r)));
 
       let n = 0;
-      for (const t of [this.W1T, this.W2, this.E, this.C, this.Wx, this.Uh, this.Wy]) n += t.data.length;
+      for (const t of [this.W1T, this.W2, this.E, this.C, this.L, this.Wx, this.Uh, this.Wy]) n += t.data.length;
       this.paramCount = n + this.b1.length + this.b2.length + this.bx.length + this.bh.length + this.by.length;
     }
 
@@ -164,11 +202,11 @@
       return this.clsTags.map((tag, i) => ({ tag, p: z[i] })).sort((a, b) => b.p - a.p);
     }
 
-    _gruStep(wordId, intentEmb, h) {
+    _gruStep(wordId, cond, h) {
       const H = this.H, E = this.E.cols;
-      const x = new Float32Array(E + intentEmb.length);
+      const x = new Float32Array(E + cond.length);
       x.set(this.E.data.subarray(wordId * E, wordId * E + E), 0);
-      x.set(intentEmb, E);
+      x.set(cond, E);
       const gx = vecMat(x, this.Wx, Float32Array.from(this.bx));
       const gh = vecMat(h, this.Uh, Float32Array.from(this.bh));
       const hn = new Float32Array(H);
@@ -181,25 +219,38 @@
       return hn;
     }
 
-    /** Sample one reply from the GRU, word by word. Returns {text, tokens, logp}. */
-    generate(tag, temperature = 0.75, rand = Math.random) {
+    /** Sample one reply from the GRU, word by word (temperature + nucleus/top-p).
+     *  Returns {text, tokens, logp} where logp is the mean log-prob per token. */
+    generate(tag, lang = "en", temperature = 0.8, rand = Math.random, topP = 0.92) {
       const cid = this.genTags.indexOf(tag);
       if (cid < 0) return null;
-      const C = this.C.cols;
-      const intentEmb = this.C.data.subarray(cid * C, cid * C + C);
+      const lid = Math.max(0, this.langs.indexOf(lang));
+      const C = this.C.cols, L = this.L.cols;
+      const cond = new Float32Array(C + L);
+      cond.set(this.C.data.subarray(cid * C, cid * C + C), 0);
+      cond.set(this.L.data.subarray(lid * L, lid * L + L), C);
       let h = new Float32Array(this.H);
       let w = 1; // <s>
       const tokens = [];
       let logp = 0;
+      const V = this.vocab.length;
+      const order = new Int32Array(V);
       for (let step = 0; step < this.maxLen; step++) {
-        h = this._gruStep(w, intentEmb, h);
+        h = this._gruStep(w, cond, h);
         const logits = vecMat(h, this.Wy, Float32Array.from(this.by));
-        for (let i = 0; i < logits.length; i++) logits[i] /= temperature;
+        for (let i = 0; i < V; i++) logits[i] /= temperature;
         logits[0] = -1e9; // never <pad>
+        logits[1] = -1e9; // never <s>
         softmaxInPlace(logits);
-        let u = rand(), acc = 0;
-        w = logits.length - 1;
-        for (let i = 0; i < logits.length; i++) { acc += logits[i]; if (u < acc) { w = i; break; } }
+        // nucleus sampling: only sample from the smallest set covering topP of the mass
+        let n = 0;
+        for (let i = 0; i < V; i++) if (logits[i] > 1e-5) order[n++] = i;
+        const idx = Array.from(order.subarray(0, n)).sort((a, b) => logits[b] - logits[a]);
+        let mass = 0, cut = 0;
+        while (cut < n && mass < topP) mass += logits[idx[cut++]];
+        let u = rand() * mass, acc = 0;
+        w = idx[0];
+        for (let k = 0; k < cut; k++) { acc += logits[idx[k]]; if (u < acc) { w = idx[k]; break; } }
         logp += Math.log(logits[w] + 1e-12);
         if (w === 2) break; // </s>
         tokens.push(this.vocab[w]);
@@ -219,7 +270,7 @@
     return new Brain(await res.json());
   }
 
-  const api = { Brain, loadBrain, normalize, featurize, fnv1a, detokenize, genTokenize };
+  const api = { Brain, loadBrain, normalize, detectLang, featurize, fnv1a, detokenize, genTokenize, setTextConfig };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.BrainLib = api;
 })(typeof self !== "undefined" ? self : this);

@@ -2,15 +2,19 @@
 
 Two neural networks get trained on the files in ../data:
 
-1. Intent classifier  - MLP (hashed bag-of-features -> 128 ReLU -> softmax).
-   Figures out WHAT the user is saying (greeting, insult, choice, math, ...).
-2. Response generator - word-level GRU language model conditioned on the intent.
-   Writes the reply word by word, sampled from its learned distribution.
+1. Intent classifier  - MLP (hashed bag-of-features 4096 -> 192 ReLU -> softmax).
+   Figures out WHAT the user is saying (greeting, insult, choice, search, ...).
+   Indonesian slang gets normalised first (data/slang_id.json), so "gk", "ga",
+   "nggak" all look the same to the network.
+2. Response generator - word-level GRU language model (256 hidden units)
+   conditioned on the intent AND the language (id / en), so it replies in
+   the language you typed in. Writes the reply word by word.
 
 Both are trained with hand-written backprop + Adam and exported (int8
-quantised) to ../model/brain.json, which the website runs in the browser.
+quantised) to ../model/brain.json. The grammar checker's word lists go to
+../model/lexicon.json. The website runs everything in the browser.
 
-Usage:  python training/train.py  [--seed 7] [--gen-epochs 120]
+Usage:  python training/train.py  [--seed 7] [--gen-epochs 90] [--skip-val]
 """
 import argparse
 import base64
@@ -22,18 +26,23 @@ import time
 
 import numpy as np
 
-from textproc import featurize, gen_tokenize, gen_detokenize
+from textproc import (featurize, gen_tokenize, gen_detokenize, normalize, response_lang,
+                      SLANG_MAP, ID_MARKERS, EMOJI_WORDS)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 OUT = os.path.join(ROOT, "model", "brain.json")
+LEX_OUT = os.path.join(ROOT, "model", "lexicon.json")
 
-FEAT_DIM = 2048
-CLS_HIDDEN = 128
-GEN_EMB = 48
+FEAT_DIM = 4096
+CLS_HIDDEN = 192
+GEN_EMB = 64
 GEN_INTENT_EMB = 16
-GEN_HIDDEN = 160
-MAX_GEN_LEN = 40
+GEN_LANG_EMB = 8
+GEN_HIDDEN = 256
+GEN_DROPOUT = 0.1
+MAX_GEN_LEN = 48
+LANGS = ["en", "id"]
 
 
 # ------------------------------------------------------------------ data
@@ -52,8 +61,15 @@ def load_data():
 
 
 SLOT_RE = re.compile(r"\{([A-Z])\}")
-NOISE_PRE = ["bro", "yo", "eh", "woy", "lol", "ngl", "anjir", "hmm", "jujur", "fr"]
-NOISE_POST = ["bro", "lol", "pls", "dong", "sih", "deh", "fr", "bang", "ya", "?", "!!", "wkwk", "😭", "💀"]
+NOISE_PRE = ["bro", "yo", "eh", "woy", "lol", "ngl", "anjir", "hmm", "jujur", "fr", "bang", "eh bang", "cuy", "jir", "btw", "oi"]
+NOISE_POST = ["bro", "lol", "pls", "dong", "sih", "deh", "fr", "bang", "ya", "?", "!!", "wkwk", "😭", "💀", "cuy", "nih",
+              "tuh", "anjir", "bjir", "gak sih", "kan", "lah", "loh", "ngab", "ges", "gais", "plis", "😂", "🥀"]
+# swap a word for a common chat spelling, so the net sees real-world variants
+CHAT_SPELLING = {"gak": ["ga", "gk", "nggak", "engga", "kagak"], "banget": ["bgt", "bngt", "bet"], "yang": ["yg"],
+                 "udah": ["udh", "dah", "sudah"], "kamu": ["lu", "lo", "km", "elu"], "aku": ["gw", "gue", "gua", "w", "aq"],
+                 "lagi": ["lg"], "kenapa": ["knp", "napa"], "gimana": ["gmn", "gimna"], "tahu": ["tau"], "kalau": ["kalo", "klo"],
+                 "lu": ["lo", "elu", "km", "kamu"], "gw": ["gue", "aku", "gua", "w"], "sama": ["sm", "ama"], "dong": ["donk"],
+                 "you": ["u"], "your": ["ur"], "are": ["r"], "please": ["pls", "plz"], "the": ["da"], "what": ["wat", "wut"]}
 
 
 def fill_slots(pattern, fillers, rng):
@@ -65,20 +81,28 @@ def fill_slots(pattern, fillers, rng):
 
 def noisy(text, rng):
     words = text.split()
+    for i, w in enumerate(words):
+        if w in CHAT_SPELLING and rng.random() < 0.5:
+            words[i] = rng.choice(CHAT_SPELLING[w])
     r = rng.random()
     if r < 0.15 and len(words) > 2:
         del words[rng.randrange(len(words))]
-    elif r < 0.30:
-        # keyboard-ish typo: duplicate or swap a char inside one word
+    elif r < 0.35:
+        # keyboard-ish typo: duplicate, swap or drop a char inside one word
         i = rng.randrange(len(words))
         w = words[i]
         if len(w) > 3:
             j = rng.randrange(1, len(w) - 1)
-            if rng.random() < 0.5:
+            k = rng.random()
+            if k < 0.33:
                 w = w[:j] + w[j] + w[j:]
-            else:
+            elif k < 0.66:
                 w = w[:j - 1] + w[j] + w[j - 1] + w[j + 1:]
+            else:
+                w = w[:j] + w[j + 1:]
             words[i] = w
+    if rng.random() < 0.1:
+        words = [w.upper() for w in words]
     if rng.random() < 0.25:
         words.insert(0, rng.choice(NOISE_PRE))
     if rng.random() < 0.3:
@@ -113,7 +137,7 @@ def build_classifier_set(intents, fillers, rng, per_pattern=8, holdout=0.0):
         # keyboard-mash gibberish so the bot can honestly say "idk what u said"
         y = tags.index("fallback")
         letters = "qwertyuiopasdfghjklzxcvbnm"
-        for _ in range(per_pattern * 25):
+        for _ in range(per_pattern * 30):
             words = ["".join(rng.choice(letters) for _ in range(rng.randint(2, 8)))
                      for _ in range(rng.randint(1, 4))]
             train.append((" ".join(words), y))
@@ -128,6 +152,14 @@ def to_matrix(samples):
             X[i, k] = v
         y[i] = lab
     return X, y
+
+
+def load_eval_set(tags):
+    path = os.path.join(ROOT, "tests", "eval_set.json")
+    if not os.path.exists(path):
+        return None, None
+    rows = [(t, tags.index(l)) for t, l in json.load(open(path, encoding="utf-8")) if l in tags]
+    return to_matrix(rows)
 
 
 # ------------------------------------------------------------------ adam
@@ -180,12 +212,14 @@ def classifier_forward(P, X):
     return softmax(h @ P["W2"] + P["b2"])
 
 
-def train_classifier(X, y, n_classes, epochs, rng_np, Xv=None, yv=None, log=True):
+def train_classifier(X, y, n_classes, epochs, rng_np, evals=(), log=True):
     P = init_classifier(n_classes, rng_np)
     opt = Adam(P, lr=2e-3)
-    smooth, drop, wd, bs = 0.05, 0.3, 1e-5, 64
+    smooth, drop, wd, bs = 0.05, 0.35, 1e-5, 64
     n = len(X)
     for ep in range(epochs):
+        if ep == int(epochs * 0.75):
+            opt.lr = 5e-4
         idx = rng_np.permutation(n)
         tot = 0.0
         for s in range(0, n, bs):
@@ -208,8 +242,9 @@ def train_classifier(X, y, n_classes, epochs, rng_np, Xv=None, yv=None, log=True
         if log and (ep % 10 == 0 or ep == epochs - 1):
             acc = (classifier_forward(P, X).argmax(1) == y).mean()
             msg = f"  [cls] epoch {ep:3d}  loss {tot / n:.4f}  train acc {acc:.3f}"
-            if Xv is not None and len(Xv):
-                msg += f"  val acc {(classifier_forward(P, Xv).argmax(1) == yv).mean():.3f}"
+            for name, Xe, ye in evals:
+                if Xe is not None and len(Xe):
+                    msg += f"  {name} acc {(classifier_forward(P, Xe).argmax(1) == ye).mean():.3f}"
             print(msg)
     return P
 
@@ -217,12 +252,13 @@ def train_classifier(X, y, n_classes, epochs, rng_np, Xv=None, yv=None, log=True
 # ------------------------------------------------------------------ GRU generator
 
 def init_generator(V, n_intents, rng_np):
-    H, E, C = GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB
-    D = E + C
+    H, E, C, L = GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB, GEN_LANG_EMB
+    D = E + C + L
     s = lambda *shape: rng_np.standard_normal(shape).astype(np.float32)
     return {
         "E": s(V, E) * 0.1,
         "C": s(n_intents, C) * 0.1,
+        "L": s(len(LANGS), L) * 0.1,
         "Wx": s(D, 3 * H) * np.sqrt(1.0 / D),
         "bx": np.zeros(3 * H, dtype=np.float32),
         "Uh": s(H, 3 * H) * np.sqrt(1.0 / H),
@@ -243,24 +279,31 @@ def gru_step(P, x, h):
     return h_new, (x, h, z, r, n, gh)
 
 
-def generator_loss_and_grads(P, inp, tgt, mask, cid):
-    """inp/tgt/mask: (B, T) ; cid: (B,). Returns loss, grads (full BPTT)."""
+def generator_loss_and_grads(P, inp, tgt, mask, cid, lid, drop=0.0, rng_np=None):
+    """inp/tgt/mask: (B, T) ; cid, lid: (B,). Returns loss, grads (full BPTT)."""
     B, T = inp.shape
-    H = GEN_HIDDEN
+    H = P["Uh"].shape[0]
     E = P["E"].shape[1]
-    h = np.zeros((B, H), dtype=np.float32)
-    cache, probs, hs = [], [], []
-    cemb = P["C"][cid]
+    C = P["C"].shape[1]
+    h = np.zeros((B, H), dtype=P["Uh"].dtype)
+    cache, probs, hs, dmasks = [], [], [], []
+    cond = np.concatenate([P["C"][cid], P["L"][lid]], axis=1)
     for t in range(T):
-        x = np.concatenate([P["E"][inp[:, t]], cemb], axis=1)
+        x = np.concatenate([P["E"][inp[:, t]], cond], axis=1)
         h, c = gru_step(P, x, h)
         cache.append(c)
-        hs.append(h)
-        probs.append(softmax(h @ P["Wy"] + P["by"]))
+        if drop > 0:
+            dm = (rng_np.random(h.shape) > drop).astype(h.dtype) / (1 - drop)
+        else:
+            dm = None
+        hd = h * dm if dm is not None else h
+        dmasks.append(dm)
+        hs.append(hd)
+        probs.append(softmax(hd @ P["Wy"] + P["by"]))
     ntok = mask.sum()
     loss = 0.0
     g = {k: np.zeros_like(v) for k, v in P.items()}
-    dh_next = np.zeros((B, H), dtype=np.float32)
+    dh_next = np.zeros((B, H), dtype=h.dtype)
     for t in reversed(range(T)):
         p = probs[t]
         m = mask[:, t]
@@ -270,7 +313,10 @@ def generator_loss_and_grads(P, inp, tgt, mask, cid):
         dlog *= (m / ntok)[:, None]
         g["Wy"] += hs[t].T @ dlog
         g["by"] += dlog.sum(0)
-        dh = dlog @ P["Wy"].T + dh_next
+        dhd = dlog @ P["Wy"].T
+        if dmasks[t] is not None:
+            dhd *= dmasks[t]
+        dh = dhd + dh_next
         x, hp, z, r, n, gh = cache[t]
         dn = dh * (1 - z)
         dz = dh * (hp - n)
@@ -288,16 +334,17 @@ def generator_loss_and_grads(P, inp, tgt, mask, cid):
         dx = dgx @ P["Wx"].T
         dh_prev += dgh @ P["Uh"].T
         np.add.at(g["E"], inp[:, t], dx[:, :E])
-        np.add.at(g["C"], cid, dx[:, E:])
+        np.add.at(g["C"], cid, dx[:, E:E + C])
+        np.add.at(g["L"], lid, dx[:, E + C:])
         dh_next = dh_prev
     return loss / ntok, g
 
 
 def gradient_check():
     """Numerical vs analytic gradients on a tiny GRU, so we KNOW backprop is right."""
-    global GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB
-    saved = (GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB)
-    GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB = 5, 4, 3
+    global GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB, GEN_LANG_EMB
+    saved = (GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB, GEN_LANG_EMB)
+    GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB, GEN_LANG_EMB = 5, 4, 3, 2
     rng_np = np.random.default_rng(0)
     P = {k: v.astype(np.float64) for k, v in init_generator(7, 2, rng_np).items()}
     for k in P:
@@ -306,21 +353,22 @@ def gradient_check():
     tgt = rng_np.integers(0, 7, (3, 4))
     mask = np.array([[1, 1, 1, 1], [1, 1, 0, 0], [1, 1, 1, 0]], dtype=np.float64)
     cid = np.array([0, 1, 1])
-    _, g = generator_loss_and_grads(P, inp, tgt, mask, cid)
+    lid = np.array([1, 0, 1])
+    _, g = generator_loss_and_grads(P, inp, tgt, mask, cid, lid)
     worst = 0.0
     for k in P:
         flat = P[k].reshape(-1)
         for i in rng_np.choice(flat.size, min(6, flat.size), replace=False):
             old = flat[i]
             flat[i] = old + 1e-5
-            lp, _ = generator_loss_and_grads(P, inp, tgt, mask, cid)
+            lp, _ = generator_loss_and_grads(P, inp, tgt, mask, cid, lid)
             flat[i] = old - 1e-5
-            lm, _ = generator_loss_and_grads(P, inp, tgt, mask, cid)
+            lm, _ = generator_loss_and_grads(P, inp, tgt, mask, cid, lid)
             flat[i] = old
             num = (lp - lm) / 2e-5
             ana = g[k].reshape(-1)[i]
             worst = max(worst, abs(num - ana) / max(1e-8, abs(num) + abs(ana)))
-    GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB = saved
+    GEN_HIDDEN, GEN_EMB, GEN_INTENT_EMB, GEN_LANG_EMB = saved
     print(f"  [gradcheck] worst relative error {worst:.2e}")
     assert worst < 1e-4, "GRU backprop is wrong!"
 
@@ -329,13 +377,11 @@ def build_generator_set(intents, extra):
     tags = [it["tag"] for it in intents]
     seqs = []
     for it in intents:
-        for r in it["responses"]:
-            seqs.append((tags.index(it["tag"]), gen_tokenize(r)))
-    roast = tags.index("roast_me")
-    for r in extra:
-        seqs.append((roast, gen_tokenize(r)))
+        lines = it["responses"] + (extra if it["tag"] == "roast_me" else [])
+        for r in lines:
+            seqs.append((tags.index(it["tag"]), LANGS.index(response_lang(r)), gen_tokenize(r)))
     counts = {}
-    for _, toks in seqs:
+    for _, _, toks in seqs:
         for tok in toks:
             counts[tok] = counts.get(tok, 0) + 1
     vocab = ["<pad>", "<s>", "</s>"] + sorted(counts)
@@ -348,41 +394,44 @@ def train_generator(tags, vocab, seqs, epochs, rng_np):
     opt = Adam(P, lr=3e-3)
     bs = 32
     for ep in range(epochs):
-        if ep == int(epochs * 0.7):
+        if ep == int(epochs * 0.6):
             opt.lr = 1e-3
+        if ep == int(epochs * 0.85):
+            opt.lr = 4e-4
         order = rng_np.permutation(len(seqs))
         tot, nb = 0.0, 0
         for s in range(0, len(order), bs):
             batch = [seqs[i] for i in order[s:s + bs]]
-            T = max(len(t) for _, t in batch) + 1
+            T = max(len(t) for _, _, t in batch) + 1
             inp = np.zeros((len(batch), T), dtype=np.int64)
             tgt = np.zeros((len(batch), T), dtype=np.int64)
             mask = np.zeros((len(batch), T), dtype=np.float32)
-            for b, (_, toks) in enumerate(batch):
+            for b, (_, _, toks) in enumerate(batch):
                 ids = [w2i[w] for w in toks]
                 seq_in = [1] + ids
                 seq_out = ids + [2]
                 inp[b, :len(seq_in)] = seq_in
                 tgt[b, :len(seq_out)] = seq_out
                 mask[b, :len(seq_out)] = 1
-            cid = np.array([c for c, _ in batch])
-            loss, g = generator_loss_and_grads(P, inp, tgt, mask, cid)
+            cid = np.array([c for c, _, _ in batch])
+            lid = np.array([l for _, l, _ in batch])
+            loss, g = generator_loss_and_grads(P, inp, tgt, mask, cid, lid, GEN_DROPOUT, rng_np)
             opt.step(g, clip=5.0)
             tot += loss
             nb += 1
         if ep % 10 == 0 or ep == epochs - 1:
-            print(f"  [gen] epoch {ep:3d}  loss/token {tot / nb:.4f}")
+            print(f"  [gen] epoch {ep:3d}  loss/token {tot / nb:.4f}", flush=True)
     return P
 
 
-def sample(P, vocab, cid, rng_np, temp=0.7):
-    h = np.zeros((1, GEN_HIDDEN), dtype=np.float32)
+def sample(P, vocab, cid, lid, rng_np, temp=0.7):
+    h = np.zeros((1, P["Uh"].shape[0]), dtype=np.float32)
     w, out = 1, []
+    cond = np.concatenate([P["C"][[cid]], P["L"][[lid]]], axis=1)
     for _ in range(MAX_GEN_LEN):
-        x = np.concatenate([P["E"][[w]], P["C"][[cid]]], axis=1)
+        x = np.concatenate([P["E"][[w]], cond], axis=1)
         h, _ = gru_step(P, x, h)
-        logits = (h @ P["Wy"] + P["by"])[0] / temp
-        p = softmax(logits)
+        p = softmax((h @ P["Wy"] + P["by"])[0] / temp)
         w = int(rng_np.choice(len(p), p=p))
         if w == 2:
             break
@@ -414,12 +463,36 @@ def dequant(d):
     return q.astype(np.float32) * np.array(d["scale"], dtype=np.float32)[:, None]
 
 
+def build_lexicon(intents, fillers, extra):
+    """Word lists + rules for the grammar roaster (assets/js/grammar.js)."""
+    lex = {}
+    for lang in LANGS:
+        with open(os.path.join(DATA, "lexicon", lang + ".txt"), encoding="utf-8") as f:
+            lex[lang] = " ".join(w.strip() for w in f if w.strip())
+    with open(os.path.join(DATA, "grammar_rules.json"), encoding="utf-8") as f:
+        rules = {k: v for k, v in json.load(f).items() if not k.startswith("_")}
+    known = set(rules.pop("ignore"))
+    known.update(SLANG_MAP.keys())
+    texts = [p for it in intents for p in it["patterns"] + it["responses"]] + extra
+    texts += [v for vals in fillers.values() for v in vals]
+    for t in texts:
+        known.update(re.findall(r"[a-z]+", re.sub(r"\{\w+\}", " ", t.lower())))
+    # never let a rule's *wrong* spelling sneak into the whitelist via the training data
+    known -= {w for w, r in rules["words"].items() if r}
+    lex["known"] = " ".join(sorted(known))
+    lex["rules"] = rules
+    with open(LEX_OUT, "w", encoding="utf-8") as f:
+        json.dump(lex, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"== saved {LEX_OUT} ({os.path.getsize(LEX_OUT) / 1024:.0f} KB)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--cls-epochs", type=int, default=40)
-    ap.add_argument("--gen-epochs", type=int, default=150)
+    ap.add_argument("--cls-epochs", type=int, default=30)
+    ap.add_argument("--gen-epochs", type=int, default=90)
     ap.add_argument("--skip-val", action="store_true")
+    ap.add_argument("--cls-only", action="store_true")
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
@@ -431,26 +504,33 @@ def main():
     gradient_check()
 
     if not args.skip_val:
-        print("== classifier: validation run (15% of patterns held out)")
+        print("== classifier: validation run (15% of patterns held out + tests/eval_set.json)")
         tags, tr, va = build_classifier_set(intents, fillers, random.Random(args.seed), holdout=0.15)
         X, y = to_matrix(tr)
         Xv, yv = to_matrix(va)
-        train_classifier(X, y, len(tags), args.cls_epochs, np.random.default_rng(args.seed), Xv, yv)
+        Xe, ye = load_eval_set(tags)
+        train_classifier(X, y, len(tags), args.cls_epochs, np.random.default_rng(args.seed),
+                         [("heldout", Xv, yv), ("eval", Xe, ye)])
 
     print("== classifier: final run on all patterns")
     cls_tags, tr, _ = build_classifier_set(intents, fillers, rng)
     X, y = to_matrix(tr)
+    Xe, ye = load_eval_set(cls_tags)
     print(f"  {len(tr)} training examples, {len(cls_tags)} intents")
-    CP = train_classifier(X, y, len(cls_tags), args.cls_epochs, rng_np)
+    CP = train_classifier(X, y, len(cls_tags), args.cls_epochs, rng_np, [("eval", Xe, ye)])
+    if args.cls_only:
+        return
 
     print("== generator (GRU)")
     gen_tags, vocab, seqs = build_generator_set(intents, extra)
-    print(f"  {len(seqs)} responses, vocab {len(vocab)}")
+    n_id = sum(1 for _, l, _ in seqs if LANGS[l] == "id")
+    print(f"  {len(seqs)} responses ({n_id} indonesian), vocab {len(vocab)}")
     GP = train_generator(gen_tags, vocab, seqs, args.gen_epochs, rng_np)
 
     model = {
-        "format": "brainrot-bot-v1",
+        "format": "brainrot-bot-v2",
         "trained_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "text": {"slang": SLANG_MAP, "markers": sorted(ID_MARKERS)},
         "classifier": {
             "feat_dim": FEAT_DIM,
             "tags": cls_tags,
@@ -463,6 +543,7 @@ def main():
             "hidden": GEN_HIDDEN,
             "max_len": MAX_GEN_LEN,
             "tags": gen_tags,
+            "langs": LANGS,
             "vocab": vocab,
             **{k: quant(v) for k, v in GP.items()},
         },
@@ -473,11 +554,13 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(model, f, ensure_ascii=False, separators=(",", ":"))
     print(f"== saved {OUT} ({os.path.getsize(OUT) / 1024:.0f} KB) in {time.time() - t0:.0f}s")
+    build_lexicon(intents, fillers, extra)
 
     # sanity: samples from the *quantised* weights (what the browser will run)
     QP = {k: dequant(model["generator"][k]) for k in GP}
-    for tag in ["greeting", "insult", "choice", "roast_me", "insult_long", "fallback"]:
-        print(f"  {tag:12s} -> {sample(QP, vocab, gen_tags.index(tag), rng_np)}")
+    for tag in ["greeting", "insult", "choice", "roast_me", "search", "grammar"]:
+        for lang in LANGS:
+            print(f"  {tag:10s} {lang} -> {sample(QP, vocab, gen_tags.index(tag), LANGS.index(lang), rng_np)}")
 
 
 if __name__ == "__main__":
