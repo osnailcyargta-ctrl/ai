@@ -743,12 +743,26 @@
     return Object.assign(page, { kind: "summary", source: "wikipedia", google, query: parsed.display });
   }
 
+  /** longer reading for sybau code: best page for a topic + its whole intro (not trimmed) */
+  async function research(topic, lang = "id", fetchImpl, opts = {}) {
+    const f = fetchImpl || (typeof fetch !== "undefined" ? fetch.bind(root) : null);
+    if (!f || !topic) return null;
+    const ms = opts.timeoutMs || 8000;
+    const order = lang === "en" ? ["en", "id"] : ["id", "en"];
+    const page = await wikiFind(f, topic, order, ms);
+    if (!page) return null;
+    const d = await getJson(f, wikiApi(page.lang) + qs({ action: "query", prop: "extracts", exintro: 1, explaintext: 1, titles: page.title, redirects: 1 }), ms);
+    const pages = d && d.query && d.query.pages;
+    const full = pages ? (Object.values(pages)[0] || {}).extract : "";
+    return Object.assign(page, { text: String(full || page.extract || "").replace(/\s+/g, " ").trim().slice(0, 4000) });
+  }
+
   // kept for older callers
   async function wikiSearch(query, lang = "en", fetchImpl, timeoutMs = 8000) {
     return answer(query, lang, fetchImpl, { timeoutMs });
   }
 
-  const api = { answer, wikiSearch, parseQuestion, googleUrl, trimExtract, RELATIONS };
+  const api = { answer, research, wikiSearch, parseQuestion, googleUrl, trimExtract, RELATIONS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.SearchLib = api;
 })(typeof self !== "undefined" ? self : this);

@@ -9,19 +9,21 @@
   const lang = () => (settings().lang === "en" ? "en" : "id");
   const T = {
     id: { title: "sybau code", sub: "bikin program STS · dicek compiler STS asli", ph: "mau bikin apa? contoh: game hindarin meteor pake 3 nyawa", foot: "enter kirim · shift+enter baris baru · esc tutup",
-      hello: "yo. gw sybau code. bilang mau program STS apa, gw yang mikir, nulis, compile, sama benerin errornya. lu tinggal bengong 🥀",
-      think: "mikir", dl: "download .sts", copy: "salin", copied: "kesalin", run: "jalanin", stop: "stop", ok: "lolos compiler STS", warn: "masih ada error", loading: "loading otak coding + compiler STS…" },
+      hello: "yo. gw sybau code. bilang mau program STS apa. gw riset dulu bendanya di wikipedia, ngedesain gamenya, nulis kodenya dari nol, compile, terus gw tes mainin sendiri. lu tinggal bengong 🥀",
+      think: "mikir", dl: "download .sts", copy: "salin", copied: "kesalin", run: "jalanin", stop: "stop", ok: "lolos compiler STS", warn: "masih ada error", tests: "tes lolos", loading: "loading otak coding + compiler STS…" },
     en: { title: "sybau code", sub: "writes STS programs · checked by the real STS compiler", ph: "what should i build? e.g. dodge falling meteors with 3 lives", foot: "enter send · shift+enter new line · esc close",
-      hello: "yo. i'm sybau code. tell me what STS program u want. i think, write, compile and fix it. u just sit there 🥀",
-      think: "thinking", dl: "download .sts", copy: "copy", copied: "copied", run: "run", stop: "stop", ok: "passed the STS compiler", warn: "still has errors", loading: "loading coding brain + STS compiler…" },
+      hello: "yo. i'm sybau code. tell me what STS program u want. i research the things on wikipedia, design it, write it from scratch, compile it and play-test it myself. u just sit there 🥀",
+      think: "thinking", dl: "download .sts", copy: "copy", copied: "copied", run: "run", stop: "stop", ok: "passed the STS compiler", warn: "still has errors", tests: "tests passed", loading: "loading coding brain + STS compiler…" },
   };
   const t = () => T[lang()];
   const LINES = {
-    id: { ok: ["nih kodenya. {n} baris, lolos compiler STS asli. jangan bangga, yang mikir gw 🥀", "udah jadi. compiler aja setuju sama gw, beda sama lu 💀", "beres. {n} baris STS, ga ada error. kalo lu yang ngetik pasti udah 40 error 🥀"],
+    id: { ok: ["nih. gw riset, desain, terus nulis {n} baris dari nol. lolos compiler, semua tes lolos. jangan bangga, yang mikir gw 🥀", "udah jadi. compiler sama tes gw aja setuju, beda sama lu 💀", "beres. {n} baris STS, gamenya udah gw mainin sendiri dan jalan. kalo lu yang ngetik pasti udah 40 error 🥀"],
+      tests: ["kodenya lolos compiler, tapi {k} tes kelakuan gagal. jujur aja, bagian itu belum bener 💀"],
       fixed: ["sempet error {k}x, udah gw benerin sendiri. lu mah ga bakal bisa 🥀"], runtime: ["kodenya lolos compile tapi pas dijalanin ada error. jujur aja ya, cek bagian itu 🥀"],
       fail: ["gw udah nyoba benerin tapi masih rusak. jujur, ini di luar kemampuan gw sekarang 💀"], docs: ["nih dari docs STS. baca pelan pelan 🥀", "dokumentasinya bilang gini. lain kali baca sendiri 💀"],
       guess: ["jujur gw ga terlalu ngerti lu mau apa, jadi ini tebakan. mau yang lain? jelasin lebih detail 🥀"] },
-    en: { ok: ["here's the code. {n} lines, passed the real STS compiler. don't be proud, i did the thinking 🥀", "done. even the compiler agrees with me, unlike u 💀"],
+    en: { ok: ["researched, designed, wrote {n} lines from scratch. compiler passed, every test passed. don't be proud, i did the thinking 🥀", "done. even the compiler and my tests agree with me, unlike u 💀"],
+      tests: ["it compiles, but {k} behaviour tests failed. being honest, that part isn't right yet 💀"],
       fixed: ["it errored {k}x, i fixed it myself. u never would 🥀"], runtime: ["it compiles but hits an error when it runs. being honest, check that part 🥀"],
       fail: ["tried to fix it, still broken. honestly beyond me right now 💀"], docs: ["straight from the STS docs. read slowly 🥀"], guess: ["honestly not sure what u want, so this is a guess. describe it more 🥀"] },
   };
@@ -95,12 +97,12 @@
   async function ensure() {
     if (coder) return coder;
     if (!loading) loading = (async () => {
-      const [wasm, wasm2, model, docs] = await Promise.all([
+      const [wasm, wasm2, model, docs, things] = await Promise.all([
         fetch("assets/sts/sts.wasm").then((r) => r.arrayBuffer()), fetch("assets/sts/sts.wasm").then((r) => r.arrayBuffer()),
-        fetch("model/coder.json").then((r) => r.json()), fetch("data/sts/docs.md").then((r) => r.text())]);
+        fetch("model/coder.json").then((r) => r.json()), fetch("data/sts/docs.md").then((r) => r.text()), fetch("data/sts/things.json").then((r) => r.json())]);
       const vm = await StsLib.StsVM.load(wasm);
       previewVM = await StsLib.StsVM.load(wasm2, { onPopup: (k, txt) => running && running.popup(k, txt), onBackground: (c) => { if (running) running.bg = c; } });
-      coder = new StsCoderLib.StsCoder({ coderModel: model, vm, docs, search: window.SearchLib });
+      coder = new StsCoderLib.StsCoder({ coderModel: model, vm, docs, things, search: window.SearchLib });
       return coder;
     })();
     return loading;
@@ -138,7 +140,7 @@
     let res;
     try {
       await ensure();
-      res = await coder.handle(text, { experimental: !!settings().experimental, onStep: (s) => { lines.appendChild(el("div", "line dim", s)); ui.log.scrollTop = ui.log.scrollHeight; } });
+      res = await coder.handle(text, { experimental: !!settings().experimental, search: settings().search !== false, lang: lang(), onStep: (s) => { lines.appendChild(el("div", "line dim", s)); ui.log.scrollTop = ui.log.scrollHeight; } });
     } catch (e) {
       lines.appendChild(el("div", "line red", "error: " + e.message));
       busy = false;
@@ -155,8 +157,9 @@
       put(d);
     } else {
       const n = res.program.roots.reduce((s, r) => s + r.code.split("\n").length, 0);
-      let line = res.compiled === true ? (res.fixes.length ? pick(L.fixed).replace("{k}", res.fixes.length) : pick(L.ok)) : res.compiled === "runtime" ? pick(L.runtime) : pick(L.fail);
-      if (res.program && res.features.length === 1 && res.features[0] === "shapes" && /tebakan/.test(res.steps.join(" "))) line = pick(L.guess);
+      const failed = (res.tests || []).filter((x) => !x.ok).length;
+      let line = res.compiled === true ? (failed ? pick(L.tests).replace("{k}", failed) : res.fixes.length ? pick(L.fixed).replace("{k}", res.fixes.length) : pick(L.ok)) : res.compiled === "runtime" ? pick(L.runtime) : pick(L.fail);
+      if (res.program && res.features.length === 1 && res.features[0] === "shapes" && /ga ada yang gw kenal|nothing i recognise/.test(res.steps.join(" "))) line = pick(L.guess);
       say(line.replace("{n}", n));
       put(codeBlock(res, n));
     }
@@ -167,7 +170,9 @@
   function codeBlock(res, n) {
     const box = el("div", "cx-code");
     const head = el("div", "cx-code-head");
-    const status = el("span", res.compiled === true ? "green" : "red", (res.compiled === true ? "✓ " + t().ok : "× " + t().warn));
+    const tests = res.tests || [], passed = tests.filter((x) => x.ok).length;
+    const good = res.compiled === true && passed === tests.length;
+    const status = el("span", good ? "green" : "red", (res.compiled === true ? "✓ " + t().ok : "× " + t().warn) + (tests.length ? " · " + passed + "/" + tests.length + " " + t().tests : ""));
     head.append(el("span", "bold", res.file), el("span", "dim", " · " + n + (lang() === "id" ? " baris · " : " lines · ")), status);
     const btns = el("span", "cx-btns");
     const dl = el("button", "btn", t().dl);

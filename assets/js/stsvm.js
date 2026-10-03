@@ -58,6 +58,16 @@
     mouseMove(x, y) { this.x.sts_mousemove(x, y); }
     mouseDown(d) { this.x.sts_mousedown(d ? 1 : 0); }
     key(name, down) { this.x.sts_key(this.write(name), down ? 1 : 0); }
+    /** global variables of the running program -> {name: "value"} */
+    vars() {
+      const out = {};
+      for (let i = 0, n = this.x.sts_var_count(); i < n; i++) {
+        const l = this.x.sts_var_dump(i);
+        const sv = this.read(this.x.sts_scratch(), l), k = sv.indexOf("=");
+        if (k > 0) out[sv.slice(0, k)] = sv.slice(k + 1);
+      }
+      return out;
+    }
     runtimeError() { const l = this.x.sts_err_len(); return l ? this.read(this.x.sts_err_ptr(), l) : ""; }
     objects() {
       const base = this.x.sts_pack(), count = this.x.sts_pack_count(), stride = this.x.sts_pack_stride();

@@ -7,6 +7,15 @@ const PAGES = {
   "Amerika": { qid: "Q828", extract: "Amerika adalah benua.", },
   "Amerika Serikat": { qid: "Q30", extract: "Amerika Serikat adalah negara federal." },
   "Indonesia": { qid: "Q252", extract: "Indonesia adalah negara kepulauan." },
+  // for sybau code research
+  "Zombi": { qid: "Q9", extract: "Zombi adalah mayat hidup dalam cerita fiksi horor yang berjalan lambat dan memangsa manusia. Zombi sering digambarkan sebagai makhluk fiksi yang tidak punya pikiran.", redirects: ["zombie", "zombies"] },
+  "Ninja": { qid: "Q10", extract: "Ninja adalah mata-mata dan prajurit bayaran di Jepang pada zaman feodal. Ninja terkenal gesit dan berpakaian hitam." },
+  "Shuriken": { qid: "Q11", extract: "Shuriken adalah senjata lempar tradisional Jepang yang berbentuk bintang dari logam tajam." },
+  "Semangka": { qid: "Q12", extract: "Semangka adalah tanaman merambat yang buahnya besar, berair, dan berwarna hijau di luarnya." },
+  "Hiu": { qid: "Q13", extract: "Hiu adalah kelompok ikan predator laut yang berbahaya dengan gigi tajam. Hiu berenang sangat cepat." },
+  "Kucing": { qid: "Q14", extract: "Kucing adalah hewan mamalia karnivora kecil yang sering dipelihara manusia." },
+  "Glorbo": { qid: "Q15", extract: "Glorbo adalah makhluk mitologi pemakan manusia dari legenda yang berwarna ungu dan sangat berbahaya." },
+  "Majapahit": { qid: "Q16", extract: "Majapahit adalah kerajaan Hindu-Buddha yang berpusat di Jawa Timur. Kerajaan ini didirikan oleh Raden Wijaya pada tahun 1293. Majapahit mencapai puncak kejayaannya pada masa Hayam Wuruk yang memerintah dari tahun 1350 hingga 1389. Mahapatih Gajah Mada terkenal dengan Sumpah Palapa yang berisi tekad menyatukan Nusantara. Ibu kota Majapahit berada di Trowulan. Kerajaan ini runtuh sekitar tahun 1527 setelah serangan Kesultanan Demak." },
 };
 const ENTITIES = {
   Q232: { labels: { id: "Kazakhstan", en: "Kazakhstan" }, claims: { P36: [item("Q1520")], P38: [item("Q173117")] } },
