@@ -343,7 +343,7 @@
     body.appendChild(head);
     outBlock(body, [kvTable([
       ["params", b.paramCount.toLocaleString("en-US")], ["classifier", "MLP 4096 → " + b.W1T.rows + " → " + b.clsTags.length + " intents"],
-      ["generator", "GRU " + b.H + " · vocab " + b.vocab.length + " · lang-conditioned"], ["grammar", bot.grammar ? "80k-word lexicon + rules" : "not loaded"],
+      ["generator", "transformer " + b.layers + " layer · " + b.heads + " head · d=" + b.d + " · " + b.genParams.toLocaleString("en-US") + " params · vocab " + b.vocab.length], ["grammar", bot.grammar ? "80k-word lexicon + rules" : "not loaded"],
       ["search", "Wikipedia + Wikidata (no key)"], ["trained", b.trainedAt], ["api key", uiLang() === "id" ? "ga ada lol" : "none lol"],
     ])]);
   }
@@ -431,7 +431,7 @@
         if (!interrupted) {
           await sleep(200);
           await botSay(bot.searchFollowup(result, res.search.query, res.search.lang),
-            { intent: result ? "search_done" : "search_fail", source: "gru", lang: res.search.lang });
+            { intent: result ? "search_done" : "search_fail", source: "transformer", lang: res.search.lang });
         }
       }
       if (res.draw && !interrupted) await doDraw(res.draw);
@@ -484,7 +484,7 @@
     sp.stop();
     const mean = d.fixes.length ? "did you mean " + d.fixes.map((f) => f.to).join(" + ") + "?" : null;
     renderPicture(d.grid, d.size, d.known ? d.prompt || d.labels.join(" + ") : req.prompt + " (??)", mean);
-    await botSay(bot.drawFollowup(d, req), { intent: d.known ? "draw" : "draw_unknown", source: "gru", lang: bot._lang() });
+    await botSay(bot.drawFollowup(d, req), { intent: d.known ? "draw" : "draw_unknown", source: "transformer", lang: bot._lang() });
   }
 
   // ---------------------------------------------------------------- connect key
@@ -596,7 +596,7 @@
         if (!opts.quiet) lines.push(el("span", "yellow", t().learnHint));
         outBlock(body, lines);
         const summary = w + "x" + h + ", " + (id ? "kebanyakan " : "mostly ") + (info.colors[0] ? (id ? info.colors[0].id : info.colors[0].en) : "?");
-        await botSay(bot.fileOpened("image", summary), { intent: "file_image", source: "gru", lang: bot._lang() });
+        await botSay(bot.fileOpened("image", summary), { intent: "file_image", source: "transformer", lang: bot._lang() });
       } else if (TEXT_EXT.test(file.name) || /^text\//.test(file.type) || file.type === "application/json") {
         if (file.size > 2 * 1024 * 1024) throw new Error(id ? "file kegedean (max 2 MB)" : "file too big (max 2 MB)");
         const text = await readAs(file, "text");
@@ -607,7 +607,7 @@
         toolHead(body, "Read", file.name);
         outBlock(body, [el("span", null, lines.length + (id ? " baris · " : " lines · ") + text.length + (id ? " karakter" : " chars")),
           el("span", "code", lines.slice(0, 10).join("\n").slice(0, 900) + (lines.length > 10 ? "\n…" : ""))].concat(opts.quiet ? [] : [el("span", "yellow", t().learnHintText)]));
-        await botSay(bot.fileOpened("text", lines.length + (id ? " baris" : " lines")), { intent: "file_text", source: "gru", lang: bot._lang() });
+        await botSay(bot.fileOpened("text", lines.length + (id ? " baris" : " lines")), { intent: "file_text", source: "transformer", lang: bot._lang() });
       } else {
         throw new Error(id ? "format ga didukung. bisa: png, jpg, gif, webp, txt, md, csv, json" : "unsupported format. try png, jpg, gif, webp, txt, md, csv, json");
       }
@@ -636,7 +636,7 @@
       const { body } = row("tool");
       toolHead(body, "Learn", name);
       outBlock(body, [pictureNode(r.preview, 16, name), el("span", "dim", (id ? "akurasi rekonstruksi " : "reconstruction accuracy ") + Math.round(r.acc * 100) + "% · " + (id ? "coba: gambar " : "try: draw ") + name)]);
-      await botSay(bot.learnedImage(name), { intent: "learned_image", source: "gru", lang: bot._lang() });
+      await botSay(bot.learnedImage(name), { intent: "learned_image", source: "transformer", lang: bot._lang() });
     } else {
       const sum = learner.learnText(pending.name, pending.text);
       sp.stop();
@@ -645,7 +645,7 @@
       const desc = sum.kind === "notes" ? sum.chunks + (id ? " potongan catatan (tanya aja isinya)" : " passages of notes (ask me about it)") + (sum.truncated ? (id ? " · dipotong, kegedean" : " · truncated, too big") : "")
         : sum.pairs + (id ? " pasangan tanya-jawab (" : " question/answer pairs (") + sum.kind + ")";
       outBlock(body, [el("span", "green", desc)].concat(sum.saveFailed ? [el("span", "red", id ? "storage browser penuh, sebagian ga kesimpen" : "browser storage full, some of it wasn't saved")] : []));
-      if (!auto) await botSay(bot.fileOpened("text", desc), { intent: "file_text", source: "gru", lang: bot._lang() });
+      if (!auto) await botSay(bot.fileOpened("text", desc), { intent: "file_text", source: "transformer", lang: bot._lang() });
     }
     pending = null;
   }

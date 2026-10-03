@@ -83,8 +83,222 @@
     return out.map((a) => a.map(Math.round));
   }
 
+
+  // ------------------------------------------------------------------ named games with their own rules
+  /** tic-tac-toe: 3x3 board, X = you, O = the computer (or a 2nd player) */
+  function writeTicTacToe(d, opts) {
+    const L = (id, en) => (d.lang === "en" ? en : id);
+    const g = d.board, c = new Code();
+    const W = d.stage.w, H = d.stage.h, cell = g.cell, x0 = Math.round((W - cell * 3) / 2), y0 = g.top;
+    const LINES = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 4, 7], [2, 5, 8], [3, 6, 9], [1, 5, 9], [3, 5, 7]];
+    const cells = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    c.note(L("dibikin dari nol sama sybau code buat: ", "written from scratch by sybau code for: ") + String(d.request || "").slice(0, 90));
+    for (const n of d.notes || []) c.note(n);
+    c.line(`background(${q(d.bg)})`);
+    c.blank();
+    c.note(L("isi papan: 0 = kosong, 1 = X, 2 = O", "board: 0 = empty, 1 = X, 2 = O"));
+    for (const n of cells) c.line(`var s${n} = 0`);
+    c.line("var giliran = 1   // " + L("siapa yang jalan", "whose turn"));
+    c.line("var langkah = 0   // " + L("udah berapa kotak keisi", "cells filled"));
+    c.line("var selesai = 0");
+    c.line("var menangX = 0");
+    c.line("var menangO = 0");
+    c.line("var seri = 0");
+    if (opts.probe) { c.line("var _tick = 0"); for (const [n] of opts.probe.watch || []) c.line(`var ${n} = 0`); }
+    c.blank();
+    c.def("isi", ["n"], () => { for (const n of cells) c.if(`n == ${n}`, () => c.line(`return s${n}`)); c.line("return -1"); });
+    c.blank();
+    c.def("tandai", ["n", "p"], () => {
+      for (const n of cells) c.if(`n == ${n}`, () => c.line(`s${n} = p`));
+      c.if("p == 1", () => { c.line(`set("tanda" + n, "text", "X")`); c.line(`set("tanda" + n, "color", ${q(g.colorX)})`); });
+      c.else(() => { c.line(`set("tanda" + n, "text", "O")`); c.line(`set("tanda" + n, "color", ${q(g.colorO)})`); });
+      c.line("langkah = langkah + 1");
+    });
+    c.blank();
+    c.def("punyaGaris", ["p"], () => {
+      c.note(L("8 garis: 3 baris, 3 kolom, 2 diagonal", "8 lines: 3 rows, 3 columns, 2 diagonals"));
+      for (const [a, b, e] of LINES) c.if(`s${a} == p and s${b} == p and s${e} == p`, () => c.line("return 1"));
+      c.line("return 0");
+    });
+    c.blank();
+    c.def("kotakPenentu", ["p"], () => {
+      c.note(L("kotak kosong yang bikin p punya 3 sejajar (0 kalo ga ada)", "an empty cell that gives p three in a row (0 if none)"));
+      for (const [a, b, e] of LINES) for (const [x, y, z] of [[a, b, e], [a, e, b], [b, e, a]]) c.if(`s${x} == p and s${y} == p and s${z} == 0`, () => c.line(`return ${z}`));
+      c.line("return 0");
+    });
+    c.blank();
+    if (!g.twoPlayer) {
+      c.def("langkahKomputer", [], () => {
+        c.note(L("otak O: menang kalo bisa, blok X, ambil tengah, pojok, terus pinggir", "O's brain: win if it can, block X, take the centre, a corner, then a side"));
+        if (g.easy) c.if("chance(0.35)", () => { c.line("var r = randint(1, 9)"); c.if("isi(r) == 0", () => { c.line("tandai(r, 2)"); c.line("return"); }); });
+        c.line("var n = kotakPenentu(2)");
+        c.if("n == 0", () => c.line("n = kotakPenentu(1)"));
+        c.if("n == 0 and s5 == 0", () => c.line("n = 5"));
+        if (g.hard) {
+          c.note(L("kalo X ambil 2 pojok berseberangan, jangan ambil pojok (biar ga kena jebakan)", "if X holds opposite corners, take a side (avoids the fork trap)"));
+          c.if("n == 0 and ((s1 == 1 and s9 == 1) or (s3 == 1 and s7 == 1))", () => { for (const k of [2, 4, 6, 8]) c.if(`n == 0 and s${k} == 0`, () => c.line(`n = ${k}`)); });
+        }
+        c.line("var mulai = randint(0, 3)   // " + L("pojok mana dulu, biar ga ketebak", "which corner first, so it's not predictable"));
+        for (let r = 0; r < 4; r++) c.if(`n == 0 and mulai == ${r}`, () => { for (const k of [1, 3, 9, 7, 1, 3, 9].slice(r, r + 4)) c.if(`n == 0 and s${k} == 0`, () => c.line(`n = ${k}`)); });
+        for (const k of [2, 4, 6, 8]) c.if(`n == 0 and s${k} == 0`, () => c.line(`n = ${k}`));
+        c.if("n > 0", () => c.line("tandai(n, 2)"));
+      });
+      c.blank();
+    }
+    c.def("cekAkhir", [], () => {
+      c.if("punyaGaris(1) == 1", () => { c.line("selesai = 1"); c.line("menangX = menangX + 1"); c.line(`set("status", "text", ${q(g.twoPlayer ? L("X MENANG", "X WINS") : L("LU MENANG. hoki doang 🥀", "U WON. pure luck 🥀"))})`); });
+      c.elif("punyaGaris(2) == 1", () => { c.line("selesai = 1"); c.line("menangO = menangO + 1"); c.line(`set("status", "text", ${q(g.twoPlayer ? L("O MENANG", "O WINS") : L("KOMPUTER MENANG. kalah sama kode 50 baris 💀", "THE COMPUTER WON. lost to 50 lines of code 💀"))})`); });
+      c.elif("langkah >= 9", () => { c.line("selesai = 1"); c.line("seri = seri + 1"); c.line(`set("status", "text", ${q(L("SERI", "DRAW"))})`); });
+      c.line(`set("skor", "text", "X " + menangX + "  ·  O " + menangO + "  ·  ${L("seri", "draw")} " + seri)`);
+    });
+    c.blank();
+    c.def("pilih", ["n"], () => {
+      c.if("selesai == 1 or isi(n) != 0", () => c.line("return"));
+      if (g.twoPlayer) {
+        c.line("tandai(n, giliran)");
+        c.line("cekAkhir()");
+        c.if("selesai == 0", () => { c.line("giliran = 3 - giliran"); c.if("giliran == 1", () => c.line(`set("status", "text", ${q(L("giliran X", "X to move"))})`)); c.else(() => c.line(`set("status", "text", ${q(L("giliran O", "O to move"))})`)); });
+      } else {
+        c.line("tandai(n, 1)");
+        c.line("cekAkhir()");
+        c.if("selesai == 0", () => { c.line("langkahKomputer()"); c.line("cekAkhir()"); });
+      }
+    });
+    c.blank();
+    c.def("mainLagi", [], () => {
+      for (const n of cells) { c.line(`s${n} = 0`); c.line(`set("tanda${n}", "text", "")`); }
+      c.line("langkah = 0"); c.line("selesai = 0"); c.line("giliran = 1");
+      c.line(`set("status", "text", ${q(g.twoPlayer ? L("giliran X", "X to move") : L("lu X. klik kotaknya", "u are X. click a cell"))})`);
+    });
+    c.blank();
+    c.note(L("---- papan", "---- the board"));
+    c.line(`on 16 10 draw text ${q(d.title)} 22 color "#b9e389". judul`);
+    c.line(`on 16 40 draw text "X 0  ·  O 0  ·  ${L("seri", "draw")} 0" 14 color "#e6ecdd". skor`);
+    cells.forEach((n) => {
+      const x = x0 + ((n - 1) % 3) * cell, y = y0 + Math.floor((n - 1) / 3) * cell;
+      c.line(`on ${x + 3} ${y + 3} draw square ${cell - 6} color ${q(g.cellColor)}. sel${n}`);
+      c.line(`on ${x + Math.round(cell / 2 - cell * 0.18)} ${y + Math.round(cell * 0.18)} draw text "" ${Math.round(cell * 0.6)} color "#ffffff". tanda${n}`);
+    });
+    c.line(`on 16 ${H - 50} draw text ${q(g.twoPlayer ? L("giliran X", "X to move") : L("lu X. klik kotaknya", "u are X. click a cell"))} 15 color "#feae34". status`);
+    c.line(`on ${W - 130} ${H - 56} draw rect 114 32 color "#4a3626". tombolUlang`);
+    c.line(`on ${W - 116} ${H - 48} draw text "${L("main lagi", "again")}" 14 color "#e6ecdd". labelUlang`);
+    for (const n of cells) { c.blank(); c.block(`onclick /id"sel${n}" check`, () => c.line(`pilih(${n})`)); }
+    c.blank();
+    c.block(`onclick /id"tombolUlang" check`, () => c.line("mainLagi()"));
+    if (opts.probe) {
+      c.blank();
+      c.block("forever", () => {
+        c.line("_tick = _tick + 1");
+        for (const [n, expr] of opts.probe.watch || []) c.line(`${n} = ${expr}`);
+        for (const [tk, line] of opts.probe.at || []) c.if(`_tick == ${tk}`, () => c.line(line));
+      });
+    }
+    return { roots: [{ index: 0, name: "main", code: c.text() }], stage: d.stage, title: d.title, info: { cells: cells.map((n) => ({ n, x: x0 + ((n - 1) % 3) * cell + cell / 2, y: y0 + Math.floor((n - 1) / 3) * cell + cell / 2 })) } };
+  }
+
+  /** snake on a grid; the body is N segment objects that follow the head */
+  function writeSnake(d, opts) {
+    const L = (id, en) => (d.lang === "en" ? en : id);
+    const g = d.snake, c = new Code();
+    const W = d.stage.w, H = d.stage.h, k = g.cell, cols = Math.floor((W - 20) / k), rows = Math.floor((H - 80) / k), x0 = Math.round((W - cols * k) / 2), y0 = 66;
+    c.note(L("dibikin dari nol sama sybau code buat: ", "written from scratch by sybau code for: ") + String(d.request || "").slice(0, 90));
+    for (const n of d.notes || []) c.note(n);
+    c.line(`background(${q(d.bg)})`);
+    c.blank();
+    c.lines(["var skor = 0", "var selesai = 0", "var panjang = 3   // " + L("panjang badan", "body length"), "var arahX = 1", "var arahY = 0", "var nextX = 1", "var nextY = 0",
+      `var hx = ${x0 + 5 * k}`, `var hy = ${y0 + 4 * k}`, "var jeda = 0", `var tiap = ${g.every}   // ` + L("frame per langkah (makin kecil makin cepet)", "frames per step (smaller = faster)")]);
+    if (opts.probe) { c.line("var _tick = 0"); for (const [n] of opts.probe.watch || []) c.line(`var ${n} = 0`); }
+    c.blank();
+    c.def("taruhMakanan", [], () => c.line(`setpos("${g.foodId}", ${x0} + randint(0, ${cols - 1}) * ${k}, ${y0} + randint(0, ${rows - 1}) * ${k})`));
+    c.blank();
+    c.def("tamat", ["pesan"], () => { c.if("selesai == 1", () => c.line("return")); c.line("selesai = 1"); c.line(`on ${Math.round(W / 2 - 110)} ${Math.round(H / 2 - 20)} draw text pesan 30 color "#e43b44". banner`); c.line(`show.popup(pesan + ${q(L(" · skor: ", " · score: "))} + skor)`); });
+    c.blank();
+    c.def("baca", [], () => {
+      c.note(L("panah ganti arah, tapi ga boleh langsung balik badan", "arrows turn, but never straight back into yourself"));
+      c.if(`(key("left") or key("a")) and arahX != 1`, () => c.lines(["nextX = -1", "nextY = 0"]));
+      c.if(`(key("right") or key("d")) and arahX != -1`, () => c.lines(["nextX = 1", "nextY = 0"]));
+      c.if(`(key("up") or key("w")) and arahY != 1`, () => c.lines(["nextX = 0", "nextY = -1"]));
+      c.if(`(key("down") or key("s")) and arahY != -1`, () => c.lines(["nextX = 0", "nextY = 1"]));
+    });
+    c.blank();
+    c.def("jalan", [], () => {
+      c.note(L("tiap ruas pindah ke tempat ruas di depannya, dari ekor ke kepala", "each segment moves to where the one in front was, tail first"));
+      for (let i = g.max; i >= 2; i--) c.if(`panjang >= ${i}`, () => c.line(`setpos("badan${i}", get("badan${i - 1}", "x"), get("badan${i - 1}", "y"))`));
+      c.line(`setpos("badan1", hx, hy)`);
+      c.lines(["arahX = nextX", "arahY = nextY", `hx = hx + arahX * ${k}`, `hy = hy + arahY * ${k}`]);
+      c.if(`hx < ${x0} or hx > ${x0 + (cols - 1) * k} or hy < ${y0} or hy > ${y0 + (rows - 1) * k}`, () => c.line(`tamat(${q(L("NABRAK TEMBOK", "HIT THE WALL"))})`));
+      c.line(`setpos("kepala", hx, hy)`);
+      c.note(L("nabrak badan sendiri? (ruas 1-2 nempel kepala, jadi mulai dari 3)", "bit yourself? (segments 1-2 touch the head anyway, so from 3)"));
+      for (let i = 3; i <= g.max; i++) c.if(`panjang >= ${i} and get("badan${i}", "x") == hx and get("badan${i}", "y") == hy`, () => c.line(`tamat(${q(L("GIGIT BADAN SENDIRI", "BIT YOURSELF"))})`));
+      c.if(`get("${g.foodId}", "x") == hx and get("${g.foodId}", "y") == hy`, () => {
+        c.line("skor = skor + 1");
+        c.line(`set("hudSkor", "text", ${q(L("skor: ", "score: "))} + skor)`);
+        c.if(`panjang < ${g.max}`, () => { c.line("panjang = panjang + 1"); for (let i = 4; i <= g.max; i++) c.if(`panjang == ${i}`, () => c.lines([`showobj("badan${i}")`, `setpos("badan${i}", get("badan${i - 1}", "x"), get("badan${i - 1}", "y"))`])); });
+        c.if("tiap > 4 and skor % 4 == 0", () => c.line("tiap = tiap - 1"));
+        c.line("taruhMakanan()");
+      });
+    });
+    c.blank();
+    c.line(`on 16 10 draw text ${q(d.title)} 22 color "#b9e389". judul`);
+    c.line(`on 16 38 draw text "${L("skor", "score")}: 0" 15 color "#e6ecdd". hudSkor`);
+    c.line(`on ${x0 - 2} ${y0 - 2} draw rect ${cols * k + 4} ${rows * k + 4} color "#1c2a18". arena`);
+    for (let i = 1; i <= g.max; i++) { c.line(`on ${x0 + (5 - Math.min(i, 3)) * k} ${y0 + 4 * k} draw square ${k - 2} color ${q(g.color)}. badan${i}`); if (i > 3) c.line(`hide("badan${i}")`); }
+    c.line(`on ${x0 + 5 * k} ${y0 + 4 * k} draw square ${k - 2} color ${q(g.headColor)}. kepala`);
+    c.line(`on 0 0 draw ${g.foodShape} ${k - 4} color ${q(g.foodColor)}. ${g.foodId}`);
+    c.line("taruhMakanan()");
+    c.line(`on 16 ${H - 16} draw text "${L("panah/wasd", "arrows/wasd")}" 11 color "#767d75". petunjuk`);
+    c.blank();
+    c.block("forever", () => {
+      if (opts.probe) { c.line("_tick = _tick + 1"); for (const [n, expr] of opts.probe.watch || []) c.line(`${n} = ${expr}`); for (const [tk, line] of opts.probe.at || []) c.if(`_tick == ${tk}`, () => c.line(line)); }
+      c.if("selesai == 0", () => { c.line("baca()"); c.line("jeda = jeda + 1"); c.if("jeda >= tiap", () => { c.line("jeda = 0"); c.line("jalan()"); }); });
+    });
+    return { roots: [{ index: 0, name: "main", code: c.text() }], stage: d.stage, title: d.title, info: { x0, y0, k } };
+  }
+
+  /** rock paper scissors against the computer */
+  function writeRps(d, opts) {
+    const L = (id, en) => (d.lang === "en" ? en : id);
+    const c = new Code(), W = d.stage.w;
+    const names = d.lang === "en" ? ["rock", "scissors", "paper"] : ["batu", "gunting", "kertas"];
+    c.note(L("dibikin dari nol sama sybau code buat: ", "written from scratch by sybau code for: ") + String(d.request || "").slice(0, 90));
+    c.line(`background(${q(d.bg)})`);
+    c.blank();
+    c.lines(["var menang = 0", "var kalah = 0", "var seri = 0", "var pilihanLu = 0", "var pilihanKomputer = 0"]);
+    if (opts.probe) { c.line("var _tick = 0"); for (const [n] of opts.probe.watch || []) c.line(`var ${n} = 0`); }
+    c.blank();
+    c.def("nama", ["n"], () => { names.forEach((nm, i) => c.if(`n == ${i + 1}`, () => c.line(`return ${q(nm)}`))); c.line('return "?"'); });
+    c.blank();
+    c.def("main", ["n"], () => {
+      c.note(L(`1 ${names[0]} ngalahin 2 ${names[1]}, 2 ngalahin 3 ${names[2]}, 3 ngalahin 1`, `1 ${names[0]} beats 2 ${names[1]}, 2 beats 3 ${names[2]}, 3 beats 1`));
+      c.line("pilihanLu = n");
+      c.line("pilihanKomputer = randint(1, 3)");
+      c.line(`set("teksKomputer", "text", ${q(L("komputer: ", "computer: "))} + nama(pilihanKomputer))`);
+      c.if("pilihanLu == pilihanKomputer", () => { c.line("seri = seri + 1"); c.line(`set("hasil", "text", ${q(L("SERI", "DRAW"))})`); });
+      c.elif("(pilihanLu == 1 and pilihanKomputer == 2) or (pilihanLu == 2 and pilihanKomputer == 3) or (pilihanLu == 3 and pilihanKomputer == 1)", () => { c.line("menang = menang + 1"); c.line(`set("hasil", "text", ${q(L("LU MENANG (hoki) 🥀", "U WIN (luck) 🥀"))})`); });
+      c.else(() => { c.line("kalah = kalah + 1"); c.line(`set("hasil", "text", ${q(L("LU KALAH 💀", "U LOSE 💀"))})`); });
+      c.line(`set("skor", "text", ${q(L("menang ", "won "))} + menang + ${q(L(" · kalah ", " · lost "))} + kalah + ${q(L(" · seri ", " · draw "))} + seri)`);
+    });
+    c.blank();
+    c.line(`on 16 10 draw text ${q(d.title)} 22 color "#b9e389". judul`);
+    c.line(`on 16 40 draw text "${L("menang 0 · kalah 0 · seri 0", "won 0 · lost 0 · draw 0")}" 14 color "#e6ecdd". skor`);
+    const cols = ["#8e8a93", "#e43b44", "#f4f1ea"], shapes = ["circle", "triangle", "rect"];
+    names.forEach((nm, i) => {
+      const x = Math.round(W / 2 - 200 + i * 140);
+      c.line(`on ${x} 100 draw ${shapes[i]} ${shapes[i] === "circle" ? 100 : "100 80"} color ${q(cols[i])}. tombol${i + 1}`);
+      c.line(`on ${x + 18} 210 draw text ${q(nm.toUpperCase())} 16 color "#e6ecdd". label${i + 1}`);
+    });
+    c.line(`on 16 250 draw text "" 16 color "#feae34". teksKomputer`);
+    c.line(`on 16 280 draw text "${L("pilih salah satu", "pick one")}" 24 color "#b9e389". hasil`);
+    for (let i = 1; i <= 3; i++) { c.blank(); c.block(`onclick /id"tombol${i}" check`, () => c.line(`main(${i})`)); }
+    if (opts.probe) { c.blank(); c.block("forever", () => { c.line("_tick = _tick + 1"); for (const [n, expr] of opts.probe.watch || []) c.line(`${n} = ${expr}`); for (const [tk, line] of opts.probe.at || []) c.if(`_tick == ${tk}`, () => c.line(line)); }); }
+    return { roots: [{ index: 0, name: "main", code: c.text() }], stage: d.stage, title: d.title, info: { buttons: [0, 1, 2].map((i) => ({ x: Math.round(W / 2 - 200 + i * 140) + 50, y: 140 })) } };
+  }
+
+  const SPECIAL = { tictactoe: writeTicTacToe, snake: writeSnake, rps: writeRps };
+
   // ------------------------------------------------------------------ the writer
   function write(d, opts = {}) {
+    if (d.special && SPECIAL[d.special]) return SPECIAL[d.special](d, opts);
     const L = (id, en) => (d.lang === "en" ? en : id);
     const W = d.stage.w, H = d.stage.h;
     const rand = opts.rand || Math.random;

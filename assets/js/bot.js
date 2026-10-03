@@ -5,7 +5,7 @@
  *   2. language detection (id / en) so it replies in your language
  *   3. classifier net picks the intent
  *   4. tools fill facts: math, time, date, memory recall, choice parsing, search query
- *   5. GRU generator writes several candidate replies, we keep the best one
+ *   5. transformer generator writes several candidate replies, we keep the best one
  *      whose placeholders we can actually fill (= honest, no made-up facts)
  *   6. grammar checker looks for a spelling crime to roast
  *   7. memory gets updated (name, likes, hates, age, insults, grammar crimes, history)
@@ -24,6 +24,10 @@
   const LONG_ROAST_WORDS = 14; // insults this long get "stfu i ain't reading allat"
   const N_CANDIDATES = 10;
 
+  // insults aimed at the bot: a backstop for when the classifier is unsure ("ai lu lemot" is not a compliment)
+  const INSULT_WORD_RE = /\b(goblok|gblk|bego|tolol|bodoh|idiot|dongo|bloon|oon|cacat|busuk|ampas|sampah|lemot|ngaco|payah|norak|alay|jelek|burik|buluk|bau|cupu|garing|nyebelin|kampungan|ga ?guna|gak ?guna|ngga ?guna|ga ?berguna|stupid|dumb(?:est)?|trash|garbage|useless|worst|cringe|annoying|clanker|bozo|mid|ugly|junk|slow|weak|lame|npc)\b/i;
+  const AT_BOT_RE = /\b(lu|lo|loe|elu|elo|kamu|kau|ente|ai|bot|sybau|u|ur|you|your|you're|youre|ni ai|ni bot|dasar)\b/i;
+  const NOT_AT_BOT_RE = /\b(gw|gue|aku|saya|i|i'm|im|me|my|temen|teman|dia|mereka|guru|bos|pacar|mantan)\b.{0,12}\b(goblok|bego|tolol|bodoh|jelek|payah|lemot|dumb|stupid|ugly|slow)/i;
   const SELF_HARM_RE = /\b(kill myself|kms|end my life|want to die|wanna die|dont want to live|don't want to live|suicid\w*|bunuh diri|pengen mati|ingin mati|mau mati|pgn mati|nyakitin diri|self ?harm|hurt myself|ga mau hidup|gak mau hidup|nggak mau hidup|nyayat tangan)\b/i;
   const JOKING_RE = /\b(mati ketawa|mati gaya|ngakak|mati kutu|mati lampu|hp mati|batre mati|baterai mati)\b/i;
 
@@ -275,7 +279,7 @@
       const lang = this.settings.lang === "id" || this.settings.lang === "en" ? this.settings.lang : this.detectLang(raw);
       d.lang = lang;
 
-      const meta = { source: "gru", novel: false, confidence: 1, intent: null, top: [], lang, thinking: null };
+      const meta = { source: "transformer", novel: false, confidence: 1, intent: null, top: [], lang, thinking: null };
       let intent;
 
       const ranked = brain.classify(raw);
@@ -290,6 +294,14 @@
         intent = ranked[0].tag;
         meta.confidence = ranked[0].p;
         if (ranked[0].p < CONF_THRESHOLD || !raw) intent = "fallback";
+        const iw = raw.match(INSULT_WORD_RE);
+        if (iw && AT_BOT_RE.test(raw) && !NOT_AT_BOT_RE.test(raw) && intent !== "insult" && intent !== "roast_me" && !(intent === "search" && ranked[0].p > 0.8) &&
+            !["selfharm", "sad", "apology", "hate_something", "choice"].includes(intent)) {
+          intent = "insult";
+          meta.source = "insult-check";
+        }
+        if (iw) this._insultWord = iw[1].toLowerCase();
+        else this._insultWord = null;
       }
 
       // experimental: don't give up on a sentence it doesn't know, try to understand it first
@@ -311,7 +323,7 @@
       const facts = extractFacts(raw, intent, mem);
       const slots = { name: d.name ? cap(d.name) : null, like: d.likes[0] || null, hate: d.hates[0] || null,
         thing: facts.thing || null, choice: null, other: null, answer: null, query: null, title: null,
-        wrong: null, right: null, count: null };
+        wrong: null, right: null, count: null, insult: intent === "insult" ? this._insultWord || null : null };
 
       switch (intent) {
         case "math":
@@ -510,7 +522,7 @@
     _say(intent, slots, extra) {
       const text = this._compose(intent, Object.assign({ name: this.mem.data.name ? cap(this.mem.data.name) : null }, slots), {}, this._lang());
       if (text) {
-        this.mem.data.history.push(Object.assign({ role: "bot", text, meta: { intent, source: "gru" } }, extra || {}));
+        this.mem.data.history.push(Object.assign({ role: "bot", text, meta: { intent, source: "transformer" } }, extra || {}));
         this._remember(text);
         this._trim();
         this.mem.save();
@@ -534,7 +546,7 @@
       const slots = { name: this.mem.data.name ? cap(this.mem.data.name) : null, query, title };
       const text = this._compose(result ? "search_done" : "search_fail", slots, {}, lang || this.mem.data.lang || "en");
       if (result) this.mem.data.history.push({ role: "bot", kind: "search", result });
-      this.mem.data.history.push({ role: "bot", text, meta: { intent: result ? "search_done" : "search_fail", source: "gru" } });
+      this.mem.data.history.push({ role: "bot", text, meta: { intent: result ? "search_done" : "search_fail", source: "transformer" } });
       this._remember(text);
       this._trim();
       this.mem.save();
@@ -582,7 +594,7 @@
         const best = cands[Math.floor(this.rand() * Math.min(3, cands.length))];
         this.recentRaw.unshift(best.raw);
         if (this.recentRaw.length > 12) this.recentRaw.length = 12;
-        meta.source = "gru";
+        meta.source = "transformer";
         meta.novel = !brain.trainingLines.has(best.raw);
         return best.text;
       }

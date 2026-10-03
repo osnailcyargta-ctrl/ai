@@ -7,7 +7,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "training"))
 from textproc import featurize, normalize, detect_lang
-from train import dequant, softmax
+from train import dequant, softmax, prefix_ids
+import transformer as tfm
 
 TEXTS = ["gk tau bgt yg mana", "kata2 lu jelek", "wkwkwkwk", "hahahaha", "awokwokwok", "lu tuh gmn sih", "i dont care lol",
          "halo bro apa kabar", "lu tuh BEGO banget 😭😭", "mending iphone atau samsung??", "berapa 12+30",
@@ -25,7 +26,16 @@ for t in TEXTS:
     p = softmax(np.maximum(0, x @ W1 + b1) @ W2 + b2)
     py.append({"tokens": normalize(t), "lang": detect_lang(normalize(t)), "probs": [float(v) for v in p]})
 
-js = json.loads(subprocess.check_output(["node", os.path.join(ROOT, "tests", "parity.js"), json.dumps(TEXTS)]))
+g = m["generator"]
+GP = {k: dequant(v) for k, v in g.items() if isinstance(v, dict) and ("q" in v or "f" in v)}
+vocab = g["vocab"]
+SEQS = [prefix_ids(vocab, "insult", "id"), prefix_ids(vocab, "greeting", "en") + [vocab.index(w) for w in ["hi"] if w in vocab],
+        prefix_ids(vocab, "roast_me", "id") + [5, 9, 30, 200, 7]]
+out = json.loads(subprocess.check_output(["node", os.path.join(ROOT, "tests", "parity.js"), json.dumps(TEXTS), json.dumps(SEQS)]))
+js = out["cls"]
+gworst = max(float(np.abs(tfm.next_logits(GP, s, g["heads"]) - np.array(o)).max()) for s, o in zip(SEQS, out["gen"]))
+print(f"transformer logits python vs js: max diff {gworst:.2e}")
+assert gworst < 1e-3, "transformer in the browser differs from python"
 worst = 0.0
 for t, a, b in zip(TEXTS, py, js):
     assert a["tokens"] == b["tokens"], (t, a["tokens"], b["tokens"])

@@ -7,4 +7,6 @@ const out = texts.map((t) => {
   const probs = brain.clsTags.map((tag) => ranked.find((r) => r.tag === tag).p);
   return { tokens: normalize(t), lang: detectLang(normalize(t)), probs };
 });
-console.log(JSON.stringify(out));
+const seqs = JSON.parse(process.argv[3] || "[]");
+const gen = seqs.map((ids) => Array.from(brain.logitsFor(ids)));
+console.log(JSON.stringify({ cls: out, gen }));

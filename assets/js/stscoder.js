@@ -46,7 +46,7 @@
     shop: /\b(shop|toko|upgrade|store)\b/,
     move: /\b(gerak(in|kan)?|bergerak|move|moving|arrow|panah|wasd|keyboard|kontrol|control)\b/,
     maze: /\b(maze|labirin|labyrinth)\b/,
-    collect: /\b(kumpul\w*|ngumpul\w*|collect\w*|pick ?up|grab|ambil\w*|ngambil\w*|makan\w*|eat\w*|mungut\w*|pungut\w*)\b/,
+    collect: /\b(kumpul\w*|ngumpul\w*|mengumpul\w*|collect\w*|pick ?up|grab|ambil\w*|ngambil\w*|mengambil|makan\w*|memakan|eat\w*|mungut\w*|pungut\w*|memungut)\b/,
     dodge: /\b(hindar\w*|menghindar\w*|dodge\w*|avoid\w*|kabur|escape|rintangan|obstacles?)\b/,
     shoot: /\b(tembak\w*|nembak\w*|shoot\w*|shooter|lempar\w*|ngelempar\w*|throw\w*|serang\w*|nyerang|attack\w*|basmi\w*|bunuh\w*|ngebunuh|kill\w*|lawan\w*|ngelawan|fight\w*|blast\w*)\b/,
     chase: /\b(dikejar|dikejer|ngejar|mengejar|kejar\w*|chase[sd]?|chasing|hunt\w*|memburu|diburu)\b/,
@@ -74,6 +74,23 @@
     shapes: /\b(gambar(in)?|draw|lukis|pemandangan|scene)\b/,
     score: /\b(skor|score|nilai|poin|points?)\b/,
   };
+  // games known by name (they have their own rules, see stsgen.js)
+  const GAMES = [
+    ["tictactoe", /\b(tic ?tac ?toe|tik ?tak ?to[ek]?|tictactoe|x ?o ?x|o ?x ?o|xo|noughts and crosses|silang bulat)\b/, ["tictactoe", "tiktaktok", "noughtsandcrosses", "xox"]],
+    ["snake", /\b(snake( game)?|game ular|ular ?ularan|ular makan \w+|cacing makan|nokia snake)\b/, ["snakegame", "snake"]],
+    ["rps", /\b(suit|suwit|batu gunting kertas|gunting batu kertas|kertas gunting batu|rock paper scissors?|janken)\b/, ["batuguntingkertas", "rockpaperscissors", "guntingbatukertas"]],
+  ];
+  function findGame(t) {
+    for (const [name, re] of GAMES) if (re.test(t)) return { name };
+    // typos: "rictactoe", "tik tak tok", "rock paper sciccors" (joined words, edit distance)
+    const w = t.trim().split(/\s+/);
+    for (let n = 1; n <= 3; n++) for (let i = 0; i + n <= w.length; i++) {
+      const joined = w.slice(i, i + n).join("");
+      if (joined.length < 6) continue;
+      for (const [name, , spellings] of GAMES) for (const sp of spellings) if (Math.abs(sp.length - joined.length) <= 2 && editDistance(joined, sp) <= (sp.length >= 9 ? 2 : 1)) return { name, typo: w.slice(i, i + n).join(" "), as: sp };
+    }
+    return null;
+  }
   const APPS = new Set(["greet", "dice", "guess", "counter", "calculator", "colorchange", "popup", "hover", "traffic", "password", "quiz", "shapes"]);
   const KNOWN_WORDS = ["clicker", "toko", "shop", "upgrade", "labirin", "maze", "kumpulin", "collect", "hindarin", "dodge", "tembak", "shoot", "lempar", "kejar", "dikejar", "tangkap",
     "nyawa", "lives", "countdown", "timer", "detik", "stopwatch", "kuis", "quiz", "soal", "nama", "dadu", "dice", "tebak", "angka", "counter", "kalkulator", "calculator",
@@ -244,11 +261,11 @@
   function num(t, re, def) { const m = t.match(re); const g = m && m.slice(1).find((x) => x != null); return g ? Math.max(1, Math.min(9999, parseInt(g, 10))) : def; }
 
   const V = {   // verb -> what it makes its object
-    player: /^(jadi|sebagai|as|pemainnya|karakternya|kontrol|control|mainin|pemain|karakter|player|hero)$/,
-    item: /^(kumpul\w*|ngumpul\w*|collect\w*|ambil\w*|ngambil\w*|pungut\w*|mungut\w*|makan\w*|eat\w*|grab\w*|dapetin|dapatkan|nyari\w*|cari\w*|find)$/,
+    player: /^(jadi|sebagai|as|pemainnya|karakternya|kontrol|control|controls|mainin|pemain|karakter|player|hero|mengendalikan|mengontrol|ngontrol)$/,
+    item: /^(kumpul\w*|ngumpul\w*|mengumpulkan|collect\w*|ambil\w*|ngambil\w*|mengambil|pungut\w*|mungut\w*|memungut|makan\w*|memakan|eat\w*|grab\w*|dapetin|dapatkan|nyari\w*|cari\w*|mencari|find)$/,
     catch: /^(tangkap\w*|tangkep\w*|nangkep\w*|nangkap\w*|catch\w*)$/,
     enemy: /^(hindar\w*|menghindar\w*|dodge\w*|avoid\w*|jauhin|awas\w*)$/,
-    shoot: /^(tembak\w*|nembak\w*|shoot\w*|serang\w*|nyerang|attack\w*|basmi\w*|bunuh\w*|ngebunuh|kill\w*|lawan\w*|ngelawan|fight\w*|hancur\w*|destroy\w*|blast\w*|melawan)$/,
+    shoot: /^(tembak\w*|nembak\w*|menembak\w*|shoot\w*|serang\w*|nyerang|attack\w*|basmi\w*|bunuh\w*|ngebunuh|kill\w*|lawan\w*|ngelawan|fight\w*|hancur\w*|destroy\w*|blast\w*|melawan)$/,
     throw: /^(lempar\w*|ngelempar\w*|throw\w*|tembakin)$/,
     chased: /^(dikejar|dikejer|diburu|dimakan)$/,
     chaser: /^(ngejar|mengejar|kejar|chases|chase|chasing|memburu)$/,
@@ -276,12 +293,14 @@
         return w;
       });
     }
+    const game = findGame(t);
+    if (game && game.typo) notes.push("'" + game.typo + "' kayaknya maksudnya '" + game.as + "'");
     const probs = reader ? reader.read(t) : {};
     const mech = new Set(), why = {};
     for (const [f, re] of Object.entries(RULES)) if (re.test(t)) { mech.add(f); why[f] = "kata kunci"; }
     // the neural reader fills in when the keyword rules found nothing (paraphrases)
     const ruled = mech.size;
-    for (const [f, p] of Object.entries(probs)) if (p > (ruled ? 0.97 : 0.5) && !mech.has(f) && (!ruled || !APPS.has(f))) { mech.add(f); why[f] = "model " + Math.round(p * 100) + "%"; }
+    for (const [f, p] of Object.entries(probs)) if (p > (ruled ? 0.97 : 0.85) && !mech.has(f) && (!ruled || !APPS.has(f))) { mech.add(f); why[f] = "model " + Math.round(p * 100) + "%"; }
     if (mech.has("countdown") && /\btimer\b/.test(t) && mech.has("stopwatch")) mech.delete("countdown");
     if (mech.has("dice") && /\b(lempar|ngelempar|throw|roll)\w*\s+(dadu|dice|the dice)\b/.test(t) && !/\b(tembak|shoot|serang|attack)/.test(t)) mech.delete("shoot");
     if (mech.has("quiz") && mech.has("guess")) mech.delete("quiz");
@@ -374,8 +393,18 @@
     if (topic && mech.has("quiz")) for (const w of topic.split(" ")) { const i = things.findIndex((x) => x.word === w); if (i >= 0) things.splice(i, 1); }
     if (things.length && mech.has("quiz") && !topic && things.every((x) => !x.roles.length)) { topic = things.map((x) => x.word).join(" "); things.length = 0; }
 
+    if (game) {
+      // the game's own words are not things ("tic" is not a Tic Tac); keep a food for snake
+      const gameWords = /^(tic|tac|toe|tik|tak|tok|tictactoe|xo|ox|xox|snake|ular|ularan|suit|suwit|batu|gunting|kertas|rock|paper|scissors?|janken|game|nokia)$/;
+      for (let i = things.length - 1; i >= 0; i--) if (gameWords.test(things[i].word) || (game.typo && game.typo.split(" ").includes(things[i].word))) things.splice(i, 1);
+      for (const f of [...mech]) if (!/^(countdown|score)$/.test(f)) mech.delete(f);
+      mech.add(game.name); why[game.name] = game.typo ? "nama game (typo)" : "nama game";
+    }
+    const gm = !game && t.match(/\b(?:game|permainan|main(?:in)?|play)\s+([a-z0-9]{3,}(?: [a-z0-9]{3,})?)/);
     const A = {
-      raw, t, lang: ID_WORDS.test(t) ? "id" : EN_WORDS.test(t) ? "en" : Lib.detectLang(Lib.normalize(raw)) === "id" ? "id" : opts.lang || "id",
+      raw, t, game: game && game.name, gameName: gm ? gm[1].replace(/\b(dong|aja|yang|yg|sederhana|simple|seru)\b/g, "").trim() || null : null,
+      twoPlayer: /\b((2|dua) (pemain|player|orang)|lawan (temen|teman|orang)|pvp|multiplayer|berdua|two players?|2p)\b/.test(t),
+      lang: ID_WORDS.test(t) ? "id" : EN_WORDS.test(t) ? "en" : Lib.detectLang(Lib.normalize(raw)) === "id" ? "id" : opts.lang || "id",
       mech, why, probs, notes, quotes, things, topic,
       title: (raw.match(/(?:judul(?:nya)?|nama(?:nya)? game|title(?:d)?|called|namanya)\s+"?([^",.]{2,30})"?/i) || [])[1] || null,
       stage: (t.match(/\b(\d{3,4})\s*[x×]\s*(\d{3,4})\b/) || []).slice(1).map(Number),
@@ -479,6 +508,34 @@
     const reasons = [];
     const W = A.stage[0] || 520, H = A.stage[1] || 360;
     const d = { lang: A.lang, request: A.raw, stage: { w: W, h: H }, bg: A.bg || "#101a0c", notes: [], vars: [], hud: [], entities: [], widgets: [], timers: [], sequence: [], end: {}, title: null };
+    if (A.game === "tictactoe") {
+      d.special = "tictactoe";
+      d.stage = { w: Math.max(W, 420), h: Math.max(H, 360) };
+      d.board = { cell: 72, top: 64, colorX: "#feae34", colorO: "#2ce8f5", cellColor: "#26361f", twoPlayer: A.twoPlayer, hard: !A.easy, easy: A.easy };
+      d.title = A.title || "tic tac toe";
+      reasons.push(L("papan 3×3, 9 kotak bisa diklik, isinya disimpen di s1..s9", "a 3×3 board, 9 clickable cells, stored in s1..s9"),
+        L("cek menang: 8 garis (3 baris, 3 kolom, 2 diagonal)", "win check: 8 lines (3 rows, 3 columns, 2 diagonals)"),
+        A.twoPlayer ? L("2 pemain gantian X dan O", "2 players take turns as X and O") : L("lawan komputer. otaknya: menang kalo bisa → blok lu → ambil tengah → pojok → pinggir", "vs the computer. its brain: win if it can → block u → centre → corner → side") + (A.easy ? L(" (mode gampang: kadang asal)", " (easy: sometimes random)") : ""));
+      return Object.assign(d, { reasons, game: true });
+    }
+    if (A.game === "snake") {
+      const food = A.things.find((th) => (know[th.word] || {}).cat && !/^(predator|monster|hazard)$/.test((know[th.word] || {}).cat));
+      const fk = food ? know[food.word] : {};
+      const col = (A.things.find((th) => th.color) || {}).color;
+      d.special = "snake";
+      d.snake = { cell: 16, max: 30, every: A.hard ? 4 : A.easy ? 9 : 6, color: col || "#63c74d", headColor: "#b9e389", foodId: food ? camel(food.word) : L("apel", "apple"), foodColor: (food && food.color) || fk.color || "#e43b44", foodShape: (fk.shape === "circle" || !fk.shape) ? "circle" : "square" };
+      d.title = A.title || L("ular sybau", "sybau snake");
+      reasons.push(L("arena kotak-kotak 16px, ular jalan 1 kotak tiap " + d.snake.every + " frame", "a 16px grid, the snake moves one cell every " + d.snake.every + " frames"),
+        L("badan = " + d.snake.max + " ruas, tiap ruas pindah ke posisi ruas depannya", "body = " + d.snake.max + " segments, each moves to where the one in front was"),
+        L("makan " + d.snake.foodId + " = skor +1 & badan nambah, nabrak tembok/badan = kalah", "eat the " + d.snake.foodId + " = +1 and grow, hitting a wall or yourself = game over"));
+      return Object.assign(d, { reasons, game: true });
+    }
+    if (A.game === "rps") {
+      d.special = "rps";
+      d.title = A.title || L("batu gunting kertas", "rock paper scissors");
+      reasons.push(L("3 tombol, komputer milih randint(1, 3), aturan: batu > gunting > kertas > batu", "3 buttons, the computer picks randint(1, 3); rock > scissors > paper > rock"));
+      return Object.assign(d, { reasons, game: true });
+    }
 
     // every thing gets its final role
     const items = [], enemies = [], goals = [], projs = [], clicks = [];
@@ -550,7 +607,7 @@
       if (m.has("shoot") && !enemies.length) enemies.push(make("alien", "target"));
       if (m.has("chase") && !enemies.some((e) => (e.motion || e.C.motion) === "chase")) enemies.push(make("zombie", "enemy", { motion: "chase" }));
       if (m.has("whack") && !clicks.length) clicks.push(make(L("tikus", "mouse"), "click"));
-      if (m.has("maze") && !goals.length) goals.push(make("finish", "goal"));
+      if (m.has("maze") && !goals.length && !items.length && !m.has("collect")) goals.push(make("finish", "goal"));
       if (m.has("flappy") && !enemies.length) enemies.push(make(L("pipa", "pipe"), "enemy", { cat: "nature" }));
       if (m.has("jump") && !enemies.length) enemies.push(make(L("batu", "rock"), "enemy"));
       if (m.has("shoot") && !projs.length) projs.push(make(L("peluru", "bullet"), "projectile"));
@@ -996,6 +1053,7 @@
     const pass = (ok, msg) => { results.push({ ok, msg }); say("   " + (ok ? "✓ " : "✗ ") + msg); };
     const val = (r, t, k) => (r.seen && r.seen[t] ? parseFloat(r.seen[t][k]) : NaN);
     const near = (r, t, k) => { for (let i = 0; i < 4; i++) { const x = val(r, t + i, k); if (!isNaN(x)) return x; } return NaN; };
+    if (d.special) { specialTests(vm, d, rand, pass, L, near); return results; }
     if (P) {
       const watch = [["_px", `get("${P.id}", "x")`], ["_py", `get("${P.id}", "y")`]];
       let keys = [], expect = null;
@@ -1053,6 +1111,43 @@
     const r = probeRun(vm, d, { watch: [] }, { frames: 300, actions: acts }, rand);
     pass(r.ok, L("dimainin acak 5 detik: ga ada error", "5 seconds of random play: no errors") + (r.ok ? "" : " — " + r.error));
     return results;
+  }
+
+  function specialTests(vm, d, rand, pass, L, near) {
+    const run = (probe, script) => probeRun(vm, d, probe, script, rand);
+    const err = (r) => (r.ok ? "" : " — " + r.error);
+    if (d.special === "tictactoe") {
+      const cells = Gen.write(d, {}).info.cells;
+      const two = d.board.twoPlayer;
+      let r = run({ watch: [["_a", "s1"], ["_n", "langkah"]] }, { frames: 20, actions: [[5, (m) => m.click(cells[0].x, cells[0].y)]] });
+      pass(r.ok && near(r, 12, "_a") === 1 && near(r, 12, "_n") === (two ? 1 : 2), L("klik kotak kiri atas → jadi X", "clicking the top-left cell → X") + (two ? "" : L(", komputer langsung bales", ", the computer answers")) + err(r));
+      if (!two) {
+        r = run({ watch: [["_v", "s3"]], at: [[5, "s1 = 1"], [6, "s2 = 1"], [7, "langkahKomputer()"]] }, { frames: 15 });
+        pass(r.ok && near(r, 10, "_v") === 2, L("X punya 2 sejajar (1,2) → komputer ngeblok di 3", "X has two in a row (1,2) → the computer blocks 3") + err(r));
+        r = run({ watch: [["_v", "s6"]], at: [[5, "s4 = 2"], [6, "s5 = 2"], [7, "s1 = 1"], [8, "s2 = 1"], [9, "langkahKomputer()"]] }, { frames: 15 });
+        pass(r.ok && near(r, 12, "_v") === 2, L("komputer bisa menang di 6 → dia milih menang, bukan ngeblok", "the computer can win at 6 → it wins instead of blocking") + err(r));
+      }
+      r = run({ watch: [["_v", "selesai"]] }, { frames: 60, actions: cells.map((c2, i) => [5 + i * 4, (m) => m.click(c2.x, c2.y)]) });
+      pass(r.ok && near(r, 50, "_v") === 1, L("klik semua kotak → game selesai (menang/kalah/seri)", "clicking every cell → the game ends (win/lose/draw)") + err(r));
+      r = run({ watch: [["_v", "langkah"]], at: [[30, "mainLagi()"]] }, { frames: 40, actions: [[5, (m) => m.click(cells[4].x, cells[4].y)]] });
+      pass(r.ok && near(r, 20, "_v") > 0 && near(r, 35, "_v") === 0, L("tombol main lagi ngosongin papan", "the again button clears the board") + err(r));
+    } else if (d.special === "snake") {
+      const k = d.snake.cell;
+      let r = run({ watch: [["_x", "hx"]] }, { frames: 70 });
+      pass(r.ok && near(r, 60, "_x") > near(r, 2, "_x"), L("ular jalan sendiri ke kanan", "the snake moves right by itself") + err(r));
+      r = run({ watch: [["_y", "hy"]] }, { frames: 50, actions: [[5, (m) => m.key("up", true)], [30, (m) => m.key("up", false)]] });
+      pass(r.ok && near(r, 40, "_y") < near(r, 4, "_y"), L("pencet panah atas → belok ke atas", "pressing up → turns up") + err(r));
+      r = run({ watch: [["_s", "skor"], ["_p", "panjang"]], at: [[3, `setpos("${d.snake.foodId}", hx + ${k}, hy)`]] }, { frames: 30 });
+      pass(r.ok && near(r, 25, "_s") === 1 && near(r, 25, "_p") === 4, L("makan → skor 1, badan jadi 4 ruas", "eating → score 1, body grows to 4") + err(r));
+      r = run({ watch: [["_v", "selesai"]] }, { frames: 400 });
+      pass(r.ok && near(r, 380, "_v") === 1, L("dibiarin lurus terus → nabrak tembok → game over", "left alone → hits the wall → game over") + err(r));
+    } else if (d.special === "rps") {
+      const b = Gen.write(d, {}).info.buttons;
+      const r = run({ watch: [["_v", "menang + kalah + seri"]] }, { frames: 30, actions: [[5, (m) => m.click(b[0].x, b[0].y)], [15, (m) => m.click(b[2].x, b[2].y)]] });
+      pass(r.ok && near(r, 25, "_v") === 2, L("klik 2 pilihan → 2 ronde kehitung", "two clicks → two rounds counted") + err(r));
+      const r2 = run({ watch: [["_v", "menang"]], at: [[5, "pilihanKomputer = 2"]] }, { frames: 10 });
+      pass(r2.ok, L("aturan menang/kalah ke-compile & jalan", "the win/lose rules compile and run") + err(r2));
+    }
   }
 
   // ------------------------------------------------------------------ STS questions (docs)
@@ -1151,17 +1246,33 @@
       if (A.things.length) say(L("   benda yang lu sebut: ", "   things u mentioned: ") + A.things.map((th) => th.word + (th.roles.length ? " [" + th.roles.join("/") + "]" : "") + (th.count ? " ×" + th.count : "") + (th.color ? " " + colorName(th.color, A.lang) : "")).join(", "));
       if (!mechs.length && !A.things.length) say(L("   ga ada yang gw kenal. gw tebak lu mau gambar", "   nothing i recognise. guessing u want a drawing"));
 
+      // nothing it recognises: the words themselves might be a game it can read about
+      const nothing = !A.game && ![...A.mech].some((f) => !/^(score|countdown|lives)$/.test(f)) && !A.things.length;
+      if (nothing && !A.gameName) {
+        const phrase = A.t.replace(/\b(bikin\w*|buat\w*|tolong|dong|aja|deh|make|create|build|me|a|an|the|please|pls|program|aplikasi|app|kode|code|sts|game|permainan|yang|yg)\b/g, " ").replace(/\s+/g, " ").trim();
+        if (phrase.length >= 3) A.gameName = phrase.split(" ").slice(0, 3).join(" ");
+      }
+      // a game it does not know by name: read what that game is first
+      if (!A.game && A.gameName && !this.kb.find(A.gameName.split(" ")[0]) && ![...A.mech].some((f) => !/^(score|countdown|lives|shapes)$/.test(f))) {
+        const cant = await this._learnGame(A, useSearch, say);
+        if (cant) return { kind: "cant", steps, text: cant, lang: A.lang };
+      }
       // research
       const know = {};
       const words = A.things.map((th) => th.word).slice(0, 6);
       if (words.length || (A.mech.has("quiz") && A.topic)) say(L("2. riset dulu", "2. research first") + (useSearch && this.search ? L(" (wikipedia + database gw)", " (wikipedia + my database)") : L(" (search mati, cuma database offline)", " (search is off, offline database only)")));
-      const pending = words.map((w) => this._page(w, A.lang, useSearch));
-      for (let i = 0; i < words.length; i++) know[words[i]] = await this._research(words[i], A.lang, useSearch, say, pending[i]);
+      for (const th of A.things) if (th.hero) { know[th.word] = { cat: "person", source: th.hero, color: "#feae34" }; this.cache.set(th.word, know[th.word]); }
+      const pending = words.map((w) => (know[w] ? Promise.resolve(null) : this._page(w, A.lang, useSearch)));
+      for (let i = 0; i < words.length; i++) if (!know[words[i]]) know[words[i]] = await this._research(words[i], A.lang, useSearch, say, pending[i]);
       // defaults the design may add (koin, meteor...) come from the offline base only
       for (const w of ["koin", "coin", "apel", "apple", "meteor", "alien", "zombie", "tikus", "mouse", "finish", "pipa", "pipe", "batu", "rock", "peluru", "bullet", "raket", "ikan", "udang", "cacing", "bunga", "anjing", "kucing"]) if (!know[w]) { const k = this.kb.find(w); if (k) know[w] = { cat: k.entry.cat, color: k.entry.color, shape: k.entry.shape, size: k.entry.size }; }
       if (A.mech.has("quiz")) know.__quiz = await this._quiz(A, useSearch, say);
-      if (!A.mech.size && !A.things.length) A.mech.add("shapes");
-      if (!A.mech.size && A.things.length && A.things.every((th) => !th.roles.length)) A.mech.add("shapes");
+      if (!A.mech.size && A.things.length && A.things.every((th) => !th.roles.length)) A.things[0].topic = true;   // "kucing sama anjing" -> a game about them
+      if (!A.mech.size && !A.things.length) {
+        say(L("   gw ga nemu apa yang mau dibikin, jadi gw ga mau asal ngarang", "   i couldn't work out what to build, so i won't just make something up"));
+        return { kind: "cant", steps, lang: A.lang, text: L("jujur gw ga ngerti lu mau bikin apa. jelasin gamenya: siapa yang lu mainin, ada apa aja, ngapain (ngumpulin, ngehindar, nembak, lompat, nebak...), menang/kalahnya gimana. contoh: \"game kucing ngumpulin ikan, dikejar anjing, 3 nyawa\" 🥀",
+          "honestly i don't get what u want to build. describe the game: who u play as, what's in it, what u do (collect, dodge, shoot, jump, guess...), how u win or lose. e.g. \"a cat collecting fish while a dog chases it, 3 lives\" 🥀") };
+      }
 
       say(L("3. desain", "3. design"));
       const d = design(A, know, this.rand);
@@ -1200,6 +1311,45 @@
       const sts = toSts(prog, name);
       this.last = { A, d, sts };
       return { kind: "code", steps, program: prog, design: d, sts, file: name + ".sts", compiled, fixes, tests, features: [...A.mech], lang: A.lang };
+    }
+
+    /** "game pacman": look the game up, then read its description like a request */
+    async _learnGame(A, useSearch, say) {
+      const L = (a, b) => (A.lang === "en" ? b : a);
+      const name = A.gameName;
+      if (!useSearch || !this.search) return null;
+      say(L(`2. '${name}' itu game apa? gw baca dulu di wikipedia`, `2. what is '${name}'? reading about it on wikipedia first`));
+      let page = null;
+      try { page = await (this.search.research || this.search.answer)(name, A.lang, this.fetch, { timeoutMs: 6000 }); } catch (e) { page = null; }
+      const text = page ? (page.text || page.extract || "") : "";
+      if (!page || !/\b(permainan|game|olahraga|sport|arkade|arcade|teka.teki|puzzle)\b/i.test(text)) {
+        say(page ? L(`   "${page.title}" bukan artikel soal game, jadi '${name}' gw anggep benda`, `   "${page.title}" isn't about a game, so '${name}' is a thing`) : L("   ga ketemu. lanjut pake yang gw ngerti", "   nothing found. going with what i understand"));
+        return null;
+      }
+      const intro = sentencesOf(text).slice(0, 3).join(" ") || text.slice(0, 400);
+      say(`   🔎 "${page.title}": ${intro.length > 160 ? intro.slice(0, 157) + "…" : intro}`);
+      const lower = " " + intro.toLowerCase().replace(/(\w)-(\w)/g, "$1 $2") + " ";
+      const g = findGame(lower);
+      const nameWords = name.split(" ");
+      A.things = A.things.filter((th) => !nameWords.includes(th.word));
+      if (g) { A.game = g.name; A.mech = new Set([g.name]); A.why[g.name] = L("dari artikel", "from the article"); say(L(`   → ini ${g.name}, gw bisa bikin itu`, `   → that's ${g.name}, i can build that`)); return null; }
+      // read the description with the same reader as a request
+      const B = analyze(lower, null, this.kb, {});
+      const GAMEY = ["maze", "collect", "dodge", "shoot", "chase", "catch", "flappy", "jump", "pong", "whack", "quiz", "guess", "dice", "clicker", "survive", "lives"];
+      const got = GAMEY.filter((f) => B.mech.has(f));
+      if (!got.length) {
+        say(L("   → artikelnya ga nyebut mekanik yang gw bisa bikin", "   → the article names no mechanic i can build"));
+        return L(`jujur aja: gw udah baca soal ${page.title} ("${intro.slice(0, 120)}…"), tapi gw belum bisa bikin game kayak gitu di STS. yang gw bisa: tictactoe, snake, suit, labirin, nembak, hindarin, ngumpulin, lompat, flappy, pong, kuis, clicker, sama campurannya. coba jelasin aturannya pake kata-kata itu 🥀`,
+          `honestly: i read about ${page.title} ("${intro.slice(0, 120)}…") but i can't build that kind of game in STS yet. what i can do: tictactoe, snake, rock paper scissors, mazes, shooting, dodging, collecting, jumping, flappy, pong, quizzes, clickers and mixes of them. describe the rules with those words 🥀`);
+      }
+      for (const f of got) { A.mech.add(f); A.why[f] = L("dari artikel", "from the article"); }
+      const titleWords = page.title.toLowerCase().split(/[\s-]+/);
+      const roled = B.things.filter((th) => th.roles.length && !nameWords.includes(th.word) && !titleWords.includes(th.word) && th.word.length > 2 && !th.roles.includes("player")).slice(0, 3);
+      for (const th of roled) if (!A.things.some((x) => x.word === th.word)) A.things.push(th);
+      // the game's hero is the player, named after the game
+      A.things.unshift({ word: nameWords.join(""), roles: ["player"], count: null, color: null, speed: 1, size: 1, hero: page.title });
+      say(L("   → dari artikelnya: ", "   → from the article: ") + got.join(", ") + (roled.length ? " · " + roled.map((th) => th.word + " [" + th.roles.join("/") + "]" + (th.count ? " ×" + th.count : "")).join(", ") : ""));
+      return null;
     }
 
     async _quiz(A, useSearch, say) {

@@ -25,18 +25,18 @@ Chatbot brainrot yang **benci kamu**. Beda dari AI lain yang baik dan selalu set
 pesan user ─► normalisasi slang (gk→gak, lu→kamu, wkwkwk→wkwk) + deteksi bahasa
           ─► Classifier MLP ─► intent (insult / choice / search / math / greeting / ... 50 intent)
           ─► tools: matematika, jam, tanggal, parsing "A atau B", query search, memori
-          ─► GRU generator (dikondisikan intent + bahasa) ─► nulis balesan kata per kata
+          ─► Transformer generator (prefix <intent> <bahasa>) ─► nulis balesan kata per kata
           ─► isi placeholder {name} {thing} {query} ... dari memori/tools
-          ─► grammar checker ─► kalo ada typo, GRU nulis roast grammar {wrong}→{right}
+          ─► grammar checker ─► kalo ada typo, transformer nulis roast grammar {wrong}→{right}
           ─► (kalo pertanyaan) parser pertanyaan ─► Wikidata (fakta) / Wikipedia (ringkasan) ─► hasil + roast penutup
 ```
 
 1. **Intent classifier**: input = hashed bag-of-words + bigram + char trigram + kata pertama (4096 dim) → 320 ReLU → softmax 52 intent. Data training di-augmentasi otomatis (typo, singkatan, kata tambahan, huruf kapital, slot diisi random) jadi ~14 ribu contoh.
-2. **Response generator**: GRU word-level (embedding 96 + intent 16 + bahasa 8 → hidden 320 → ~2000 kata). Tiap balesan di-*sample* kata per kata (temperature + nucleus/top-p). Bot bikin 10 kandidat, buang yang placeholdernya gak bisa diisi jujur, yang barusan dipake, atau yang bahasanya gak cocok, terus pilih yang skornya paling tinggi. Nyalain 🧠 **OTAK** buat liat intent, confidence, bahasa, dan ✦ kalau kalimatnya baru (gak ada di data training).
+2. **Response generator**: **Transformer** kecil ala GPT yang ditulis dari nol di numpy (`training/transformer.py`): 4 layer, 4 attention head, d=160, causal self-attention, feed-forward GELU, pre-LayerNorm, backprop manual + gradient check. Dikondisikan pake token awalan `<i:insult> <l:id> <s>` biar tau mau ngomong apa dan pake bahasa apa. Di browser jalan pake KV cache (`assets/js/brain.js`), dan `tests/parity.py` ngecek hasilnya sama persis kayak Python. Tiap balesan di-*sample* kata per kata (temperature + nucleus/top-p). Bot bikin 10 kandidat, buang yang placeholdernya gak bisa diisi jujur, yang barusan dipake, atau yang bahasanya gak cocok, terus pilih yang skornya paling tinggi. Nyalain 🧠 **OTAK** buat liat intent, confidence, bahasa, dan ✦ kalau kalimatnya baru (gak ada di data training).
 3. **Grammar checker** (`assets/js/grammar.js`): aturan frasa/kata salah dari `data/grammar_rules.json`, aturan di-/ke- bahasa Indonesia, dan pengecek typo pake 80 ribu kata paling umum (Indo + English): kata yang gak dikenal tapi beda 1 huruf dari kata umum = typo. Slang, singkatan chat, dan ketawa (wkwk) gak dihitung typo.
 4. **Search** (`assets/js/search.js`): parser pertanyaan Indo/English ngenalin ~35 jenis relasi (ibu kota, presiden, CEO, pendiri, penduduk, mata uang, bahasa, luas, tinggi, umur, lahir, tempat lahir, meninggal, pasangan, penemu, penulis, sutradara, benua, didirikan, agama, klub, kantor pusat…). Subjeknya dicari di Wikipedia (redirect + "did you mean" buat typo) → ID Wikidata-nya → properti yang ditanya (yang masih berlaku, bukan yang udah lewat; populasi diambil yang paling baru). Kalo bukan pertanyaan fakta, ambil ringkasan Wikipedia. Search otomatis jalan kalo pesannya pertanyaan dan bukan soal lu/gw (pertanyaan kayak "kenapa lu jahat" tetep dibales roast, bukan di-search).
 
-Total **2,6 juta parameter** chatbot (2.595.833) + ~670 ribu generator gambar + ~1,06 juta pembaca request kode STS = ~4,3 juta parameter. `model/brain.json` ~3,5 MB, `model/coder.json` ~1,4 MB, `model/pixels.json` ~950 KB, `model/lexicon.json` ~650 KB (int8 quantized).
+Total **3,2 juta parameter** chatbot (3.246.629: classifier 1,3 juta + transformer 1,9 juta) + ~670 ribu generator gambar + ~1,06 juta pembaca request kode STS = ~5 juta parameter. `model/brain.json` ~4,5 MB, `model/coder.json` ~1,4 MB, `model/pixels.json` ~950 KB, `model/lexicon.json` ~650 KB (int8 quantized).
 
 ### Kenapa Wikipedia/Wikidata, bukan Google langsung?
 
@@ -48,9 +48,11 @@ Batasannya: pertanyaan yang gak ada di Wikipedia/Wikidata (berita hari ini, harg
 
 Bukan nempel program jadi. Tiap request dipecah jadi **benda** ("ninja", "zombie", "shuriken") dan **apa yang dilakuin ke benda itu** (dimainin, dihindarin, dikumpulin, ditembak, ngejar lu, ditangkep, diklik). Tiap benda diriset dulu: artikel Wikipedia-nya dibaca ("Zombi adalah mayat hidup ... berjalan lambat" → monster, lambat → ngejar pelan), ditambah database offline `data/sts/things.json` kalau search mati. Dari situ dibikin desain (siapa pemainnya, kontrolnya, gerakan tiap benda, apa yang terjadi kalau kena, cara menang/kalah), terus `stsgen.js` nulis kodenya: variabel, satu fungsi per kelakuan, objek, event, loop. Kuis soal topik ("kuis tentang majapahit") soalnya dibikin dari kalimat artikel Wikipedia-nya (isian tahun/nama/angka + benar-salah). Abis di-compile pake compiler STS asli, programnya dijalanin tanpa layar dan dites: pemain gerak kalo tombolnya dipencet? musuh beneran gerak? nyentuh musuh beneran ngurangin nyawa? peluru beneran nambah skor? Yang gagal dilaporin jujur.
 
-Jujurnya: ini bukan AI gede yang bisa nulis program apa aja. Dia ngerti sekitar 30 jenis mekanik (gerak, ngejar, jatuh, mantul, nembak, lompat, flappy, labirin, kuis, clicker, toko, dadu, dll) yang bisa dicampur bebas, dan benda apa aja yang bisa dia riset. Di luar itu dia bakal bikin yang paling deket.
+Game yang punya aturan sendiri dikenalin dari namanya, termasuk typo ("rictactoe" → tic tac toe): **tic tac toe** (lawan komputer yang mikir: menang kalo bisa → ngeblok lu → tengah → pojok, atau 2 pemain), **snake** (badan 30 ruas yang ngikutin kepala), **suit/batu gunting kertas**. Game yang dia ga kenal ("game pacman") dibaca dulu artikel Wikipedia-nya, terus deskripsinya dibaca kayak request ("memakan titik di labirin sambil menghindari 4 hantu yang mengejar" → labirin + titik buat dimakan + 4 hantu ngejar). Kalo artikelnya nyebut aturan yang dia belum bisa (catur), atau dia sama sekali ga ngerti requestnya, dia bilang jujur dan nanya, bukan asal gambar kotak/lingkaran.
 
-> Jujur juga soal "pinter": ChatGPT itu ratusan miliar parameter yang dilatih dari sebagian besar internet; sybau 2,6 juta. Jadi "selalu tau apapun" gak mungkin buat model sekecil ini, makanya dia pake tools (Wikidata/Wikipedia, kalkulator, memori) dan mode eksperimental buat nutupin yang dia gak tau. Ini model kecil yang dilatih dari ~800 contoh balesan dan ~2000 pola chat, jadi jelas gak sepinter ChatGPT. Dia jago di hal yang dilatihin (roasting, ngobrol santai Indo/English, milih pilihan lu terus ngehate, matematika, inget-inget lu, nyari di Wikipedia, ngoreksi typo), tapi dia gak bisa nalar panjang atau jawab pertanyaan rumit.
+Jujurnya: ini bukan AI gede yang bisa nulis program apa aja. Dia ngerti sekitar 30 jenis mekanik (gerak, ngejar, jatuh, mantul, nembak, lompat, flappy, labirin, kuis, clicker, toko, dadu, tic tac toe, snake, suit, dll) yang bisa dicampur bebas, dan benda/game apa aja yang bisa dia riset. Di luar itu dia bilang jujur.
+
+> Jujur juga soal "pinter": ChatGPT itu ratusan miliar parameter yang dilatih dari sebagian besar internet; sybau 3,2 juta. Jadi "selalu tau apapun" gak mungkin buat model sekecil ini, makanya dia pake tools (Wikidata/Wikipedia, kalkulator, memori) dan mode eksperimental buat nutupin yang dia gak tau. Ini model kecil yang dilatih dari ~800 contoh balesan dan ~2000 pola chat, jadi jelas gak sepinter ChatGPT. Dia jago di hal yang dilatihin (roasting, ngobrol santai Indo/English, milih pilihan lu terus ngehate, matematika, inget-inget lu, nyari di Wikipedia, ngoreksi typo), tapi dia gak bisa nalar panjang atau jawab pertanyaan rumit.
 
 **Soal "kys"**: bot ini gak pernah bilang kys. Kalau lu ngetik itu ke dia, dia cuma bales roast biasa. Dan kalau ada yang beneran ngomong soal pengen bunuh diri / nyakitin diri sendiri, bot berhenti bercanda dan ngasih info bantuan (Indonesia: 119 ext 8).
 
@@ -109,6 +111,7 @@ data/                 data training (edit ini buat ngubah kepribadian)
   lexicon/              80rb kata paling umum (en + id), buat cek typo
 training/
   train.py              training kedua network (numpy) -> model/brain.json + model/lexicon.json
+  transformer.py        transformer GPT kecil dari nol (forward + backprop manual + gradient check)
   train_coder.py        training pembaca request kode STS (numpy) -> model/coder.json
   train_pixels.py       training generator gambar (numpy) -> model/pixels.json
   textproc.py           normalisasi teks + hashing (dicerminkan persis di brain.js)

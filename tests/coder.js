@@ -18,7 +18,7 @@ const requests = process.argv.length > 2 ? process.argv.slice(2) : [
   "kuis tentang majapahit 4 soal", "kuis matematika 5 soal perkalian", "quiz with 3 questions",
   "bikinin game clicker", "game clicker pake toko upgrade, harga 15", "tanya nama terus sapa", "lempar dadu", "tebak angka 1 sampe 50", "counter tambah kurang",
   "kalkulator sederhana", "kotak ganti warna kalo diklik", "bola mantul", "tombol popup \"halo dunia\"", "lampu lalu lintas", "password check, password nya rahasia",
-  "gambar lingkaran merah dan kotak biru", "clicker dengan stopwatch", "hover effect", "game glorbo", "asdfgh qwerty",
+  "gambar lingkaran merah dan kotak biru", "bikin rictactoe", "tic tac toe 2 pemain", "game snake", "game ular makan apel", "suit lawan komputer", "bikin game pacman", "clicker dengan stopwatch", "hover effect", "game glorbo",
 ];
 (async () => {
   const vm = await StsLib.StsVM.load(fs.readFileSync(path.join(__dirname, "../assets/sts/sts.wasm")));
@@ -31,6 +31,7 @@ const requests = process.argv.length > 2 ? process.argv.slice(2) : [
   for (const r of requests) {
     coder.last = null;
     const res = await coder.handle(r);
+    if (res.kind === "cant") { console.log("CANT ", r, "->", res.text.slice(0, 120)); continue; }
     if (res.kind !== "code") { console.log("DOCS ", r, "->", res.head); continue; }
     const failed = res.tests.filter((t) => !t.ok);
     const ok = res.compiled === true && res.fixes.length === 0 && !failed.length;
@@ -64,6 +65,18 @@ const requests = process.argv.length > 2 ? process.argv.slice(2) : [
   coder.last = null;
   const off = await coder.handle("bikin game ninja lawan zombie", { search: false });
   check(off.compiled === true && /database offline/.test(off.steps.join("\n")), "works with search off (offline knowledge)");
+  coder.last = null;
+  res = await coder.handle("bikin tictactoe");
+  check(res.design.special === "tictactoe" && !res.design.entities.length && !/ngumpulin|barang:/.test(res.steps.join(" ")), "tictactoe is tic-tac-toe, not collecting Tic Tacs");
+  coder.last = null;
+  res = await coder.handle("bikin game catur");
+  check(res.kind === "cant" && /catur/i.test(res.text), "chess (read on wikipedia, not buildable yet) -> says so honestly");
+  coder.last = null;
+  res = await coder.handle("bikin game pacman");
+  check(res.design.maze && res.design.entities.some((e) => e.key === "hantu" && e.count === 4) && res.design.entities.some((e) => e.role === "item"), "pacman from its article: maze + 4 ghosts chasing + dots to eat");
+  coder.last = null;
+  res = await coder.handle("asdfgh qwerty");
+  check(res.kind === "cant", "gibberish -> asks what to build instead of drawing random shapes");
   console.log(bad ? bad + " failed" : "all passed");
   process.exit(bad ? 1 : 0);
 })();

@@ -15,6 +15,8 @@ const PAGES = {
   "Hiu": { qid: "Q13", extract: "Hiu adalah kelompok ikan predator laut yang berbahaya dengan gigi tajam. Hiu berenang sangat cepat." },
   "Kucing": { qid: "Q14", extract: "Kucing adalah hewan mamalia karnivora kecil yang sering dipelihara manusia." },
   "Glorbo": { qid: "Q15", extract: "Glorbo adalah makhluk mitologi pemakan manusia dari legenda yang berwarna ungu dan sangat berbahaya." },
+  "Pac-Man": { qid: "Q17", extract: "Pac-Man adalah permainan video arkade tahun 1980. Pemain mengendalikan Pac-Man yang harus memakan semua titik di dalam labirin sambil menghindari 4 hantu yang mengejar.", redirects: ["pacman", "pac man"] },
+  "Catur": { qid: "Q18", extract: "Catur adalah permainan papan strategi untuk dua pemain yang dimainkan di atas papan kotak-kotak 8×8 dengan 16 bidak per pemain.", redirects: ["chess"] },
   "Majapahit": { qid: "Q16", extract: "Majapahit adalah kerajaan Hindu-Buddha yang berpusat di Jawa Timur. Kerajaan ini didirikan oleh Raden Wijaya pada tahun 1293. Majapahit mencapai puncak kejayaannya pada masa Hayam Wuruk yang memerintah dari tahun 1350 hingga 1389. Mahapatih Gajah Mada terkenal dengan Sumpah Palapa yang berisi tekad menyatukan Nusantara. Ibu kota Majapahit berada di Trowulan. Kerajaan ini runtuh sekitar tahun 1527 setelah serangan Kesultanan Demak." },
 };
 const ENTITIES = {

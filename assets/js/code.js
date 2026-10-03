@@ -151,7 +151,9 @@
     sum.textContent = "✻ " + t().think + " · " + res.steps.length + (lang() === "id" ? " langkah · " : " steps · ") + ((performance.now() - t0) / 1000).toFixed(1) + "s";
     if (res.steps.length > 6) think.open = false;
     const L = LINES[res.lang === "en" ? "en" : "id"];
-    if (res.kind === "docs") {
+    if (res.kind === "cant") {
+      say(res.text);
+    } else if (res.kind === "docs") {
       say(pick(L.docs));
       const d = el("div", "cx-doc");
       d.append(el("div", "bold", res.head), el("div", "cx-doc-body", res.body));

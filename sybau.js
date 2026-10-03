@@ -158,7 +158,6 @@
     return z;
   }
 
-  const sig = (x) => 1 / (1 + Math.exp(-x));
 
   class Brain {
     constructor(json) {
@@ -171,16 +170,17 @@
       this.W2 = dequant(c.W2);
       this.b2 = dequant(c.b2).data;
 
+      // generator: a small GPT-style transformer (training/transformer.py)
       const g = json.generator;
-      this.H = g.hidden;
+      this.d = g.d; this.layers = g.layers; this.heads = g.heads; this.ctx = g.ctx;
       this.maxLen = g.max_len;
       this.genTags = g.tags;
       this.langs = g.langs || ["en", "id"];
       this.vocab = g.vocab;
-      for (const k of ["E", "C", "L", "Wx", "Uh", "Wy"]) this[k] = dequant(g[k]);
-      this.bx = dequant(g.bx).data;
-      this.bh = dequant(g.bh).data;
-      this.by = dequant(g.by).data;
+      this.vocabIndex = new Map(this.vocab.map((w, i) => [w, i]));
+      this.nSpecial = this.vocab.filter((w) => w.startsWith("<i:") || w.startsWith("<l:")).length;
+      this.G = {};
+      for (const k of Object.keys(g)) if (g[k] && typeof g[k] === "object" && (g[k].q || g[k].f)) this.G[k] = dequant(g[k]);
 
       this.responses = json.responses;
       this.examples = json.examples || {}; // one sentence per training pattern (experimental mode)
@@ -189,9 +189,8 @@
       for (const tag in json.responses)
         for (const r of json.responses[tag]) this.trainingLines.add(detokenize(genTokenize(r)));
 
-      let n = 0;
-      for (const t of [this.W1T, this.W2, this.E, this.C, this.L, this.Wx, this.Uh, this.Wy]) n += t.data.length;
-      this.paramCount = n + this.b1.length + this.b2.length + this.bx.length + this.bh.length + this.by.length;
+      this.genParams = Object.values(this.G).reduce((n, t) => n + t.data.length, 0);
+      this.paramCount = this.W1T.data.length + this.W2.data.length + this.b1.length + this.b2.length + this.genParams;
     }
 
     /** -> [{tag, p}] sorted, most likely first */
@@ -210,45 +209,72 @@
       return this.clsTags.map((tag, i) => ({ tag, p: z[i] })).sort((a, b) => b.p - a.p);
     }
 
-    _gruStep(wordId, cond, h) {
-      const H = this.H, E = this.E.cols;
-      const x = new Float32Array(E + cond.length);
-      x.set(this.E.data.subarray(wordId * E, wordId * E + E), 0);
-      x.set(cond, E);
-      const gx = vecMat(x, this.Wx, Float32Array.from(this.bx));
-      const gh = vecMat(h, this.Uh, Float32Array.from(this.bh));
-      const hn = new Float32Array(H);
-      for (let i = 0; i < H; i++) {
-        const z = sig(gx[i] + gh[i]);
-        const r = sig(gx[H + i] + gh[H + i]);
-        const n = Math.tanh(gx[2 * H + i] + r * gh[2 * H + i]);
-        hn[i] = (1 - z) * n + z * h[i];
+    /** feed one token at position `pos`; keys/values are cached so each step is cheap.
+     *  -> logits for the next token */
+    _step(tok, pos, cache) {
+      const G = this.G, d = this.d, nh = this.heads, hd = d / nh;
+      const x = new Float32Array(d);
+      for (let i = 0; i < d; i++) x[i] = G.E.data[tok * d + i] + G.Pos.data[pos * d + i];
+      const ln = (v, gk, bk) => {
+        let mu = 0; for (let i = 0; i < d; i++) mu += v[i]; mu /= d;
+        let va = 0; for (let i = 0; i < d; i++) va += (v[i] - mu) * (v[i] - mu); va /= d;
+        const r = 1 / Math.sqrt(va + 1e-5), o = new Float32Array(d), gg = G[gk].data, bb = G[bk].data;
+        for (let i = 0; i < d; i++) o[i] = (v[i] - mu) * r * gg[i] + bb[i];
+        return o;
+      };
+      for (let l = 0; l < this.layers; l++) {
+        const h = ln(x, "g1_" + l, "b1_" + l);
+        const qkv = vecMat(h, G["Wqkv_" + l], Float32Array.from(G["bqkv_" + l].data));
+        const c = cache[l];
+        c.k.push(qkv.slice(d, 2 * d)); c.v.push(qkv.slice(2 * d, 3 * d));
+        const T = c.k.length, y = new Float32Array(d), sc = new Float32Array(T), inv = 1 / Math.sqrt(hd);
+        for (let a = 0; a < nh; a++) {
+          const o = a * hd;
+          let m = -Infinity;
+          for (let t = 0; t < T; t++) { let s2 = 0; const kt = c.k[t]; for (let i = 0; i < hd; i++) s2 += qkv[o + i] * kt[o + i]; sc[t] = s2 * inv; if (sc[t] > m) m = sc[t]; }
+          let z = 0; for (let t = 0; t < T; t++) { sc[t] = Math.exp(sc[t] - m); z += sc[t]; }
+          for (let t = 0; t < T; t++) { const w = sc[t] / z, vt = c.v[t]; for (let i = 0; i < hd; i++) y[o + i] += w * vt[o + i]; }
+        }
+        const att = vecMat(y, G["Wo_" + l], Float32Array.from(G["bo_" + l].data));
+        for (let i = 0; i < d; i++) x[i] += att[i];
+        const h2 = ln(x, "g2_" + l, "b2_" + l);
+        const u = vecMat(h2, G["W1_" + l], Float32Array.from(G["c1_" + l].data));
+        for (let i = 0; i < u.length; i++) { const v = u[i]; u[i] = 0.5 * v * (1 + Math.tanh(0.7978845608028654 * (v + 0.044715 * v * v * v))); }
+        const f = vecMat(u, G["W2_" + l], Float32Array.from(G["c2_" + l].data));
+        for (let i = 0; i < d; i++) x[i] += f[i];
       }
-      return hn;
+      return vecMat(ln(x, "gf", "bf"), G.Wy, Float32Array.from(G.by.data));
     }
 
-    /** Sample one reply from the GRU, word by word (temperature + nucleus/top-p).
+    /** logits after reading a list of token ids (used by tests/parity.js) */
+    logitsFor(ids) {
+      const cache = Array.from({ length: this.layers }, () => ({ k: [], v: [] }));
+      let z = null;
+      ids.forEach((t, i) => { z = this._step(t, i, cache); });
+      return z;
+    }
+    prefix(tag, lang) { return [this.vocabIndex.get("<i:" + tag + ">"), this.vocabIndex.get("<l:" + lang + ">"), 1]; }
+
+    /** Sample one reply from the transformer, word by word (temperature + nucleus/top-p).
      *  Returns {text, tokens, logp} where logp is the mean log-prob per token. */
     generate(tag, lang = "en", temperature = 0.8, rand = Math.random, topP = 0.92) {
-      const cid = this.genTags.indexOf(tag);
-      if (cid < 0) return null;
-      const lid = Math.max(0, this.langs.indexOf(lang));
-      const C = this.C.cols, L = this.L.cols;
-      const cond = new Float32Array(C + L);
-      cond.set(this.C.data.subarray(cid * C, cid * C + C), 0);
-      cond.set(this.L.data.subarray(lid * L, lid * L + L), C);
-      let h = new Float32Array(this.H);
-      let w = 1; // <s>
+      if (this.genTags.indexOf(tag) < 0) return null;
+      if (!this.langs.includes(lang)) lang = this.langs[0];
+      const cache = Array.from({ length: this.layers }, () => ({ k: [], v: [] }));
+      const pre = this.prefix(tag, lang);
+      let logits0 = null;
+      pre.forEach((t, i) => { logits0 = this._step(t, i, cache); });
+      let w = 1;
       const tokens = [];
       let logp = 0;
       const V = this.vocab.length;
       const order = new Int32Array(V);
-      for (let step = 0; step < this.maxLen; step++) {
-        h = this._gruStep(w, cond, h);
-        const logits = vecMat(h, this.Wy, Float32Array.from(this.by));
+      for (let step = 0; step < this.maxLen && pre.length + step < this.ctx; step++) {
+        const logits = step === 0 ? logits0 : this._step(w, pre.length + step - 1, cache);
         for (let i = 0; i < V; i++) logits[i] /= temperature;
         logits[0] = -1e9; // never <pad>
         logits[1] = -1e9; // never <s>
+        for (let i = 3; i < 3 + this.nSpecial; i++) logits[i] = -1e9; // never a prefix token
         softmaxInPlace(logits);
         // nucleus sampling: only sample from the smallest set covering topP of the mass
         let n = 0;
@@ -1249,7 +1275,7 @@
  *   2. language detection (id / en) so it replies in your language
  *   3. classifier net picks the intent
  *   4. tools fill facts: math, time, date, memory recall, choice parsing, search query
- *   5. GRU generator writes several candidate replies, we keep the best one
+ *   5. transformer generator writes several candidate replies, we keep the best one
  *      whose placeholders we can actually fill (= honest, no made-up facts)
  *   6. grammar checker looks for a spelling crime to roast
  *   7. memory gets updated (name, likes, hates, age, insults, grammar crimes, history)
@@ -1268,6 +1294,10 @@
   const LONG_ROAST_WORDS = 14; // insults this long get "stfu i ain't reading allat"
   const N_CANDIDATES = 10;
 
+  // insults aimed at the bot: a backstop for when the classifier is unsure ("ai lu lemot" is not a compliment)
+  const INSULT_WORD_RE = /\b(goblok|gblk|bego|tolol|bodoh|idiot|dongo|bloon|oon|cacat|busuk|ampas|sampah|lemot|ngaco|payah|norak|alay|jelek|burik|buluk|bau|cupu|garing|nyebelin|kampungan|ga ?guna|gak ?guna|ngga ?guna|ga ?berguna|stupid|dumb(?:est)?|trash|garbage|useless|worst|cringe|annoying|clanker|bozo|mid|ugly|junk|slow|weak|lame|npc)\b/i;
+  const AT_BOT_RE = /\b(lu|lo|loe|elu|elo|kamu|kau|ente|ai|bot|sybau|u|ur|you|your|you're|youre|ni ai|ni bot|dasar)\b/i;
+  const NOT_AT_BOT_RE = /\b(gw|gue|aku|saya|i|i'm|im|me|my|temen|teman|dia|mereka|guru|bos|pacar|mantan)\b.{0,12}\b(goblok|bego|tolol|bodoh|jelek|payah|lemot|dumb|stupid|ugly|slow)/i;
   const SELF_HARM_RE = /\b(kill myself|kms|end my life|want to die|wanna die|dont want to live|don't want to live|suicid\w*|bunuh diri|pengen mati|ingin mati|mau mati|pgn mati|nyakitin diri|self ?harm|hurt myself|ga mau hidup|gak mau hidup|nggak mau hidup|nyayat tangan)\b/i;
   const JOKING_RE = /\b(mati ketawa|mati gaya|ngakak|mati kutu|mati lampu|hp mati|batre mati|baterai mati)\b/i;
 
@@ -1519,7 +1549,7 @@
       const lang = this.settings.lang === "id" || this.settings.lang === "en" ? this.settings.lang : this.detectLang(raw);
       d.lang = lang;
 
-      const meta = { source: "gru", novel: false, confidence: 1, intent: null, top: [], lang, thinking: null };
+      const meta = { source: "transformer", novel: false, confidence: 1, intent: null, top: [], lang, thinking: null };
       let intent;
 
       const ranked = brain.classify(raw);
@@ -1534,6 +1564,14 @@
         intent = ranked[0].tag;
         meta.confidence = ranked[0].p;
         if (ranked[0].p < CONF_THRESHOLD || !raw) intent = "fallback";
+        const iw = raw.match(INSULT_WORD_RE);
+        if (iw && AT_BOT_RE.test(raw) && !NOT_AT_BOT_RE.test(raw) && intent !== "insult" && intent !== "roast_me" && !(intent === "search" && ranked[0].p > 0.8) &&
+            !["selfharm", "sad", "apology", "hate_something", "choice"].includes(intent)) {
+          intent = "insult";
+          meta.source = "insult-check";
+        }
+        if (iw) this._insultWord = iw[1].toLowerCase();
+        else this._insultWord = null;
       }
 
       // experimental: don't give up on a sentence it doesn't know, try to understand it first
@@ -1555,7 +1593,7 @@
       const facts = extractFacts(raw, intent, mem);
       const slots = { name: d.name ? cap(d.name) : null, like: d.likes[0] || null, hate: d.hates[0] || null,
         thing: facts.thing || null, choice: null, other: null, answer: null, query: null, title: null,
-        wrong: null, right: null, count: null };
+        wrong: null, right: null, count: null, insult: intent === "insult" ? this._insultWord || null : null };
 
       switch (intent) {
         case "math":
@@ -1754,7 +1792,7 @@
     _say(intent, slots, extra) {
       const text = this._compose(intent, Object.assign({ name: this.mem.data.name ? cap(this.mem.data.name) : null }, slots), {}, this._lang());
       if (text) {
-        this.mem.data.history.push(Object.assign({ role: "bot", text, meta: { intent, source: "gru" } }, extra || {}));
+        this.mem.data.history.push(Object.assign({ role: "bot", text, meta: { intent, source: "transformer" } }, extra || {}));
         this._remember(text);
         this._trim();
         this.mem.save();
@@ -1778,7 +1816,7 @@
       const slots = { name: this.mem.data.name ? cap(this.mem.data.name) : null, query, title };
       const text = this._compose(result ? "search_done" : "search_fail", slots, {}, lang || this.mem.data.lang || "en");
       if (result) this.mem.data.history.push({ role: "bot", kind: "search", result });
-      this.mem.data.history.push({ role: "bot", text, meta: { intent: result ? "search_done" : "search_fail", source: "gru" } });
+      this.mem.data.history.push({ role: "bot", text, meta: { intent: result ? "search_done" : "search_fail", source: "transformer" } });
       this._remember(text);
       this._trim();
       this.mem.save();
@@ -1826,7 +1864,7 @@
         const best = cands[Math.floor(this.rand() * Math.min(3, cands.length))];
         this.recentRaw.unshift(best.raw);
         if (this.recentRaw.length > 12) this.recentRaw.length = 12;
-        meta.source = "gru";
+        meta.source = "transformer";
         meta.novel = !brain.trainingLines.has(best.raw);
         return best.text;
       }
