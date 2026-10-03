@@ -2,11 +2,11 @@
 
 Two neural networks get trained on the files in ../data:
 
-1. Intent classifier  - MLP (hashed bag-of-features 4096 -> 192 ReLU -> softmax).
+1. Intent classifier  - MLP (hashed bag-of-features 4096 -> 320 ReLU -> softmax).
    Figures out WHAT the user is saying (greeting, insult, choice, search, ...).
    Indonesian slang gets normalised first (data/slang_id.json), so "gk", "ga",
    "nggak" all look the same to the network.
-2. Response generator - word-level GRU language model (256 hidden units)
+2. Response generator - word-level GRU language model (320 hidden units)
    conditioned on the intent AND the language (id / en), so it replies in
    the language you typed in. Writes the reply word by word.
 
@@ -35,11 +35,11 @@ OUT = os.path.join(ROOT, "model", "brain.json")
 LEX_OUT = os.path.join(ROOT, "model", "lexicon.json")
 
 FEAT_DIM = 4096
-CLS_HIDDEN = 192
-GEN_EMB = 64
+CLS_HIDDEN = 320
+GEN_EMB = 96
 GEN_INTENT_EMB = 16
 GEN_LANG_EMB = 8
-GEN_HIDDEN = 256
+GEN_HIDDEN = 320
 GEN_DROPOUT = 0.1
 MAX_GEN_LEN = 48
 LANGS = ["en", "id"]
@@ -549,6 +549,9 @@ def main():
         },
         "responses": {it["tag"]: it["responses"] + (extra if it["tag"] == "roast_me" else [])
                       for it in intents},
+        # one filled-in example per pattern, for nearest-neighbour lookups in experimental mode
+        "examples": {it["tag"]: sorted({fill_slots(p, fillers, random.Random(i)) for i, p in enumerate(it["patterns"])})
+                     for it in intents if it["patterns"]},
     }
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

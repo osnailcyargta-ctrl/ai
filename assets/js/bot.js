@@ -247,7 +247,7 @@
       this.grammar = opts.grammar || null;
       this.learner = opts.learner || null;
       // user settings: lang "auto" | "id" | "en", search on/off, grammar police on/off
-      this.settings = Object.assign({ lang: "auto", search: true, grammar: true }, opts.settings || {});
+      this.settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: false }, opts.settings || {});
       this.mem = new Memory(opts.storage);
       this.rand = opts.rand || Math.random;
       this.now = opts.now || (() => new Date());
@@ -275,7 +275,7 @@
       const lang = this.settings.lang === "id" || this.settings.lang === "en" ? this.settings.lang : this.detectLang(raw);
       d.lang = lang;
 
-      const meta = { source: "gru", novel: false, confidence: 1, intent: null, top: [], lang };
+      const meta = { source: "gru", novel: false, confidence: 1, intent: null, top: [], lang, thinking: null };
       let intent;
 
       const ranked = brain.classify(raw);
@@ -290,6 +290,15 @@
         intent = ranked[0].tag;
         meta.confidence = ranked[0].p;
         if (ranked[0].p < CONF_THRESHOLD || !raw) intent = "fallback";
+      }
+
+      // experimental: don't give up on a sentence it doesn't know, try to understand it first
+      let lookup = null;
+      if (intent === "fallback" && raw && this.settings.experimental) {
+        const th = this._think(raw, ranked);
+        meta.thinking = th.steps;
+        if (th.intent) { intent = th.intent; meta.confidence = th.p; meta.source = "think"; }
+        else if (th.lookup) lookup = th.lookup;
       }
 
       const words = raw.split(/\s+/).filter(Boolean).length;
@@ -366,6 +375,14 @@
         } else if (intent === "search") intent = "fallback";
       }
 
+      if (lookup && intent === "fallback") {
+        if (this.settings.search) {
+          intent = "search";
+          slots.query = lookup;
+          search = { query: lookup, question: SLib.parseQuestion(lookup), lang, understand: true };
+        } else meta.thinking.push(lang === "id" ? "search lagi dimatiin, jadi ga bisa nyari artinya. nyerah" : "search is off, can't look it up. giving up");
+      }
+
       // ---- drawing, connect key, uploaded files: these override the classifier when they clearly apply
       let draw = null, connect = false;
       if (intent !== "selfharm") {
@@ -435,6 +452,58 @@
       this._trim();
       mem.save();
       return { text: out, meta, grammar, search, draw, connect };
+    }
+
+    /** experimental mode: typo-fix -> re-read, nearest known sentence, else pick the word to look up */
+    _think(raw, ranked) {
+      const id = this._lang() === "id" || Lib.detectLang(Lib.normalize(raw)) === "id";
+      const steps = [];
+      steps.push((id ? "ga langsung ngerti (" : "didn't get it right away (") + ranked[0].tag + " " + Math.round(ranked[0].p * 100) + "%)" + (id ? ", gw coba pahamin dulu" : ", let me figure it out"));
+      // 1. squash stretched words ("gabutt" -> "gabut") and fix typos with the 80k-word lexicon, then read it again
+      if (this.grammar) {
+        const changed = [];
+        let fixed = raw.replace(/[A-Za-z]+/g, (w) => {
+          const lw = w.toLowerCase(), sq = lw.replace(/([a-z])\1+/g, "$1");
+          if (sq !== lw && !this.grammar.isWord(lw) && (this.grammar.isWord(sq) || this.brain.vocab.includes(sq))) { changed.push(lw + "→" + sq); return sq; }
+          return w;
+        });
+        for (let i = 0; i < 4; i++) {
+          const err = this.grammar.check(fixed, { lang: id ? "id" : "en" });
+          if (!err || err.kind === "phrase") break;
+          fixed = fixed.replace(new RegExp("\\b" + err.wrong.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i"), err.right);
+          changed.push(err.wrong + "→" + err.right);
+        }
+        if (changed.length) {
+          raw = fixed; // keep thinking with the cleaned-up sentence
+          const r2 = this.brain.classify(fixed);
+          steps.push((id ? "benerin typo: " : "fixing typos: ") + changed.join(", ") + " → " + r2[0].tag + " " + Math.round(r2[0].p * 100) + "%");
+          if (r2[0].p >= CONF_THRESHOLD && r2[0].tag !== "fallback") return { intent: r2[0].tag, p: r2[0].p, steps };
+        }
+      }
+      // 2. the closest sentence it was trained on
+      if (!this._exVecs) {
+        this._exVecs = [];
+        for (const tag in this.brain.examples) for (const e of this.brain.examples[tag]) this._exVecs.push({ tag, text: e, vec: Lib.featurize(e, this.brain.featDim) });
+      }
+      const v = Lib.featurize(raw, this.brain.featDim);
+      let best = null, bs = 0;
+      for (const e of this._exVecs) {
+        let sc = 0;
+        for (const [k, x] of v) { const y = e.vec.get(k); if (y) sc += x * y; }
+        if (sc > bs) { bs = sc; best = e; }
+      }
+      if (best) steps.push((id ? "kalimat paling mirip yang gw tau: \"" : "closest sentence i know: \"") + best.text + "\" (" + best.tag + ", " + Math.round(bs * 100) + "% mirip)");
+      if (best && bs >= 0.45 && best.tag !== "fallback") return { intent: best.tag, p: bs, steps };
+      // 3. a word it has never seen: look up what it means
+      const known = (w) => this.brain.vocab.includes(w) || (this.grammar && this.grammar.isWord(w) && w.length < 4);
+      const words = (raw.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) || []).filter((w) => !known(w) && !/^(yang|dong|sih|deh|aja|itu|ini|and|the|you|lu|gw|apa|what)$/.test(w));
+      const word = words.sort((a, b) => b.length - a.length)[0];
+      if (word) {
+        steps.push((id ? "kata '" : "the word '") + word + (id ? "' ga ada di data gw, gw cari artinya dulu" : "' isn't in my data, looking up what it means"));
+        return { lookup: word, steps };
+      }
+      steps.push(id ? "tetep ga ngerti. ya udah, jujur aja" : "still no idea. being honest");
+      return { steps };
     }
 
     _lang() { return this.settings.lang === "id" || this.settings.lang === "en" ? this.settings.lang : this.mem.data.lang || "en"; }

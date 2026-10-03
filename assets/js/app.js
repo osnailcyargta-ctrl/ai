@@ -14,7 +14,7 @@
   const save = (k, v) => { try { storage && storage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
 
   // ---------------------------------------------------------------- settings
-  const settings = Object.assign({ lang: "auto", search: true, grammar: true, brain: false, theme: "auto" }, load("sybau_settings", {}));
+  const settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: false, brain: false, theme: "auto" }, load("sybau_settings", {}));
   delete settings.learn; // old setting, removed
   const CONNECT_KEY = "sybau-ck-7f3a9c2e1b8d4f60a5e3"; // same everywhere, forever (see sdk/core.js)
   const SITE = location.origin + location.pathname.replace(/[^/]*$/, "");
@@ -36,6 +36,8 @@
       unknownCmd: (c) => "Command ga dikenal: " + c + " · ketik /help",
       set: (k, v) => "Set " + k + " → " + v,
       sTitle: "Settings", sFoot: "↑↓ pilih · enter/spasi ganti · ←→ ganti · esc tutup",
+      sExp: ["Eksperimental: pahamin semua kata", "kalo ga ngerti, mikir dulu: benerin typo, cari kalimat mirip, cari arti kata asing. masih beta"],
+      thinking: "mikir", understanding: "Cari arti",
       sLang: ["Bahasa balesan", "auto = ngikutin bahasa lu"], sSearch: ["Auto search", "nanya fakta → otomatis cari di Wikipedia/Wikidata"],
       sGrammar: ["Polisi grammar", "roast typo & salah ejaan"], sBrain: ["Tampilin otak", "liat intent, confidence, bahasa (debug)"],
       sTheme: ["Tema", "auto ngikutin sistem"],
@@ -61,6 +63,8 @@
       unknownCmd: (c) => "Unknown command: " + c + " · type /help",
       set: (k, v) => "Set " + k + " to " + v,
       sTitle: "Settings", sFoot: "↑↓ navigate · enter/space change · ←→ cycle · esc close",
+      sExp: ["Experimental: understand any word", "when lost, think first: fix typos, find a similar sentence, look up unknown words. beta"],
+      thinking: "thinking", understanding: "Look up",
       sLang: ["Reply language", "auto = match whatever u type"], sSearch: ["Auto search", "factual questions → look up Wikipedia/Wikidata"],
       sGrammar: ["Grammar police", "roast typos & bad spelling"], sBrain: ["Show brain", "intent, confidence, language (debug)"],
       sTheme: ["Theme", "auto follows ur system"],
@@ -76,7 +80,7 @@
   const t = () => T[uiLang()];
 
   function applySettings() {
-    if (bot) bot.settings = { lang: settings.lang, search: settings.search, grammar: settings.grammar };
+    if (bot) bot.settings = { lang: settings.lang, search: settings.search, grammar: settings.grammar, experimental: !!settings.experimental };
     if (settings.theme === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", settings.theme);
     document.body.classList.toggle("brain-on", !!settings.brain);
@@ -207,10 +211,10 @@
     return a;
   }
 
-  function renderSearch(res, query) {
+  function renderSearch(res, query, understand) {
     const { r, body } = row("tool" + (res ? "" : " fail"));
     const head = el("span");
-    head.append(el("span", "toolname", res && res.kind === "fact" ? "Wikidata" : "Search"), document.createTextNode("(" + query + ")"));
+    head.append(el("span", "toolname", understand ? t().understanding : res && res.kind === "fact" ? "Wikidata" : "Search"), document.createTextNode("(" + query + ")"));
     body.appendChild(head);
     if (!res) {
       outBlock(body, [el("span", "red", t().noResult), linksLine(null, SearchLib.googleUrl(query))]);
@@ -338,7 +342,7 @@
     head.append(el("span", "toolname", "Stats"), document.createTextNode("(model/brain.json)"));
     body.appendChild(head);
     outBlock(body, [kvTable([
-      ["params", b.paramCount.toLocaleString("en-US")], ["classifier", "MLP 4096 → 192 → " + b.clsTags.length + " intents"],
+      ["params", b.paramCount.toLocaleString("en-US")], ["classifier", "MLP 4096 → " + b.W1T.rows + " → " + b.clsTags.length + " intents"],
       ["generator", "GRU " + b.H + " · vocab " + b.vocab.length + " · lang-conditioned"], ["grammar", bot.grammar ? "80k-word lexicon + rules" : "not loaded"],
       ["search", "Wikipedia + Wikidata (no key)"], ["trained", b.trainedAt], ["api key", uiLang() === "id" ? "ga ada lol" : "none lol"],
     ])]);
@@ -411,12 +415,19 @@
     if (interrupted) {
       sys([t().interrupted], "red");
     } else {
+      if (res.meta.thinking && res.meta.thinking.length) {
+        const th = el("div", "block think");
+        th.appendChild(el("div", "line accent", "✻ " + t().thinking + "…"));
+        for (const s of res.meta.thinking) th.appendChild(el("div", "line dim", "  ⎿ " + s));
+        put(th);
+        await sleep(reduced ? 0 : 250);
+      }
       if (res.text) await botSay(res.text, res.meta);
       if (res.search && !interrupted) {
         sp = spinner(t().searching);
         const result = await SearchLib.answer(res.search.question, res.search.lang);
         sp.stop();
-        renderSearch(result, res.search.query);
+        renderSearch(result, res.search.query, res.search.understand);
         if (!interrupted) {
           await sleep(200);
           await botSay(bot.searchFollowup(result, res.search.query, res.search.lang),
@@ -804,6 +815,7 @@
     { key: "lang", choices: ["auto", "id", "en"], label: () => t().sLang },
     { key: "search", label: () => t().sSearch },
     { key: "grammar", label: () => t().sGrammar },
+    { key: "experimental", label: () => t().sExp },
     { key: "connect", action: () => { closeSettings(); cmdConnect(); }, label: () => t().sConnect, value: () => CONNECT_KEY.slice(0, 13) + "…" },
     { key: "brain", label: () => t().sBrain },
     { key: "theme", choices: ["auto", "dark", "light"], label: () => t().sTheme },
@@ -900,7 +912,7 @@
     if (pixels) pixels.addLearned(learner.data.images);
     learner._index(); // re-index with the brain's slang table loaded
     bot = new BotLib.RoastBot(brain, { storage, grammar, learner,
-      settings: { lang: settings.lang, search: settings.search, grammar: settings.grammar } });
+      settings: { lang: settings.lang, search: settings.search, grammar: settings.grammar, experimental: !!settings.experimental } });
     await sleep(reduced ? 0 : 350);
     screen.textContent = "";
     welcome();

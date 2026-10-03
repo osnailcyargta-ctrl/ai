@@ -176,6 +176,7 @@
       this.by = dequant(g.by).data;
 
       this.responses = json.responses;
+      this.examples = json.examples || {}; // one sentence per training pattern (experimental mode)
       this.trainedAt = json.trained_at;
       this.trainingLines = new Set();
       for (const tag in json.responses)

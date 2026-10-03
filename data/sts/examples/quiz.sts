@@ -1,0 +1,28 @@
+// STS project: quiz
+// stage 460x260
+// anspopup asks a question and hands the typed answer back as a value.
+
+@root 0 main
+background("#12160e")
+on 24 20 draw text "QUIZ" 24 color "#b9e389". judul
+
+var nama = show.anspopup("siapa nama lu")
+on 24 66 draw text "halo" 18 color "#e6ecdd". sapa
+set("sapa", "text", "halo " + nama)
+
+var jawab = show.anspopup("2 + 2 = ?")
+var benar = 0
+
+if num(jawab) == 4:
+    benar = 1
+    show.popup("bener lah")
+elif num(jawab) == 22:
+    show.popup("itu nyambungin teks bukan nambah")
+else:
+    show.popup("salah, jawabannya 4")
+
+stopwatch start. sw
+on 24 110 draw text "waktu" 14 color "#93cc5f". jam
+
+forever:
+    set("jam", "text", "waktu: " + round(/time"sw") + "s")

@@ -1,0 +1,42 @@
+// STS project: clicker
+// stage 520x340
+
+@root 0 main
+background("#101a0c")
+
+var boot  = 1
+var coin  = 0
+var cpc   = 1
+var harga = 10
+
+on 24 20 draw text "STS CLICKER" 22 color "#b9e389". judul
+on 24 54 draw text "coin: 0" 18 color "#e6ecdd". skor
+on 24 78 draw text "per click: 1" 13 color "#93cc5f". info
+
+on 170 120 draw circle 150 color "#6fae3f". apesi
+on 205 185 draw text "CLICK" 22 color "#12200a". tulisan
+
+onclick /id"apesi" check:
+    coin = coin + cpc
+    set("skor", "text", "coin: " + coin)
+
+on 24 290 draw rect 190 38 color "#4a3626". tombol
+on 38 300 draw text "UPGRADE (10)" 15 color "#e6ecdd". labelUpgrade
+onclick /id"tombol" check:
+    goto #1
+
+@root 1 shop
+if boot == 1:
+    boot = 0
+    return
+
+if coin >= harga:
+    coin  = coin - harga
+    cpc   = cpc + 1
+    harga = harga * 2
+    set("skor", "text", "coin: " + coin)
+    set("info", "text", "per click: " + cpc)
+    set("labelUpgrade", "text", "UPGRADE (" + harga + ")")
+    show.popup("cpc naik jadi " + cpc)
+else:
+    show.popup("you poor dumb shit")
