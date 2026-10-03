@@ -535,11 +535,33 @@
     return ctx.getImageData(0, 0, w, h).data;
   }
 
-  async function handleFile(file) {
+  // ---- attachment: a picked/dropped/pasted file waits above the prompt until Enter
+  let attached = null;
+  const chipEl = el("div", "chip-row");
+  chipEl.hidden = true;
+  form.parentNode.insertBefore(chipEl, form);
+  function attach(file) {
+    if (!file) return;
+    attached = file;
+    chipEl.textContent = "";
+    const chip = el("span", "file-chip");
+    chip.append(el("span", "accent", "[file] "), document.createTextNode(file.name + " (" + Math.max(1, Math.round(file.size / 1024)) + " KB)"));
+    const x = el("button", "chip-x", "×");
+    x.type = "button";
+    x.title = uiLang() === "id" ? "hapus lampiran" : "remove attachment";
+    x.addEventListener("click", detach);
+    chip.appendChild(x);
+    chipEl.append(chip, el("span", "dim chip-hint", uiLang() === "id" ? "enter = buka · /learn = pelajarin · atau tanya soal file ini" : "enter = open · /learn = learn it · or ask about it"));
+    chipEl.hidden = false;
+    input.focus();
+  }
+  function detach() { attached = null; chipEl.hidden = true; chipEl.textContent = ""; input.focus(); }
+
+  async function handleFile(file, opts = {}) {
     if (!file || busy || !bot) return;
     const id = uiLang() === "id";
     const kb = Math.max(1, Math.round(file.size / 1024));
-    userEcho("[file] " + file.name + " (" + kb + " KB)");
+    userEcho("[file] " + file.name + " (" + kb + " KB)" + (opts.text ? "  " + opts.text : ""));
     busy = true;
     form.classList.add("busy");
     const sp = spinner(t().reading);
@@ -560,7 +582,7 @@
         const colors = info.colors.map((c) => (id ? c.id : c.en) + " " + c.pct + "%").join(", ");
         const lines = [thumb, el("span", null, w + "x" + h + " px · " + (id ? "warna: " : "colors: ") + colors + " · " + (id ? "terang " : "brightness ") + info.brightness + "%" + (info.transparentPct ? " · " + (id ? "transparan " : "transparent ") + info.transparentPct + "%" : ""))];
         if (grid) { lines.push(el("span", "dim", id ? "yang gw liat (16x16):" : "what i see (16x16):")); lines.push(pictureNode(grid, 16, file.name.replace(/\.\w+$/, ""))); }
-        lines.push(el("span", "yellow", t().learnHint));
+        if (!opts.quiet) lines.push(el("span", "yellow", t().learnHint));
         outBlock(body, lines);
         const summary = w + "x" + h + ", " + (id ? "kebanyakan " : "mostly ") + (info.colors[0] ? (id ? info.colors[0].id : info.colors[0].en) : "?");
         await botSay(bot.fileOpened("image", summary), { intent: "file_image", source: "gru", lang: bot._lang() });
@@ -573,7 +595,7 @@
         const { body } = row("tool");
         toolHead(body, "Read", file.name);
         outBlock(body, [el("span", null, lines.length + (id ? " baris · " : " lines · ") + text.length + (id ? " karakter" : " chars")),
-          el("span", "code", lines.slice(0, 10).join("\n").slice(0, 900) + (lines.length > 10 ? "\n…" : "")), el("span", "yellow", t().learnHintText)]);
+          el("span", "code", lines.slice(0, 10).join("\n").slice(0, 900) + (lines.length > 10 ? "\n…" : ""))].concat(opts.quiet ? [] : [el("span", "yellow", t().learnHintText)]));
         await botSay(bot.fileOpened("text", lines.length + (id ? " baris" : " lines")), { intent: "file_text", source: "gru", lang: bot._lang() });
       } else {
         throw new Error(id ? "format ga didukung. bisa: png, jpg, gif, webp, txt, md, csv, json" : "unsupported format. try png, jpg, gif, webp, txt, md, csv, json");
@@ -624,13 +646,13 @@
   }
 
   $("attach").addEventListener("click", () => $("file").click());
-  $("file").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; handleFile(f); });
+  $("file").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; attach(f); });
   let dragDepth = 0;
   window.addEventListener("dragenter", (e) => { if ([...(e.dataTransfer.types || [])].includes("Files")) { dragDepth++; $("dropzone").hidden = false; e.preventDefault(); } });
   window.addEventListener("dragover", (e) => { if ([...(e.dataTransfer.types || [])].includes("Files")) e.preventDefault(); });
   window.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $("dropzone").hidden = true; });
-  window.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; $("dropzone").hidden = true; const f = e.dataTransfer.files[0]; if (f) handleFile(f); });
-  document.addEventListener("paste", (e) => { const f = e.clipboardData && [...e.clipboardData.files][0]; if (f) { e.preventDefault(); handleFile(f); } });
+  window.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; $("dropzone").hidden = true; const f = e.dataTransfer.files[0]; if (f) attach(f); });
+  document.addEventListener("paste", (e) => { const f = e.clipboardData && [...e.clipboardData.files][0]; if (f) { e.preventDefault(); attach(f); } });
 
   // ---------------------------------------------------------------- input: history, autocomplete, keys
   const history = load("sybau_cmd_history", []);
@@ -690,9 +712,30 @@
     autoresize();
   }
 
-  function submit() {
+  async function submit() {
     const text = input.value.replace(/\s+$/, "");
-    if (!text.trim() || busy || !bot) return;
+    if ((!text.trim() && !attached) || busy || !bot) return;
+    if (attached) {
+      // send the file together with whatever was typed: nothing, /learn [name], or a question
+      const file = attached, msg = text.trim();
+      const learnCmd = /^\/learn\b/i.test(msg) || /^(?:tolong\s+)?(?:pelajarin|pelajari|belajar|pahamin|learn|study)\b/i.test(msg);
+      detach();
+      input.value = "";
+      autoresize();
+      suggestEl.hidden = true;
+      shortcutsEl.hidden = true;
+      await handleFile(file, { text: msg, quiet: learnCmd });
+      if (!pending) return; // file could not be read
+      if (learnCmd) await cmdLearn(/^\/learn\b/i.test(msg) ? msg.replace(/^\/learn\s*/i, "") : "");
+      else if (msg.startsWith("/")) runCommand(msg);
+      else if (msg) {
+        if (pending && pending.kind === "text") await cmdLearn("", true); // so the question can be answered from the file
+        await chat(msg, true);
+      }
+      scrollDown(true);
+      input.focus();
+      return;
+    }
     input.value = "";
     autoresize();
     suggestEl.hidden = true;
@@ -713,6 +756,7 @@
   input.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       if (busy) { interrupted = true; e.preventDefault(); return; }
+      if (attached && !input.value && suggestEl.hidden) { detach(); return; }
       if (!suggestEl.hidden) { suggestEl.hidden = true; return; }
       if (!shortcutsEl.hidden) { shortcutsEl.hidden = true; return; }
     }
