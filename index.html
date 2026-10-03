@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>sybau.ai 🥀</title>
+  <meta name="description" content="AI chatbot brainrot yang benci kamu. Neural net dilatih dari nol, jalan di browser, tanpa API key.">
+  <meta name="theme-color" content="#0b0a10">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥀</text></svg>">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div id="loader" class="loader">
+    <div class="loader-rose">🥀</div>
+    <p id="loader-text">loading brain... (800kb of pure hate)</p>
+  </div>
+
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <div class="avatar" aria-hidden="true">🥀</div>
+        <div>
+          <h1>sybau.ai</h1>
+          <p class="tagline">the ai that hates u · trained from scratch · no api</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="brain-toggle" class="icon-btn" title="show the neural net's thoughts" aria-pressed="false">🧠</button>
+        <button id="memory-open" class="icon-btn" title="what i remember about u">🗂️</button>
+      </div>
+    </header>
+
+    <div class="hate">
+      <span class="hate-label">hate lvl</span>
+      <div class="hate-bar"><div id="hate-fill" class="hate-fill"></div></div>
+      <span id="hate-value" class="hate-value">66%</span>
+    </div>
+
+    <main id="chat" class="chat" aria-live="polite"></main>
+
+    <div class="chips" id="chips">
+      <button class="chip">roast me</button>
+      <button class="chip">mending iphone atau android?</button>
+      <button class="chip">nama gw </button>
+      <button class="chip">gw suka </button>
+      <button class="chip">berapa 6*7</button>
+      <button class="chip">lu ai beneran?</button>
+      <button class="chip">lu bego</button>
+      <button class="chip">lu inget apa tentang gw</button>
+    </div>
+
+    <form id="composer" class="composer" autocomplete="off">
+      <input id="input" type="text" maxlength="400" placeholder="say something mid..." aria-label="message">
+      <button id="send" class="send" type="submit" aria-label="send">➤</button>
+    </form>
+  </div>
+
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>🗂️ ur file</h2>
+      <button id="memory-close" class="icon-btn" aria-label="close">✕</button>
+    </div>
+    <p class="muted">disimpen di browser lu doang (localStorage). gak ke server mana-mana.</p>
+    <dl id="memory-list" class="memory-list"></dl>
+    <div class="drawer-actions">
+      <button id="wipe" class="danger">🧹 hapus memori</button>
+    </div>
+    <h2>🧠 brain stats</h2>
+    <dl id="brain-stats" class="memory-list"></dl>
+    <p class="muted small">2 neural net: classifier MLP (ngerti maksud lu) + GRU generator (nulis balesan kata per kata).
+      Dilatih pake numpy dari folder <code>data/</code>. Semua jalan di device lu.</p>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <script src="assets/js/brain.js"></script>
+  <script src="assets/js/bot.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
