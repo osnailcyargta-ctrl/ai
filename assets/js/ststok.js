@@ -102,7 +102,7 @@
           else { s += '"'; inStr = false; prevKind = "str"; }
           continue;
         }
-        if (inStr) { s += t === SP ? " " : name(t); continue; }
+        if (inStr) { s += t === SP ? " " : name(t.replace(/^##/, "")); continue; }
         if (t.startsWith("##")) { s += name(t.slice(2)); prevKind = "word"; continue; }
         const kind = /^[A-Za-z_<]/.test(t) || /^-?\d/.test(t) || /^\/(var|id|time)$/.test(t) ? "word" : t;
         if (t === "(" ) { if (prevKind !== "word" && s && !/[\s(]$/.test(s)) s += " "; s += "("; prevKind = "("; continue; }

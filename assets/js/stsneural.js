@@ -112,10 +112,22 @@
       });
       const idx = new Int32Array(V);
       let depth = 0, inStr = false, paren = 0, lineStart = true, lastTok = Tok.NL, needBlock = false, lineToks = 0, pieces = 0, strToks = 0;
+      const recent = [];
+      let lineIds = [], lineGrams = new Set();
       const allowed = (i) => {
         const k = kind[i];
         if (k === "ban") return false;
-        if (inStr) return strToks > 24 ? k === "q" : (k === "word" || k === "tok" || k === "sp" || k === "q" || k === "piece");
+        if (inStr) {
+          if (strToks > 16) return k === "q";
+          if (k === "piece") return false;                                   // "lumba##Lumba" never goes inside a string
+          if ((k === "word" || k === "tok") && recent.slice(-6).filter((x) => x === i).length >= 1) return false;   // no repeating words in a string
+          return k === "word" || k === "tok" || k === "sp" || k === "q";
+        }
+        // no-repeat: the same 3 tokens may not come again in the same line
+        const wordy = (j) => kind[j] === "word" || kind[j] === "piece";
+        if (lineIds.length >= 2 && wordy(i) && wordy(lineIds[lineIds.length - 1]) && wordy(lineIds[lineIds.length - 2])) {
+          if (lineGrams.has(lineIds[lineIds.length - 2] + "," + lineIds[lineIds.length - 1] + "," + i)) return false;
+        }
         if (lineToks >= 44 && paren === 0) return k === "nl";       // no endless lines
         if (k === "piece" && pieces >= 3) return false;              // no "KupuKupuKupuKupu..." loops
         if (k === "sp") return false;
@@ -153,7 +165,7 @@
         const t = g.vocab[w], kd = kind[w];
         if (kd === "in") { depth++; needBlock = false; }
         else if (kd === "out") depth--;
-        else if (kd === "nl") { needBlock = lastTok === ":"; lineStart = true; lineToks = 0; }
+        else if (kd === "nl") { needBlock = lastTok === ":"; lineStart = true; lineToks = 0; lineIds = []; lineGrams = new Set(); }
         else {
           if (kd === "q") { inStr = !inStr; strToks = 0; } else if (inStr) strToks++;
           pieces = kd === "piece" ? pieces + 1 : 0;
@@ -162,6 +174,8 @@
           lineStart = false; lineToks++;
         }
         lastTok = t;
+        recent.push(w); if (recent.length > 12) recent.shift();
+        if (kd !== "nl" && kd !== "in" && kd !== "out") { if (lineIds.length >= 2) lineGrams.add(lineIds[lineIds.length - 2] + "," + lineIds[lineIds.length - 1] + "," + w); lineIds.push(w); }
         out.push(w);
         feed([w]);
         if (opts.onToken && (n % 12 === 0)) { opts.onToken(out.map((i) => g.vocab[i])); await new Promise((r) => setTimeout(r, 0)); }
