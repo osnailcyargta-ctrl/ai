@@ -172,6 +172,12 @@
       this.vocab = g.vocab;
       this.vocabIndex = new Map(this.vocab.map((w, i) => [w, i]));
       this.nSpecial = this.vocab.filter((w) => w.startsWith("<i:") || w.startsWith("<l:")).length;
+      // newer models read the user's message (like a chat model) and can copy words from it
+      this.readsUser = !!g.reads_user;
+      this.maxUser = g.max_user || 20;
+      this.copySlots = g.copy_slots || 0;
+      this.templateWords = new Set(g.template_words || []);
+      this.noWrite = new Set(this.vocab.map((w, i) => (w.startsWith("<i:") || w.startsWith("<l:") || w === "<u>" || w === "</u>" || w === "<unk>" || w === "<pad>" || w === "<s>" ? i : -1)).filter((i) => i >= 0));
       this.G = {};
       for (const k of Object.keys(g)) if (g[k] && typeof g[k] === "object" && (g[k].q || g[k].f)) this.G[k] = dequant(g[k]);
 
@@ -246,15 +252,33 @@
       ids.forEach((t, i) => { z = this._step(t, i, cache); });
       return z;
     }
-    prefix(tag, lang) { return [this.vocabIndex.get("<i:" + tag + ">"), this.vocabIndex.get("<l:" + lang + ">"), 1]; }
+    prefix(tag, lang, userTokens) {
+      if (!this.readsUser) return [this.vocabIndex.get("<i:" + tag + ">"), this.vocabIndex.get("<l:" + lang + ">"), 1];
+      const u = (userTokens || []).slice(0, this.maxUser).map((w) => (this.vocabIndex.has(w) ? this.vocabIndex.get(w) : this.vocabIndex.get("<unk>")));
+      return [this.vocabIndex.get("<i:" + tag + ">"), this.vocabIndex.get("<l:" + lang + ">"), this.vocabIndex.get("<u>"), ...u, this.vocabIndex.get("</u>"), 1];
+    }
+    /** user text -> tokens the generator reads, with copy slots for the words it may repeat */
+    readUser(text) {
+      const toks = normalize(String(text || "")).filter(Boolean);
+      const slots = {};
+      const out = toks.map((w) => {
+        if (!this.copySlots || this.templateWords.has(w) || w.length <= 2) return w;
+        if (!slots[w] && Object.keys(slots).length < this.copySlots) slots[w] = "<w" + (Object.keys(slots).length + 1) + ">";
+        return slots[w] || w;
+      });
+      const back = {};
+      for (const [w, sl] of Object.entries(slots)) back[sl] = w;
+      return { tokens: out, back };
+    }
 
     /** Sample one reply from the transformer, word by word (temperature + nucleus/top-p).
      *  Returns {text, tokens, logp} where logp is the mean log-prob per token. */
-    generate(tag, lang = "en", temperature = 0.8, rand = Math.random, topP = 0.92) {
+    generate(tag, lang = "en", temperature = 0.8, rand = Math.random, topP = 0.92, userText = "") {
       if (this.genTags.indexOf(tag) < 0) return null;
       if (!this.langs.includes(lang)) lang = this.langs[0];
       const cache = Array.from({ length: this.layers }, () => ({ k: [], v: [] }));
-      const pre = this.prefix(tag, lang);
+      const user = this.readsUser ? this.readUser(userText) : { tokens: [], back: {} };
+      const pre = this.prefix(tag, lang, user.tokens);
       let logits0 = null;
       pre.forEach((t, i) => { logits0 = this._step(t, i, cache); });
       let w = 1;
@@ -267,7 +291,8 @@
         for (let i = 0; i < V; i++) logits[i] /= temperature;
         logits[0] = -1e9; // never <pad>
         logits[1] = -1e9; // never <s>
-        for (let i = 3; i < 3 + this.nSpecial; i++) logits[i] = -1e9; // never a prefix token
+        if (this.readsUser) { for (const i of this.noWrite) logits[i] = -1e9; for (let i = 1; i <= this.copySlots; i++) if (!user.back["<w" + i + ">"]) logits[this.vocabIndex.get("<w" + i + ">")] = -1e9; }
+        else for (let i = 3; i < 3 + this.nSpecial; i++) logits[i] = -1e9; // never a prefix token
         softmaxInPlace(logits);
         // nucleus sampling: only sample from the smallest set covering topP of the mass
         let n = 0;
@@ -280,7 +305,7 @@
         for (let k = 0; k < cut; k++) { acc += logits[idx[k]]; if (u < acc) { w = idx[k]; break; } }
         logp += Math.log(logits[w] + 1e-12);
         if (w === 2) break; // </s>
-        tokens.push(this.vocab[w]);
+        tokens.push(this.readsUser && user.back[this.vocab[w]] ? user.back[this.vocab[w]] : this.vocab[w]);
       }
       return { text: detokenize(tokens), tokens, logp: logp / (tokens.length + 1) };
     }

@@ -286,6 +286,7 @@
       const meta = { source: "transformer", novel: false, confidence: 1, intent: null, top: [], lang, thinking: null };
       let intent;
 
+      this._userText = raw;
       const ranked = brain.classify(raw);
       meta.top = ranked.slice(0, 3);
       const math = findMath(raw);
@@ -597,7 +598,7 @@
       const gen = this.settings.roastGen && GEN_INTENTS.has(intent);
       const cands = [];
       for (let i = 0; i < (gen ? 16 : N_CANDIDATES); i++) {
-        const g = brain.generate(intent, lang, gen ? 0.85 + (i % 3) * 0.07 : 0.85, this.rand, gen ? 0.95 : 0.92);
+        const g = brain.generate(intent, lang, gen ? 0.85 + (i % 3) * 0.07 : 0.85, this.rand, gen ? 0.95 : 0.92, this._userText || "");
         if (!g || !g.tokens.length) continue;
         if (gen && /\bwhose (ur|u)\b|\bu is\b/.test(g.text)) continue;
         if (gen && brain.trainingLines.has(g.text)) continue;   // a copy of the training data: not allowed

@@ -29,7 +29,7 @@ import time
 import numpy as np
 
 import transformer as tfm
-from textproc import (featurize, gen_tokenize, gen_detokenize, normalize, response_lang,
+from textproc import (featurize, gen_tokenize, gen_detokenize, normalize, response_lang, detect_lang,
                       SLANG_MAP, ID_MARKERS, EMOJI_WORDS)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -45,7 +45,7 @@ GEN_HEADS = 4
 GEN_DROPOUT = 0.15
 GEN_REPEAT = 6                 # hand-written replies per epoch (the roast corpus is seen once)
 MAX_GEN_LEN = 48
-GEN_CTX = MAX_GEN_LEN + 4      # <i:tag> <l:lang> <s> ... </s>
+GEN_CTX = MAX_GEN_LEN + 28     # <i:tag> <l:lang> <u> user words (max 20) </u> <s> ... </s>
 LANGS = ["en", "id"]
 
 
@@ -287,28 +287,94 @@ def roast_corpus(rng, per_lang=3000):
     return out
 
 
-def build_generator_set(intents, extra, rng=None):
+MAX_USER = 20          # user words the generator reads
+N_COPY = 4             # copy slots <w1>..<w4>: words from the user's message the reply can repeat
+
+
+def fill_record(pattern, fillers, rng):
+    """fill {T} {N} ... and remember which value went where"""
+    vals = {}
+    def rep(m):
+        key = m.group(1)
+        if key not in fillers:
+            return m.group(0)
+        v = rng.choice(fillers[key])
+        vals.setdefault(key, v)
+        return v
+    return SLOT_RE.sub(rep, pattern), vals
+
+
+def build_generator_set(intents, extra, rng=None, fillers=None):
+    """(message -> reply) pairs. The generator reads the user's message (like a chat model)
+    and writes the reply word by word; words from the message it repeats go through copy
+    slots <w1>..<w4>, so it can answer about things it never saw in training."""
+    rng = rng or random.Random(1)
+    fillers = fillers or {}
     tags = [it["tag"] for it in intents]
+    corpus = roast_corpus(rng)
+    extra_by_tag = {}
+    for tag, lang, line in corpus:
+        extra_by_tag.setdefault(tag, []).append(line)
+    template_words = set()
+    for it in intents:
+        for p in it["patterns"]:
+            template_words.update(w for w in normalize(SLOT_RE.sub(" ", p)) if w)
     seqs = []
     for it in intents:
-        lines = it["responses"] + (extra if it["tag"] == "roast_me" else [])
-        for r in lines:
-            seqs.append((tags.index(it["tag"]), LANGS.index(response_lang(r)), gen_tokenize(r)[:MAX_GEN_LEN]))
-    seqs = seqs * GEN_REPEAT     # the hand-written lines are seen several times per epoch
-    if rng is not None:
-        for tag, lang, line in roast_corpus(rng):
-            seqs.append((tags.index(tag), LANGS.index(lang), gen_tokenize(line)[:MAX_GEN_LEN]))
+        tag = it["tag"]
+        hand = it["responses"] + (extra if tag == "roast_me" else [])
+        pool = [(r, True) for r in hand] + [(r, False) for r in extra_by_tag.get(tag, [])]
+        if not pool:
+            continue
+        pats = it["patterns"] or [""]
+        extra_lines = extra_by_tag.get(tag, [])
+        n = len(hand) * GEN_REPEAT + min(len(extra_lines), 4500)
+        by_lang = {l: [r for r, _ in pool if response_lang(r) == l] for l in LANGS}
+        for k in range(n):
+            p = rng.choice(pats)
+            user, vals = fill_record(p, fillers, rng)
+            ul = detect_lang(normalize(user)) if user.strip() else rng.choice(LANGS)
+            # answer in the user's language (most of the time)
+            if k < len(hand) * GEN_REPEAT:
+                same = [r for r in hand if response_lang(r) == ul]
+                r = rng.choice(same) if same and rng.random() < 0.85 else rng.choice(hand)
+            else:
+                same = by_lang.get(ul) or [x for x, _ in pool]
+                r = rng.choice(same)
+            if user.strip() and rng.random() < 0.3:
+                user = noisy(user, rng)
+            reply = r
+            # the reply talks about what the user said: same values in both
+            for ph, key in (("thing", "T"), ("like", "T"), ("hate", "T"), ("name", "N"), ("query", "Q")):
+                if "{" + ph + "}" in reply and key in vals:
+                    reply = reply.replace("{" + ph + "}", vals[key])
+            if "{choice}" in reply and "A" in vals and "B" in vals:
+                a, b = (vals["A"], vals["B"]) if rng.random() < 0.5 else (vals["B"], vals["A"])
+                reply = reply.replace("{choice}", a).replace("{other}", b)
+            utoks = [w for w in normalize(user) if w][:MAX_USER]
+            rtoks = gen_tokenize(reply)[:MAX_GEN_LEN]
+            # copy slots: user words that are not template words (names, things, topics)
+            if rng.random() < 0.7:
+                slot = {}
+                for w in utoks:
+                    if w not in template_words and w not in slot and len(slot) < N_COPY and len(w) > 2:
+                        slot[w] = "<w%d>" % (len(slot) + 1)
+                utoks = [slot.get(w, w) for w in utoks]
+                rtoks = [slot.get(w, w) for w in rtoks]
+            seqs.append((tags.index(tag), LANGS.index(response_lang(r)), utoks, rtoks))
     counts = {}
-    for _, _, toks in seqs:
-        for tok in toks:
+    for _, _, u, toks in seqs:
+        for tok in u + toks:
             counts[tok] = counts.get(tok, 0) + 1
-    # 0..2 stay <pad> <s> </s>; then one token per intent and per language (the conditioning prefix)
-    vocab = ["<pad>", "<s>", "</s>"] + ["<i:" + t + ">" for t in tags] + ["<l:" + l + ">" for l in LANGS] + sorted(counts)
-    return tags, vocab, seqs
+    special = ["<i:" + t + ">" for t in tags] + ["<l:" + l + ">" for l in LANGS] + ["<u>", "</u>"] + ["<w%d>" % (i + 1) for i in range(N_COPY)]
+    words = sorted(t for t, c in counts.items() if c >= 2 and t not in special)
+    vocab = ["<pad>", "<s>", "</s>", "<unk>"] + special + words
+    return tags, vocab, seqs, sorted(template_words)
 
 
-def prefix_ids(vocab, tag, lang):
-    return [vocab.index("<i:" + tag + ">"), vocab.index("<l:" + lang + ">"), 1]
+def prefix_ids(vocab, tag, lang, user=()):
+    w2i = {w: i for i, w in enumerate(vocab)}
+    return [w2i["<i:" + tag + ">"], w2i["<l:" + lang + ">"], w2i["<u>"]] + [w2i.get(w, 3) for w in list(user)[:MAX_USER]] + [w2i["</u>"], 1]
 
 
 def train_generator(tags, vocab, seqs, epochs, rng_np):
@@ -322,20 +388,21 @@ def train_generator(tags, vocab, seqs, epochs, rng_np):
     t0 = time.time()
     for ep in range(epochs):
         # batches of similar length (less padding), in random order
-        order = sorted(rng_np.permutation(len(seqs)), key=lambda i: len(seqs[i][2]) + rng_np.random() * 3)
+        order = sorted(rng_np.permutation(len(seqs)), key=lambda i: len(seqs[i][2]) + len(seqs[i][3]) + rng_np.random() * 3)
         chunks = [order[i:i + bs] for i in range(0, len(order), bs)]
         tot, nb = 0.0, 0
         for ci in rng_np.permutation(len(chunks)):
             batch = [seqs[i] for i in chunks[ci]]
-            T = max(len(t) for _, _, t in batch) + 3
+            T = max(len(u) + len(t) for _, _, u, t in batch) + 6
             inp = np.zeros((len(batch), T), dtype=np.int64)
             tgt = np.zeros((len(batch), T), dtype=np.int64)
             mask = np.zeros((len(batch), T), dtype=np.float32)
-            for b, (c, l, toks) in enumerate(batch):
-                ids = prefix_ids(vocab, tags[c], LANGS[l]) + [w2i[w] for w in toks] + [2]
+            for b, (c, l, u, toks) in enumerate(batch):
+                pre = prefix_ids(vocab, tags[c], LANGS[l], u)
+                ids = pre + [w2i.get(w, 3) for w in toks] + [2]
                 inp[b, :len(ids) - 1] = ids[:-1]
                 tgt[b, :len(ids) - 1] = ids[1:]
-                mask[b, 2:len(ids) - 1] = 1          # learn the reply, not the prefix
+                mask[b, len(pre) - 1:len(ids) - 1] = 1          # learn the reply, not the message
             # warmup, then cosine decay
             opt.lr = 1e-3 * min(1.0, (step + 1) / warm) * (0.1 + 0.9 * 0.5 * (1 + np.cos(np.pi * min(1.0, step / steps))))
             loss, g = tfm.loss_and_grads(P, inp, tgt, mask, GEN_HEADS, GEN_DROPOUT, rng_np)
@@ -348,14 +415,17 @@ def train_generator(tags, vocab, seqs, epochs, rng_np):
     return P
 
 
-def sample(P, vocab, tag, lang, rng_np, temp=0.7):
-    ids = prefix_ids(vocab, tag, lang)
+def sample(P, vocab, tag, lang, rng_np, temp=0.7, user=()):
+    ids = prefix_ids(vocab, tag, lang, user)
     n_special = sum(1 for w in vocab if w.startswith("<i:") or w.startswith("<l:"))
     out = []
     for _ in range(MAX_GEN_LEN):
         z = tfm.next_logits(P, ids, GEN_HEADS) / temp
         z[0] = z[1] = -1e9
-        z[3:3 + n_special] = -1e9          # never write a prefix token
+        z[3] = -1e9
+        for i, w in enumerate(vocab):
+            if w.startswith("<i:") or w.startswith("<l:") or w in ("<u>", "</u>"):
+                z[i] = -1e9          # never write a prefix token
         p = tfm.softmax(z)
         w = int(rng_np.choice(len(p), p=p))
         if w == 2:
@@ -448,8 +518,8 @@ def main():
         return
 
     print("== generator (transformer)")
-    gen_tags, vocab, seqs = build_generator_set(intents, extra, random.Random(args.seed + 1))
-    n_id = sum(1 for _, l, _ in seqs if LANGS[l] == "id")
+    gen_tags, vocab, seqs, template_words = build_generator_set(intents, extra, random.Random(args.seed + 1), fillers)
+    n_id = sum(1 for _, l, _, _ in seqs if LANGS[l] == "id")
     print(f"  {len(seqs)} responses ({n_id} indonesian), vocab {len(vocab)}")
     GP = train_generator(gen_tags, vocab, seqs, args.gen_epochs, rng_np)
 
@@ -472,6 +542,10 @@ def main():
             "heads": GEN_HEADS,
             "ctx": GEN_CTX,
             "max_len": MAX_GEN_LEN,
+            "reads_user": True,
+            "max_user": MAX_USER,
+            "copy_slots": N_COPY,
+            "template_words": template_words,
             "tags": gen_tags,
             "langs": LANGS,
             "vocab": vocab,
@@ -493,7 +567,8 @@ def main():
     QP = {k: dequant(model["generator"][k]) for k in GP}
     for tag in ["greeting", "insult", "choice", "roast_me", "search", "grammar"]:
         for lang in LANGS:
-            print(f"  {tag:10s} {lang} -> {sample(QP, vocab, tag, lang, rng_np)}")
+            demo = {"greeting": "halo gw rafa", "insult": "lu bego banget", "choice": "mending kopi atau teh", "roast_me": "roast gw dong", "search": "cari dinosaurus", "grammar": ""}[tag]
+            print(f"  {tag:10s} {lang} [{demo}] -> {sample(QP, vocab, tag, lang, rng_np, user=normalize(demo))}")
 
 
 if __name__ == "__main__":

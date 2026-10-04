@@ -29,7 +29,7 @@ for t in TEXTS:
 g = m["generator"]
 GP = {k: dequant(v) for k, v in g.items() if isinstance(v, dict) and ("q" in v or "f" in v)}
 vocab = g["vocab"]
-SEQS = [prefix_ids(vocab, "insult", "id"), prefix_ids(vocab, "greeting", "en") + [vocab.index(w) for w in ["hi"] if w in vocab],
+SEQS = [prefix_ids(vocab, "insult", "id", ["lu", "bego"]) if "<u>" in vocab else prefix_ids(vocab, "insult", "id"), prefix_ids(vocab, "greeting", "en") + [vocab.index(w) for w in ["hi"] if w in vocab],
         prefix_ids(vocab, "roast_me", "id") + [5, 9, 30, 200, 7]]
 out = json.loads(subprocess.check_output(["node", os.path.join(ROOT, "tests", "parity.js"), json.dumps(TEXTS), json.dumps(SEQS)]))
 js = out["cls"]
