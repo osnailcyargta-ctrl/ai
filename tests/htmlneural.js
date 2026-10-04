@@ -21,7 +21,8 @@ const REQUESTS = process.argv.length > 2 ? process.argv.slice(2) : [
   const check = async (html) => {
     const page = await browser.newPage({ viewport: { width: 640, height: 480 } });
     const errs = [];
-    page.on("pageerror", (e) => errs.push(e.message));
+    let line = 0;
+    page.on("pageerror", (e) => { errs.push(e.message); const m = /:(\d+):\d+\)?\s*$/m.exec((e.stack || "").split("\n").slice(1).join("\n")); if (m && !line) line = +m[1]; });
     page.on("dialog", (d) => d.accept("5").catch(() => {}));
     try {
       await page.setContent(html, { timeout: 3000 });
@@ -38,7 +39,7 @@ const REQUESTS = process.argv.length > 2 ? process.argv.slice(2) : [
       else if (seen.canvas && seen.colors < 2 && !seen.text) errs.push("blank page");
     } catch (e) { errs.push(e.message.split("\n")[0]); }
     await page.close();
-    return errs.length ? { ok: false, error: errs[0] } : { ok: true };
+    return errs.length ? { ok: false, error: errs[0], line } : { ok: true };
   };
   const json = JSON.parse(fs.readFileSync(MODEL, "utf8"));
   const coder = new HtmlCoder({ nlu: new CodeNLU(JSON.parse(R("model/codenlu.json"))), writers: [new HtmlWriter(json)], pool: JSON.parse(R("data/html/things.json")), check });

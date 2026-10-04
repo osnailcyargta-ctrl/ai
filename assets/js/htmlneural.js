@@ -148,20 +148,22 @@
       // like deleting a typo. Only inside the current window (the KV cache is just truncated).
       const hist = [];
       const bans = new Map();
-      let winStart = 0, backtracks = 0, afterEnd = 0;
+      let winStart = 0, backtracks = 0, afterEnd = 0, lineStartHist = -1, lineBans = 0, lineIndent = 0, scriptAt = -1, goodAt = -1, parseFails = 0;
+      const declared = new Set();
       const truncate = (p) => { for (const c of cache) { c.k.length = p; c.v.length = p; } pos = p; };
-      const back = (k) => {
+      const back = (k, noBan) => {
         k = Math.min(k, out.length - winStart, hist.length);
-        if (k <= 0 || backtracks >= 60) return false;
+        if (k <= 0 || backtracks >= 160) return false;
         backtracks++;
         let e = null;
         for (let i = 0; i < k; i++) { e = hist.pop(); out.pop(); }
         truncate(pos - k);
         shape = e.shape; logits = e.logits; sawHtmlEnd = e.saw;
         const at = out.length;
-        if (!bans.has(at)) bans.set(at, new Set());
-        bans.get(at).add(e.w);
+        if (!noBan) { if (!bans.has(at)) bans.set(at, new Set()); bans.get(at).add(e.w); }
+        // the line being written is everything since the last newline
         line = [];
+        for (let i = out.length - 1; i >= 0 && !/^⏎/.test(g.vocab[out[i]]); i--) line.unshift(g.vocab[out[i]]);
         return true;
       };
       for (let n = 0; n < maxTok; n++) {
@@ -209,16 +211,39 @@
         logp += Math.log(z[w] + 1e-12);
         if (w === END) break;
         hist.push({ w, shape, logits, saw: sawHtmlEnd });
-        if (hist.length > 24) hist.shift();
+        if (hist.length > 420) hist.shift();
         shape = next;
         const t = g.vocab[w];
         if (/^⏎/.test(t)) {
+          // "let speed = 4;" twice is a SyntaxError: throw the repeated line away and write another
+          const text = Tok.detokenize(line, slots).trim();
+          const decl = /^(?:let|const|function)\s+(\w+)/.exec(text);
+          if (decl && lineIndent === 2 && declared.has(decl[1]) && lineStartHist >= 0) {
+            const k = out.length - lineStartHist;
+            if (k > 0 && k <= hist.length && back(k)) { lineBans++; if (lineBans > 12) break; continue; }
+          }
+          if (decl && lineIndent === 2) for (const nm of text.replace(/^(?:let|const)\s+/, "").split(/,\s*/).map((x) => (/^(\w+)\s*=/.exec(x) || [])[1]).filter(Boolean).concat(/^function/.test(text) ? [decl[1]] : [])) declared.add(nm);
+          // a finished top-level JavaScript statement must parse; if not, write that statement again
+          if (scriptAt >= 0 && !shape.stack.length && !shape.quote && typeof Function === "function") {
+            const js = Tok.detokenize(out.slice(scriptAt).map((i) => g.vocab[i]).concat(line), slots);
+            let okJs = true;
+            try { new Function(js); } catch (err) { okJs = !(err instanceof SyntaxError); }
+            if (!okJs && goodAt >= scriptAt && parseFails < 30) {
+              const k = out.length - goodAt;
+              if (k > 0 && k <= hist.length && back(k, true)) { parseFails++; continue; }
+            }
+            if (okJs) goodAt = out.length + 1;
+          }
+          lineStartHist = out.length + 1;
+          lineIndent = +t.slice(1);
           // a model stuck in a loop writes the same lines again and again: stop it
           const key = line.join(" ");
           lines.push(key); line = [];
           if (lines.length > 8 && key.length > 6 && lines.slice(-6).filter((l) => l === key).length >= 4) break;
         } else line.push(t);
         if (shape.text.endsWith("</html>")) sawHtmlEnd = true;
+        if (shape.text.endsWith("<script>") && scriptAt < 0) { scriptAt = out.length + 1; goodAt = scriptAt; }
+        if (shape.text.endsWith("</script>")) scriptAt = -1;
         out.push(w);
         feed([w]);
         if (opts.onToken && n % 16 === 0) { opts.onToken(out.map((i) => g.vocab[i])); await new Promise((r) => setTimeout(r, 0)); }
@@ -233,7 +258,91 @@
     }
   }
 
-  const api = { TinyGPT, HtmlWriter, Shape };
+  /** which html line (1-based) has the first JavaScript syntax error, or 0 */
+  function syntaxErrorLine(html) {
+    if (typeof Function !== "function") return 0;
+    const lines = html.split("\n");
+    let inScript = false, start = 0, buf = [];
+    for (let i = 0; i < lines.length; i++) {
+      let l = lines[i];
+      if (!inScript) {
+        const k = l.indexOf("<script>");
+        if (k < 0) continue;
+        inScript = true; start = i; buf = []; l = l.slice(k + 8);
+      }
+      const end = l.indexOf("</script>");
+      buf.push(end >= 0 ? l.slice(0, end) : l);
+      // the code so far either parses, or is only unfinished ("Unexpected end of input"); anything else is this line's fault
+      try { new Function(buf.join("\n")); } catch (e) {
+        if (e instanceof SyntaxError && !/end of input|Unterminated template|missing \} after/i.test(e.message)) return i + 1;
+      }
+      if (end >= 0) {
+        inScript = false;
+        try { new Function(buf.join("\n")); } catch (e) { if (e instanceof SyntaxError) return i + 1; }
+      }
+    }
+    return 0;
+  }
+
+  /** rewrite one line (1-based) of an already written page; the rest stays as it is.
+   *  -> [candidate token arrays] (n of them, each the whole page) */
+  HtmlWriter.prototype.rewriteLine = async function (prefix, slots, tokens, lineNo, opts = {}) {
+    const g = this.gpt, V = g.vocab.length;
+    const starts = [];
+    tokens.forEach((t, i) => { if (/^⏎\d+$/.test(t)) starts.push(i); });
+    if (lineNo < 1 || lineNo > starts.length) return [];
+    const a = starts[lineNo - 1], b = lineNo < starts.length ? starts[lineNo] : tokens.length;
+    const before = tokens.slice(0, a + 1), after = tokens.slice(b);
+    // the model only sees what is to the left; keep inside the window
+    let ctxToks = before;
+    const pre = this.encode(prefix);
+    if (pre.length + ctxToks.length >= g.ctx - 80) ctxToks = before.slice(-(g.ctx - 80 - pre.length));
+    const cache = g.newCache();
+    let pos = 0, logits = null;
+    for (const id of pre.concat(this.encode(ctxToks))) logits = g.step(id, pos++, cache);
+    const shape0 = new Shape();
+    for (const t of before) shape0.feed(t);
+    const rand = opts.rand || Math.random, n = opts.n || 4;
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      const c = cache.map((l) => ({ k: l.k.slice(), v: l.v.slice() }));
+      let p = pos, z0 = logits, shape = shape0.clone();
+      const line = [];
+      const temp = 0.5 + 0.15 * k;
+      for (let step = 0; step < 90; step++) {
+        const z = Float32Array.from(z0);
+        let m = -Infinity;
+        for (let i = 0; i < V; i++) { z[i] /= temp; if (z[i] > m) m = z[i]; }
+        let s = 0;
+        for (let i = 0; i < V; i++) { z[i] = Math.exp(z[i] - m); s += z[i]; }
+        const cand = [];
+        for (let i = 0; i < V; i++) if (z[i] / s > 1e-5) cand.push(i);
+        cand.sort((x, y) => z[y] - z[x]);
+        let w = -1;
+        for (let tries = 0; tries < 30 && w < 0; tries++) {
+          let u = rand() * s * 0.95, pick = cand[0];
+          for (const ci of cand) { u -= z[ci]; if (u <= 0) { pick = ci; break; } }
+          const tok = g.vocab[pick];
+          if (/^(<pad>|<unk>|<req>|<\/req>|<code>|<end>)$/.test(tok)) continue;
+          const sm = /^(?:##|▁)?<[tT](\d+)>$/.exec(tok);
+          if (sm && +sm[1] > slots.length) continue;
+          if (shape.clone().feed(tok)) w = pick;
+        }
+        if (w < 0) break;
+        const tok = g.vocab[w];
+        if (/^⏎\d+$/.test(tok)) break;   // the line is done
+        shape.feed(tok);
+        line.push(tok);
+        z0 = g.step(w, p++, c);
+        if (p >= g.ctx) break;
+      }
+      out.push(before.concat(line, after));
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return out;
+  };
+
+  const api = { TinyGPT, HtmlWriter, Shape, syntaxErrorLine };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HtmlNeuralLib = api;
 })(typeof self !== "undefined" ? self : this);

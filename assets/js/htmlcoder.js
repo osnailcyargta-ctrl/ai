@@ -295,6 +295,7 @@
         const writer = this.writers[k % this.writers.length];
         step((id ? "transformer nulis, percobaan " : "transformer writing, attempt ") + (k + 1) + "/" + tries + (this.writers.length > 1 ? " (" + writer.name + ")" : ""));
         const res = await writer.write(prefix, slots, { temperature: k === 0 ? 0.6 : 0.75 + 0.05 * k, topP: 0.92, rand: o.rand, onToken: o.onCode ? (toks) => o.onCode(k + 1, toks, slots) : null, signal: o.signal });
+        if (res.closed && writer.rewriteLine) await this._repair(writer, prefix, slots, res, step, id, o);
         const verdict = await this._verify(res, slots);
         step((verdict.ok ? "✓ " : "× ") + verdict.note);
         if (!best || verdict.score > best.verdict.score) best = { res, verdict };
@@ -311,6 +312,41 @@
       this.state.request = request;
       this.state.lastCheck = { ok: true };
       return this._result(res.html, id, steps, { neural: true, request });
+    }
+
+    /** fix a page line by line instead of writing it all again: find the line with the error,
+     *  let the transformer write just that line again (it sees everything above it), keep the rest */
+    async _repair(writer, prefix, slots, res, step, id, o) {
+      const lib = root.HtmlNeuralLib || (typeof require === "function" ? require("./htmlneural.js") : null);
+      const findBad = async (toks) => {
+        const html = Tok.detokenize(toks, slots);
+        const sl = lib.syntaxErrorLine(html);
+        if (sl) return { line: sl, kind: "syntax" };
+        if (!this.check) return null;
+        const c = await this.check(html);
+        if (c.ok) return null;
+        return c.line ? { line: c.line, kind: "runtime", error: c.error } : { line: 0, kind: "runtime", error: c.error };
+      };
+      let toks = res.tokens, bad = await findBad(toks), fixes = 0;
+      const tried = new Map();
+      while (bad && bad.line && fixes < (o.deepthink ? 24 : 12)) {
+        const n = (tried.get(bad.line) || 0) + 1;
+        tried.set(bad.line, n);
+        if (n > 3) break;
+        const cands = await writer.rewriteLine(prefix, slots, toks, bad.line, { rand: o.rand, n: 4 });
+        let best = null;
+        for (const c of cands) {
+          const b2 = await findBad(c);
+          if (!b2) { best = { toks: c, bad: null }; break; }
+          if (b2.line > bad.line && (!best || (best.bad && b2.line > best.bad.line))) best = { toks: c, bad: b2 };
+        }
+        fixes++;
+        if (!best) continue;
+        step((id ? "benerin baris " : "fixing line ") + bad.line + (bad.kind === "syntax" ? (id ? " (salah ketik JavaScript)" : " (JavaScript typo)") : " (" + bad.error + ")"));
+        toks = best.toks;
+        bad = best.bad;
+      }
+      if (toks !== res.tokens) { res.tokens = toks; res.html = Tok.detokenize(toks, slots); const e = res.html.indexOf("</html>"); if (e >= 0) res.html = res.html.slice(0, e + 7) + "\n"; }
     }
 
     async _verify(res, slots) {

@@ -89,7 +89,7 @@
     return new Promise((resolve) => {
       const token = Math.random().toString(36).slice(2);
       const probe = "<script>(function(){var T='" + token + "',sent=0;function s(m){if(sent)return;sent=1;parent.postMessage({sybauCheck:T,r:m},'*')}" +
-        "window.addEventListener('error',function(e){s({ok:false,error:String(e.message||e)})});" +
+        "window.addEventListener('error',function(e){s({ok:false,error:String(e.message||e),line:e.lineno||0})});" +
         "window.alert=window.confirm=function(){return true};window.prompt=function(){return '5'};" +
         "window.addEventListener('load',function(){var k=['ArrowLeft','ArrowRight','ArrowUp',' ','Enter','a','d','w'],i=0;var iv=setInterval(function(){var key=k[i++%k.length];" +
         "try{document.dispatchEvent(new KeyboardEvent('keydown',{key:key,bubbles:true}));window.dispatchEvent(new KeyboardEvent('keydown',{key:key}));if(window.onkeydown)window.onkeydown({key:key,preventDefault:function(){}});if(window.onkeyup)window.onkeyup({key:key,preventDefault:function(){}});" +
