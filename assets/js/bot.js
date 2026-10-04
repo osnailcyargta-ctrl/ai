@@ -596,7 +596,7 @@
       // generative mode: the transformer has to come up with a NEW sentence (no stock lines)
       const gen = this.settings.roastGen && GEN_INTENTS.has(intent);
       const cands = [];
-      for (let i = 0; i < (gen ? 28 : N_CANDIDATES); i++) {
+      for (let i = 0; i < (gen ? 16 : N_CANDIDATES); i++) {
         const g = brain.generate(intent, lang, gen ? 0.85 + (i % 3) * 0.07 : 0.85, this.rand, gen ? 0.95 : 0.92);
         if (!g || !g.tokens.length) continue;
         if (gen && /\bwhose (ur|u)\b|\bu is\b/.test(g.text)) continue;
