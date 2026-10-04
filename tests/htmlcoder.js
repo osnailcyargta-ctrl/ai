@@ -1,0 +1,47 @@
+// node tests/htmlcoder.js — sybau code's request handling + code edits, with a stand-in writer
+// (the real transformer is tested in tests/htmlneural.js); this checks the understanding and edits
+const fs = require("fs"), path = require("path");
+global.HtmlTokLib = require("../assets/js/htmltok.js");
+global.HtmlReqLib = require("../assets/js/htmlreq.js");
+const { CodeNLU } = require("../assets/js/codenlu.js");
+const { HtmlCoder, settings } = require("../assets/js/htmlcoder.js");
+const R = (f) => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
+const strip = (s) => s.replace(/^<!--.*\n/, "").replace(/^<!--.*\n/, "");
+const game = strip(R("data/html/games/037-survival.html"));
+const fake = { name: "fake", params: 1, unknown: () => [], async write(prefix, slots) { return { tokens: [], html: game, closed: true, logp: 0 }; } };
+const coder = new HtmlCoder({ nlu: new CodeNLU(JSON.parse(R("model/codenlu.json"))), writers: [fake], pool: JSON.parse(R("data/html/things.json")), check: async () => ({ ok: true }) });
+let fails = 0;
+const expect = (name, cond, extra = "") => { console.log((cond ? "✓ " : "✗ ") + name + (extra ? "  " + extra : "")); if (!cond) fails++; };
+(async () => {
+  let r = await coder.handle("bikin game ninja vs zombie", { lang: "id" });
+  expect("new game", r.kind === "code" && /Ninja vs Zombie/.test(r.html), r.kind);
+  expect("things found", coder.state.things.some((t) => t.name === "zombie") && coder.state.things.some((t) => t.name === "ninja"), coder.state.things.map((t) => t.emoji + t.name).join(" "));
+  r = await coder.handle("ubah speed jadi 10", { lang: "id" });
+  expect("setvar speed", /let speed = 10;/.test(coder.state.html), r.text);
+  r = await coder.handle("nyawanya 9 aja", { lang: "id" });
+  expect("setvar lives (nyawanya)", /let lives = 9;/.test(coder.state.html), r.text);
+  r = await coder.handle("kecepatan zombie jadi 2", { lang: "id" });
+  expect("setvar by comment (kecepatan zombie -> foeSpeed)", /let foeSpeed = 2;/.test(coder.state.html), r.text);
+  r = await coder.handle("bikin lebih cepet", { lang: "id" });
+  expect("relative change", /let speed = 15;/.test(coder.state.html), r.text);
+  r = await coder.handle("background merah", { lang: "id" });
+  expect("background colour", /canvas \{[^}]*background: #7a1c1c/.test(coder.state.html), r.text);
+  r = await coder.handle("ganti zombie jadi alien", { lang: "id" });
+  expect("replace thing", !/zombie/i.test(coder.state.html) && /Alien/.test(coder.state.html) && coder.state.html.includes("👾"), r.text);
+  r = await coder.handle("musuhnya jadi hantu", { lang: "id" });
+  expect("replace by role word", /Hantu/.test(coder.state.html) && coder.state.html.includes("👻"), r.text);
+  r = await coder.handle("variabelnya apa aja?", { lang: "id" });
+  expect("ask settings", r.kind === "answer" && /speed = 15/.test(r.text), r.text.split("\n")[0]);
+  r = await coder.handle("cara mainnya gimana", { lang: "id" });
+  expect("ask controls", r.kind === "answer" && /panah|WASD/.test(r.text), r.text);
+  r = await coder.handle("delete su", { lang: "id" });
+  expect("remove a thing that isn't there", r.kind === "memory" && /ga ada "su"/.test(r.text), r.text);
+  r = await coder.handle("balikin", { lang: "id" });
+  expect("undo", r.kind === "code" && /Alien/.test(coder.state.html) && !/Hantu/.test(coder.state.html), r.text);
+  r = await coder.handle("hapus semua", { lang: "id" });
+  expect("reset", r.kind === "memory" && !coder.state.html, r.text);
+  r = await coder.handle("ubah speed jadi 3", { lang: "id" });
+  expect("edit with no game -> new", r.kind === "code", r.kind);
+  console.log(fails ? fails + " failed" : "all htmlcoder checks passed");
+  process.exit(fails ? 1 : 0);
+})();

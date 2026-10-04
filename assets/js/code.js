@@ -1,50 +1,40 @@
-/* code.js — sybau code: a coding chat that writes STS programs (see stscoder.js). */
+/* code.js — sybau code: a coding chat that writes HTML/JS/CSS games and apps (see htmlcoder.js). */
 (function () {
   "use strict";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
-  let ui = null, coder = null, previewVM = null, loading = null, busy = false, running = null;
+  let ui = null, coder = null, loading = null, busy = false, running = null, stopper = null;
 
   const settings = () => { if (window.SybauSettings) return window.SybauSettings.get(); try { return JSON.parse(localStorage.getItem("sybau_settings") || "{}"); } catch (e) { return {}; } };
   const lang = () => (settings().lang === "en" ? "en" : "id");
   const T = {
-    id: { title: "sybau code", sub: "bikin program STS · dicek compiler STS asli", ph: "mau bikin apa? contoh: game hindarin meteor pake 3 nyawa", foot: "enter kirim · shift+enter baris baru · tab s di atas buat balik ngobrol",
-      hello: "yo. gw sybau code. bilang mau program STS apa. gw riset dulu bendanya di wikipedia, ngedesain gamenya, nulis kodenya dari nol, compile, terus gw tes mainin sendiri. lu tinggal bengong 🥀",
-      think: "mikir", dl: "download .sts", copy: "salin", copied: "kesalin", run: "jalanin", stop: "stop", ok: "lolos compiler STS", warn: "masih ada error", tests: "tes lolos", loading: "loading otak coding + compiler STS…" },
-    en: { title: "sybau code", sub: "writes STS programs · checked by the real STS compiler", ph: "what should i build? e.g. dodge falling meteors with 3 lives", foot: "enter send · shift+enter new line · tab s up top to go back to chat",
-      hello: "yo. i'm sybau code. tell me what STS program u want. i research the things on wikipedia, design it, write it from scratch, compile it and play-test it myself. u just sit there 🥀",
-      think: "thinking", dl: "download .sts", copy: "copy", copied: "copied", run: "run", stop: "stop", ok: "passed the STS compiler", warn: "still has errors", tests: "tests passed", loading: "loading coding brain + STS compiler…" },
+    id: { ph: "mau bikin apa? contoh: game ninja lempar shuriken ke zombie", foot: "enter kirim · shift+enter baris baru · esc stop · tab s di atas buat balik ngobrol",
+      hello: "yo. gw sybau code. bilang mau game/app apa, gw tulis HTML + CSS + JavaScript-nya pake transformer gw sendiri, token per token, terus gw tes jalanin. abis itu lu bisa suruh ubah: \"ubah speed jadi 10\", \"ganti zombie jadi alien\", \"background merah\", \"balikin\", \"variabelnya apa aja?\" 🥀",
+      think: "mikir", dl: "download .html", copy: "salin", copied: "kesalin", run: "jalanin", stop: "stop", ok: "jalan tanpa error", loading: "loading otak coding (transformer + pembaca maksud)…" },
+    en: { ph: "what should i build? e.g. a ninja throwing shurikens at zombies", foot: "enter send · shift+enter new line · esc stop · tab s up top to go back to chat",
+      hello: "yo. i'm sybau code. tell me what game/app u want, my own transformer writes the HTML + CSS + JavaScript token by token, then i test-run it. after that u can say: \"change speed to 10\", \"replace zombie with alien\", \"red background\", \"undo\", \"what variables are there?\" 🥀",
+      think: "thinking", dl: "download .html", copy: "copy", copied: "copied", run: "run", stop: "stop", ok: "runs with no errors", loading: "loading coding brain (transformer + request reader)…" },
   };
   const t = () => T[lang()];
   const LINES = {
-    id: { ok: ["nih. gw riset, desain, terus nulis {n} baris dari nol. lolos compiler, semua tes lolos. jangan bangga, yang mikir gw 🥀", "udah jadi. compiler sama tes gw aja setuju, beda sama lu 💀", "beres. {n} baris STS, gamenya udah gw mainin sendiri dan jalan. kalo lu yang ngetik pasti udah 40 error 🥀"],
-      tests: ["kodenya lolos compiler, tapi {k} tes kelakuan gagal. jujur aja, bagian itu belum bener 💀"],
-      fixed: ["sempet error {k}x, udah gw benerin sendiri. lu mah ga bakal bisa 🥀"], runtime: ["kodenya lolos compile tapi pas dijalanin ada error. jujur aja ya, cek bagian itu 🥀"],
-      fail: ["gw udah nyoba benerin tapi masih rusak. jujur, ini di luar kemampuan gw sekarang 💀"], docs: ["nih dari docs STS. baca pelan pelan 🥀", "dokumentasinya bilang gini. lain kali baca sendiri 💀"],
-      guess: ["jujur gw ga terlalu ngerti lu mau apa, jadi ini tebakan. mau yang lain? jelasin lebih detail 🥀"] },
-    en: { ok: ["researched, designed, wrote {n} lines from scratch. compiler passed, every test passed. don't be proud, i did the thinking 🥀", "done. even the compiler and my tests agree with me, unlike u 💀"],
-      tests: ["it compiles, but {k} behaviour tests failed. being honest, that part isn't right yet 💀"],
-      fixed: ["it errored {k}x, i fixed it myself. u never would 🥀"], runtime: ["it compiles but hits an error when it runs. being honest, check that part 🥀"],
-      fail: ["tried to fix it, still broken. honestly beyond me right now 💀"], docs: ["straight from the STS docs. read slowly 🥀"], guess: ["honestly not sure what u want, so this is a guess. describe it more 🥀"] },
+    id: { neural: ["nih. {n} baris, ditulis transformer gw sendiri token per token, udah gw jalanin dan ga error. jangan bangga, yang mikir gw 🥀", "udah jadi. {n} baris HTML/CSS/JS, dites jalan. kalo lu yang ngetik pasti udah 40 error 💀", "beres. transformer gw nulis {n} baris dari nol, lolos tes. lu tinggal main 🥀"] },
+    en: { neural: ["here. {n} lines, written by my own transformer token by token, test-run with no errors. don't be proud, i did the thinking 🥀", "done. {n} lines of HTML/CSS/JS, tested. if u typed it there'd be 40 errors 💀"] },
   };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
-  // ---------------------------------------------------------------- STS highlighting
-  const KW = "on|draw|setup|coll|solid|detect|click|hover|if|elif|else|while|forever|repeat|def|return|goto|wait|break|continue|var|and|or|not|onclick|onhover|oncollide|check|show|timer|stopwatch|countdown|every|start|stop|reset|clear|color|true|false|nil";
-  const SH = "rect|square|circle|ellipse|triangle|line|text|image|video";
+  // ---------------------------------------------------------------- HTML/CSS/JS highlighting
+  const JS_KW = "const|let|var|function|return|if|else|for|while|do|of|in|new|true|false|null|this|break|continue|switch|case|async|await|try|catch|typeof";
   function highlight(code) {
-    const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escH = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return code.split("\n").map((line) => {
-      if (/^@root/.test(line)) return '<span class="sx-root">' + esc(line) + "</span>";
-      const ci = line.indexOf("//");
-      let codePart = ci >= 0 ? line.slice(0, ci) : line, comment = ci >= 0 ? line.slice(ci) : "";
-      const parts = codePart.split(/("[^"]*")/);
-      const out = parts.map((p, i) => {
-        if (i % 2) return '<span class="sx-str">' + esc(p) + "</span>";
-        return esc(p).replace(new RegExp("\\b(" + KW + ")\\b", "g"), '<span class="sx-kw">$1</span>').replace(new RegExp("\\b(" + SH + ")\\b", "g"), '<span class="sx-shape">$1</span>')
-          .replace(/(\/(?:var|id|time))/g, '<span class="sx-ref">$1</span>').replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="sx-num">$1</span>').replace(/(#\d+)\b/g, '<span class="sx-num">$1</span>');
-      }).join("");
-      return out + (comment ? '<span class="sx-com">' + esc(comment) + "</span>" : "");
+      const ci = line.search(/\/\/(?![^"]*"[^"]*$)/);
+      const body = ci >= 0 ? line.slice(0, ci) : line, comment = ci >= 0 ? line.slice(ci) : "";
+      return body.split(/("[^"]*"|'[^']*')/).map((p, i) => {
+        if (i % 2) return '<span class="sx-str">' + escH(p) + "</span>";
+        return escH(p).replace(/(&lt;\/?)([a-z][a-z0-9]*)/g, '$1<span class="sx-kw">$2</span>')
+          .replace(new RegExp("\\b(" + JS_KW + ")\\b", "g"), '<span class="sx-shape">$1</span>')
+          .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="sx-num">$1</span>');
+      }).join("") + (comment ? '<span class="sx-com">' + escH(comment) + "</span>" : "");
     }).join("\n");
   }
 
@@ -65,24 +55,18 @@
     deep.addEventListener("click", () => {
       const on = !settings().deepthink;
       if (window.SybauSettings) window.SybauSettings.set("deepthink", on);
-      else { const st = settings(); st.deepthink = on; try { localStorage.setItem("sybau_settings", JSON.stringify(st)); } catch (e) { /* ignore */ } }
       relabel(); input.focus();
     });
     foot.append(deep, footText);
-    const ask = el("div", "cx-ask");
-    ask.hidden = true;
-    ask.setAttribute("role", "dialog");
-    view.append(log, ask, form, foot);
+    view.append(log, form, foot);
     form.addEventListener("submit", (e) => { e.preventDefault(); send(); });
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
-    input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; });
-    log.addEventListener("click", () => { if (!window.getSelection().toString() && !(running && document.activeElement && document.activeElement.tagName === "CANVAS")) input.focus(); });
-    ui = { view, log, input, foot, footText, deep, ask };
     input.addEventListener("keydown", (e) => {
-      if (ui.ask.hidden) return;
-      if (e.key === "Escape") { e.preventDefault(); closeAsk(); }
-      else if (/^[1-4]$/.test(e.key) && !input.value) { const b = ui.ask.querySelectorAll(".cx-opt")[+e.key - 1]; if (b) { e.preventDefault(); b.click(); } }
-    }, true);
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+      if (e.key === "Escape" && stopper) { stopper.stop = true; }
+    });
+    input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; });
+    log.addEventListener("click", () => { if (!window.getSelection().toString() && !running) input.focus(); });
+    ui = { view, log, input, foot, footText, deep };
     relabel();
   }
   function relabel() {
@@ -91,36 +75,7 @@
     const on = !!settings().deepthink;
     ui.deep.textContent = (on ? "◆ " : "◇ ") + "deepthink " + (on ? "on" : "off");
     ui.deep.classList.toggle("on", on);
-    ui.deep.title = lang() === "id" ? "mikir lebih lama: lebih banyak percobaan, dicek kritikus, dan nanya kalo kurang paham" : "think longer: more attempts, a critic checks them, and it asks when unsure";
-  }
-
-  // ---------------------------------------------------------------- questions with choices (like claude)
-  let asking = null;
-  function closeAsk() { ui.ask.hidden = true; ui.ask.textContent = ""; asking = null; }
-  function showAsk(res, origText, extra) {
-    asking = { origText, extra };
-    ui.ask.textContent = "";
-    ui.ask.appendChild(el("div", "cx-ask-q", res.question));
-    const row = el("div", "cx-ask-opts");
-    res.options.slice(0, 4).forEach((o, i) => {
-      const b = el("button", "cx-opt");
-      b.type = "button";
-      b.append(el("span", "cx-opt-n", String(i + 1)), document.createTextNode(o.label));
-      b.addEventListener("click", () => {
-        const a = asking; closeAsk();
-        if (o.retry && o.retry.accept) { acceptBest(o.label); return; }
-        const more = Object.assign({}, a.extra, { asked: (a.extra.asked || 0) + 1 }, o.retry || {});
-        run(o.add ? a.origText + ", " + o.add : a.origText, o.label, more);
-      });
-      row.appendChild(b);
-    });
-    ui.ask.append(row, el("div", "cx-ask-hint dim", lang() === "id" ? "pencet 1-" + Math.min(4, res.options.length) + ", atau ketik jawaban sendiri · esc tutup" : "press 1-" + Math.min(4, res.options.length) + ", or type your own answer · esc to close"));
-    ui.ask.hidden = false;
-  }
-  function acceptBest(label) {
-    const u = el("div", "u"); u.append(el("span", "gt", ">"), document.createTextNode(label)); put(u);
-    const res = coder.acceptPending();
-    if (res) showResult(res);
+    ui.deep.title = lang() === "id" ? "mikir lebih lama: 6 percobaan, dipilih yang paling bagus" : "think longer: 6 attempts, the best one wins";
   }
   const put = (n) => { ui.log.appendChild(n); ui.log.scrollTop = ui.log.scrollHeight; return n; };
   function say(text) {
@@ -129,17 +84,45 @@
     return put(r);
   }
 
+  // ---------------------------------------------------------------- test-run a page in a hidden sandbox
+  function sandboxCheck(html) {
+    return new Promise((resolve) => {
+      const token = Math.random().toString(36).slice(2);
+      const probe = "<script>(function(){var T='" + token + "',sent=0;function s(m){if(sent)return;sent=1;parent.postMessage({sybauCheck:T,r:m},'*')}" +
+        "window.addEventListener('error',function(e){s({ok:false,error:String(e.message||e)})});" +
+        "window.alert=window.confirm=function(){return true};window.prompt=function(){return '5'};" +
+        "window.addEventListener('load',function(){var k=['ArrowLeft','ArrowRight','ArrowUp',' ','Enter','a','d','w'],i=0;var iv=setInterval(function(){var key=k[i++%k.length];" +
+        "try{document.dispatchEvent(new KeyboardEvent('keydown',{key:key,bubbles:true}));window.dispatchEvent(new KeyboardEvent('keydown',{key:key}));if(window.onkeydown)window.onkeydown({key:key,preventDefault:function(){}});if(window.onkeyup)window.onkeyup({key:key,preventDefault:function(){}});" +
+        "var c=document.querySelector('canvas,button,.cell,.card,td');if(c){var r=c.getBoundingClientRect();var ev={clientX:r.left+r.width/2,clientY:r.top+r.height/2,offsetX:r.width/2,offsetY:r.height/2,bubbles:true};c.dispatchEvent(new MouseEvent('mousemove',ev));c.dispatchEvent(new MouseEvent('mousedown',ev));c.dispatchEvent(new MouseEvent('mouseup',ev));c.dispatchEvent(new MouseEvent('click',ev));}}catch(e){s({ok:false,error:String(e.message||e)})}},60);" +
+        "setTimeout(function(){clearInterval(iv);var c=document.querySelector('canvas'),colors=0;if(c&&c.getContext){try{var d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,set={};for(var j=0;j<d.length;j+=388)set[d[j]+','+d[j+1]+','+d[j+2]+','+d[j+3]]=1;colors=Object.keys(set).length}catch(e){}}" +
+        "var txt=document.body?document.body.innerText.trim().length:0;s(c&&colors<2&&!txt?{ok:false,error:'layarnya kosong'}:{ok:true,colors:colors})},900)})})()<\/script>";
+      const page = /<head>/i.test(html) ? html.replace(/<head>/i, "<head>" + probe) : probe + html;
+      const f = document.createElement("iframe");
+      f.setAttribute("sandbox", "allow-scripts");
+      f.style.cssText = "position:fixed;left:-10000px;top:0;width:640px;height:480px;border:0";
+      let done = false;
+      const finish = (r) => { if (done) return; done = true; window.removeEventListener("message", onMsg); f.remove(); resolve(r); };
+      const onMsg = (e) => { if (e.data && e.data.sybauCheck === token) finish(e.data.r); };
+      window.addEventListener("message", onMsg);
+      setTimeout(() => finish({ ok: false, error: "ga selesai loading (mungkin loop tanpa akhir)" }), 4000);
+      f.srcdoc = page;
+      document.body.appendChild(f);
+    });
+  }
+
   async function ensure() {
     if (coder) return coder;
     if (!loading) loading = (async () => {
-      const [wasm, wasm2, model, docs, things] = await Promise.all([
-        fetch("assets/sts/sts.wasm").then((r) => r.arrayBuffer()), fetch("assets/sts/sts.wasm").then((r) => r.arrayBuffer()),
-        fetch("model/coder.json").then((r) => r.json()), fetch("data/sts/docs.md").then((r) => r.text()), fetch("data/sts/things.json").then((r) => r.json())]);
-      const vm = await StsLib.StsVM.load(wasm);
-      previewVM = await StsLib.StsVM.load(wasm2, { onPopup: (k, txt) => running && running.popup(k, txt), onBackground: (c) => { if (running) running.bg = c; } });
       const get = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-      const [neuralModel, bigModel] = await Promise.all([get("model/stscode.json"), get("model/stscode_big.json")]);
-      coder = new StsCoderLib.StsCoder({ coderModel: model, vm, docs, things, search: window.SearchLib, neuralModels: [neuralModel, bigModel] });
+      const [nluJson, modelJson, pool] = await Promise.all([get("model/codenlu.json"), get("model/htmlcode.json"), get("data/html/things.json")]);
+      if (!modelJson) throw new Error(lang() === "id" ? "transformer penulis kodenya (model/htmlcode.json) belum ada, lagi dilatih. coba lagi nanti" : "the code transformer (model/htmlcode.json) isn't there yet, it's still training. try again later");
+      coder = new HtmlCoderLib.HtmlCoder({
+        nlu: nluJson ? new CodeNLULib.CodeNLU(nluJson) : null,
+        writers: [new HtmlNeuralLib.HtmlWriter(modelJson)],
+        pool: pool || {},
+        check: sandboxCheck,
+        chat: (text) => (window.SybauChat ? window.SybauChat(text) : (lang() === "id" ? "oke. mau bikin apa?" : "ok. what should i build?")),
+      });
       try { coder.loadState(JSON.parse(localStorage.getItem(MEM_KEY) || "null")); } catch (e) { /* ignore */ }
       return coder;
     })();
@@ -147,23 +130,24 @@
   }
 
   // ---------------------------------------------------------------- memory (survives a reload)
-  const MEM_KEY = "sybau_code_memory", LOG_KEY = "sybau_code_log";
+  const MEM_KEY = "sybau_html_memory", LOG_KEY = "sybau_html_log";
+  try { localStorage.removeItem("sybau_code_memory"); localStorage.removeItem("sybau_code_log"); } catch (e) { /* old STS memory */ }
   let saved = [];
   try { saved = JSON.parse(localStorage.getItem(LOG_KEY) || "[]"); } catch (e) { saved = []; }
   function remember(entry) {
     saved.push(entry);
-    if (saved.length > 40) saved = saved.slice(-40);
+    if (saved.length > 30) saved = saved.slice(-30);
+    const keepCode = (list) => { let seen = 0; for (let i = list.length - 1; i >= 0; i--) if (list[i].role === "code" && ++seen > 3) list[i] = { role: "b", text: "(" + list[i].res.file + ")" }; return list; };
     try {
-      localStorage.setItem(LOG_KEY, JSON.stringify(saved));
+      localStorage.setItem(LOG_KEY, JSON.stringify(keepCode(saved)));
       if (coder) localStorage.setItem(MEM_KEY, JSON.stringify(coder.saveState()));
-    } catch (e) { saved = saved.slice(-10); }
+    } catch (e) { saved = saved.slice(-6); }
   }
   function replay() {
     for (const e of saved) {
       if (e.role === "u") { const u = el("div", "u"); u.append(el("span", "gt", ">"), document.createTextNode(e.text)); put(u); }
       else if (e.role === "b") say(e.text);
-      else if (e.role === "code") put(codeBlock(e.res, e.res.program.roots.reduce((n, r) => n + r.code.split("\n").length, 0)));
-      else if (e.role === "doc") { const d = el("div", "cx-doc"); d.append(el("div", "bold", e.head), el("div", "cx-doc-body", e.body)); put(d); }
+      else if (e.role === "code" && e.res && e.res.html) put(codeBlock(e.res));
     }
   }
 
@@ -175,16 +159,15 @@
       const note = put(el("div", "line dim", t().loading));
       try {
         await ensure(); note.remove();
-        if (saved.length) { replay(); say(lang() === "id" ? "gw masih inget yang tadi. lanjut aja, atau ketik /new buat mulai baru 🥀" : "i still remember what we were doing. keep going, or type /new for a fresh start 🥀"); }
+        if (saved.length) { replay(); say(lang() === "id" ? "gw masih inget yang tadi. lanjut aja, atau bilang \"hapus semua\" buat mulai baru 🥀" : "i still remember what we were doing. keep going, or say \"delete everything\" to start fresh 🥀"); }
         else say(t().hello);
-      }
-      catch (e) { note.textContent = "error: " + e.message; note.className = "line red"; }
+      } catch (e) { note.textContent = "error: " + e.message; note.className = "line red"; }
     }
   }
 
   // ---------------------------------------------------------------- tabs: s (chat) | sc (code)
   const TITLES = { s: ["sybau.ai", "— ~/ur-life (cooked)"], sc: ["sybau code", "— ~/projects (also cooked)"] };
-  function setTab(tab, remember = true) {
+  function setTab(tab, keep = true) {
     tab = tab === "sc" ? "sc" : "s";
     document.body.dataset.tab = tab;
     for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
@@ -195,7 +178,7 @@
     title.textContent = TITLES[tab][0] + " ";
     title.appendChild(el("span", "dim", TITLES[tab][1]));
     document.title = TITLES[tab][0];
-    if (remember) { try { localStorage.setItem("sybau_tab", tab); } catch (e) { /* ignore */ } if (location.hash !== "#" + tab) history.replaceState(null, "", tab === "sc" ? "#sc" : location.pathname + location.search); }
+    if (keep) { try { localStorage.setItem("sybau_tab", tab); } catch (e) { /* ignore */ } if (location.hash !== "#" + tab) history.replaceState(null, "", tab === "sc" ? "#sc" : location.pathname + location.search); }
     if (tab === "sc") open();
     else { stopRun(); const i = document.getElementById("input"); if (i && !i.disabled) i.focus(); }
   }
@@ -206,18 +189,14 @@
     if (!typed || busy) return;
     ui.input.value = "";
     ui.input.style.height = "auto";
-    if (asking) {   // a typed answer to the open question
-      const a = asking; closeAsk();
-      return run(a.origText + ", " + typed, typed, Object.assign({}, a.extra, { asked: (a.extra.asked || 0) + 1 }));
-    }
-    return run(typed, typed, {});
+    return run(typed);
   }
 
-  async function run(text, shown, extra) {
+  async function run(text) {
     if (busy) return;
     busy = true;
     const u = el("div", "u");
-    u.append(el("span", "gt", ">"), document.createTextNode(shown));
+    u.append(el("span", "gt", ">"), document.createTextNode(text));
     put(u);
     const think = el("details", "cx-think");
     think.open = true;
@@ -227,169 +206,88 @@
     put(think);
     const t0 = performance.now();
     let res, live = null;
-    remember({ role: "u", text: shown });
+    remember({ role: "u", text });
+    stopper = { stop: false };
     try {
       await ensure();
-      res = await coder.handle(text, Object.assign({ experimental: !!settings().experimental, search: settings().search !== false, lang: lang(), neural: settings().codeNeural !== false, deepthink: !!settings().deepthink, html: !!settings().htmlMode }, extra, {
+      res = await coder.handle(text, {
+        lang: settings().lang === "en" ? "en" : settings().lang === "id" ? "id" : undefined,
+        deepthink: !!settings().deepthink, signal: stopper,
         onStep: (s) => { lines.appendChild(el("div", "line dim", s)); ui.log.scrollTop = ui.log.scrollHeight; },
-        // the transformer "typing" its code, live
         onCode: (attempt, toks, slots) => {
           if (!live) { live = el("div", "cx-code cx-live"); live.append(el("div", "cx-code-head dim"), el("pre", "cx-pre")); put(live); }
           live.firstChild.textContent = (lang() === "id" ? "✎ transformer lagi ngetik · percobaan " : "✎ transformer typing · attempt ") + attempt + " · " + toks.length + " token";
-          live.lastChild.innerHTML = highlight(StsTokLib.detokenize(toks, slots));
+          live.lastChild.innerHTML = highlight(HtmlTokLib.detokenize(toks, slots));
           live.lastChild.scrollTop = live.lastChild.scrollHeight;
           ui.log.scrollTop = ui.log.scrollHeight;
-        } }));
+        },
+      });
     } catch (e) {
       lines.appendChild(el("div", "line red", "error: " + e.message));
-      busy = false;
+      busy = false; stopper = null;
       return;
     }
+    stopper = null;
     if (live) live.remove();
-    await sleep(Math.max(0, 500 - (performance.now() - t0)));
+    await sleep(Math.max(0, 300 - (performance.now() - t0)));
     sum.textContent = "✻ " + t().think + " · " + res.steps.length + (lang() === "id" ? " langkah · " : " steps · ") + ((performance.now() - t0) / 1000).toFixed(1) + "s";
-    if (res.steps.length > 6) think.open = false;
-    const L = LINES[res.lang === "en" ? "en" : "id"];
-    if (res.kind === "ask") {
-      say(res.question);
-      remember({ role: "b", text: res.question });
-      showAsk(res, text, extra);
-    } else if (res.kind === "cant" || res.kind === "memory") {
+    if (res.steps.length > 5) think.open = false;
+    if (res.kind === "code") {
+      const L = LINES[res.lang === "en" ? "en" : "id"];
+      const line = res.text || pick(L.neural).replace("{n}", res.lines);
+      say(line);
+      put(codeBlock(res));
+      remember({ role: "b", text: line });
+      remember({ role: "code", res: { html: res.html, file: res.file, lines: res.lines } });
+    } else {
       say(res.text);
       remember({ role: "b", text: res.text });
-    } else if (res.kind === "docs") {
-      const line = pick(L.docs);
-      say(line);
-      const d = el("div", "cx-doc");
-      d.append(el("div", "bold", res.head), el("div", "cx-doc-body", res.body));
-      put(d);
-      remember({ role: "b", text: line }); remember({ role: "doc", head: res.head, body: res.body });
-    } else showResult(res);
+      if (res.kind === "failed" && res.html) {
+        const d = el("details", "cx-think");
+        d.append(el("summary", null, lang() === "id" ? "liat hasil rusaknya" : "see the broken attempt"), el("pre", "cx-pre", res.html));
+        put(d);
+      }
+    }
     busy = false;
     ui.input.focus();
   }
 
-  function showResult(res) {
-    const L = LINES[res.lang === "en" ? "en" : "id"];
-    const n = res.program.roots.reduce((s, r) => s + r.code.split("\n").length, 0);
-    const failed = (res.tests || []).filter((x) => !x.ok).length;
-    let line = res.compiled === true ? (failed ? pick(L.tests).replace("{k}", failed) : res.fixes.length ? pick(L.fixed).replace("{k}", res.fixes.length) : pick(L.ok)) : res.compiled === "runtime" ? pick(L.runtime) : pick(L.fail);
-    if (res.program && res.features.length === 1 && res.features[0] === "shapes" && /ga ada yang gw kenal|nothing i recognise/.test(res.steps.join(" "))) line = pick(L.guess);
-    if (res.neural) line = (res.lang === "en" ? "written by the transformer itself, token by token. " : "ini ditulis transformer-nya sendiri, token per token. ") + line;
-    say(line.replace("{n}", n));
-    put(codeBlock(res, n));
-    remember({ role: "b", text: line.replace("{n}", n) });
-    remember({ role: "code", res: { file: res.file, sts: res.sts, program: res.program, compiled: res.compiled, tests: res.tests, fixes: res.fixes, lang: res.lang, html: res.html ? { lines: res.html.lines } : null } });
-
-  }
-
-  function codeBlock(res, n) {
+  function codeBlock(res) {
     const box = el("div", "cx-code");
     const head = el("div", "cx-code-head");
-    const tests = res.tests || [], passed = tests.filter((x) => x.ok).length;
-    const good = res.compiled === true && passed === tests.length;
-    const status = el("span", good ? "green" : "red", (res.compiled === true ? "✓ " + (res.html ? "HTML + JavaScript + CSS" : t().ok) : "× " + t().warn) + (tests.length ? " · " + passed + "/" + tests.length + " " + t().tests : ""));
-    head.append(el("span", "bold", res.file), el("span", "dim", " · " + n + (lang() === "id" ? " baris · " : " lines · ")), status);
+    head.append(el("span", "bold", res.file), el("span", "dim", " · " + res.lines + (lang() === "id" ? " baris · " : " lines · ")), el("span", "green", "✓ HTML + CSS + JavaScript · " + t().ok));
     const btns = el("span", "cx-btns");
-    const dl = el("button", "btn", res.html ? "download .html" : t().dl);
+    const dl = el("button", "btn", t().dl);
     dl.type = "button";
     dl.addEventListener("click", () => {
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([res.sts], { type: res.html ? "text/html" : "text/plain" }));
+      a.href = URL.createObjectURL(new Blob([res.html], { type: "text/html" }));
       a.download = res.file;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     });
     const cp = el("button", "btn", t().copy);
     cp.type = "button";
-    cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(res.sts); } catch (e) { /* ignore */ } cp.textContent = t().copied; setTimeout(() => (cp.textContent = t().copy), 1400); });
-    const run = el("button", "btn", t().run);
-    run.type = "button";
-    btns.append(dl, cp, run);
+    cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(res.html); } catch (e) { /* ignore */ } cp.textContent = t().copied; setTimeout(() => (cp.textContent = t().copy), 1400); });
+    const runB = el("button", "btn", t().run);
+    runB.type = "button";
+    btns.append(dl, cp, runB);
     head.appendChild(btns);
     const pre = el("pre", "cx-pre");
-    if (res.html) pre.textContent = res.sts; else pre.innerHTML = highlight(res.sts);
+    pre.innerHTML = highlight(res.html);
     const stage = el("div", "cx-stage");
     stage.hidden = true;
-    run.addEventListener("click", () => {
-      if (running && running.box === stage) { stopRun(); run.textContent = t().run; return; }
+    runB.addEventListener("click", () => {
+      if (running && running.box === stage) { stopRun(); runB.textContent = t().run; return; }
       stopRun();
-      if (res.html) runHtml(res.sts, stage, () => (run.textContent = t().run));
-      else startRun(res.program, stage, () => (run.textContent = t().run));
-      run.textContent = t().stop;
+      runHtml(res.html, stage, () => (runB.textContent = t().run));
+      runB.textContent = t().stop;
     });
-    if (res.compiled !== true) run.disabled = true;
     box.append(head, pre, stage);
     return box;
   }
 
-  // ---------------------------------------------------------------- live preview on the real STS VM
-  function startRun(prog, box, onEnd) {
-    box.hidden = false;
-    box.textContent = "";
-    const cv = el("canvas", "cx-canvas");
-    cv.width = prog.stage.w; cv.height = prog.stage.h;
-    cv.tabIndex = 0;
-    const pop = el("div", "cx-pop");
-    pop.hidden = true;
-    const info = el("div", "dim cx-runinfo", lang() === "id" ? "klik layar biar keyboard nyambung · panah/wasd/spasi" : "click the stage to give it the keyboard · arrows/wasd/space");
-    box.append(cv, pop, info);
-    const ctx = cv.getContext("2d");
-    const res = previewVM.compile(prog.roots);
-    if (!res.ok) { info.textContent = "compile error: " + res.error; info.className = "red"; return; }
-    previewVM.start();
-    const st = { box, bg: "#101a0c", raf: 0, waiting: false, onEnd };
-    st.popup = (kind, text) => {
-      st.waiting = true;
-      pop.textContent = "";
-      pop.appendChild(el("div", null, text));
-      let inp = null;
-      if (kind === 1) { inp = el("input"); pop.appendChild(inp); }
-      const ok = el("button", "btn", "ok");
-      ok.type = "button";
-      ok.addEventListener("click", () => { pop.hidden = true; st.waiting = false; if (kind === 1) previewVM.answer(inp.value); else previewVM.ackPopup(); cv.focus(); });
-      pop.appendChild(ok);
-      pop.hidden = false;
-      (inp || ok).focus();
-      if (inp) inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") ok.click(); });
-    };
-    const keyName = (e) => (e.key === " " ? "space" : e.key.startsWith("Arrow") ? e.key.slice(5).toLowerCase() : e.key.toLowerCase());
-    const pos = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
-    cv.addEventListener("keydown", (e) => { e.preventDefault(); e.stopPropagation(); previewVM.key(keyName(e), true); });
-    cv.addEventListener("keyup", (e) => { e.stopPropagation(); previewVM.key(keyName(e), false); });
-    cv.addEventListener("mousemove", (e) => previewVM.mouseMove(...pos(e)));
-    cv.addEventListener("mousedown", (e) => { cv.focus(); previewVM.mouseDown(1); previewVM.click(...pos(e)); });
-    cv.addEventListener("mouseup", () => previewVM.mouseDown(0));
-    let last = performance.now();
-    const frame = (now) => {
-      st.raf = requestAnimationFrame(frame);
-      const dt = Math.min(50, now - last); last = now;
-      if (!st.waiting) {
-        const s = previewVM.tick(dt);
-        if (s === StsLib.STATE.ERROR) { info.textContent = "runtime error: " + previewVM.runtimeError(); info.className = "red"; cancelAnimationFrame(st.raf); }
-      }
-      ctx.fillStyle = st.bg; ctx.fillRect(0, 0, cv.width, cv.height);
-      for (const o of previewVM.objects()) {
-        if (!o.visible) continue;
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, Math.min(1, o.alpha));
-        if (o.rot) { ctx.translate(o.x + o.w / 2, o.y + o.h / 2); ctx.rotate(o.rot * Math.PI / 180); ctx.translate(-(o.x + o.w / 2), -(o.y + o.h / 2)); }
-        ctx.fillStyle = ctx.strokeStyle = o.color || "#93cc5f";
-        if (o.kind === "rect") ctx.fillRect(o.x, o.y, o.w, o.h);
-        else if (o.kind === "circle") { ctx.beginPath(); ctx.arc(o.x + o.w / 2, o.y + o.h / 2, Math.abs(o.w / 2), 0, 6.2832); ctx.fill(); }
-        else if (o.kind === "ellipse") { ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, Math.abs(o.w / 2), Math.abs(o.h / 2), 0, 0, 6.2832); ctx.fill(); }
-        else if (o.kind === "triangle") { ctx.beginPath(); ctx.moveTo(o.x + o.w / 2, o.y); ctx.lineTo(o.x + o.w, o.y + o.h); ctx.lineTo(o.x, o.y + o.h); ctx.closePath(); ctx.fill(); }
-        else if (o.kind === "line") { ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.w, o.h); ctx.stroke(); }
-        else if (o.kind === "text") { ctx.font = "600 " + Math.max(6, o.h) + "px system-ui, sans-serif"; ctx.textBaseline = "top"; ctx.fillText(o.text, o.x, o.y); }
-        else { ctx.strokeStyle = "#575d57"; ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w, o.h); }
-        ctx.restore();
-      }
-    };
-    st.raf = requestAnimationFrame(frame);
-    running = st;
-    cv.focus();
-  }
-  /** HTML mode: the page runs in a sandboxed frame */
+  /** the page runs in a sandboxed frame */
   function runHtml(html, box, onEnd) {
     box.hidden = false;
     box.textContent = "";
@@ -397,14 +295,11 @@
     f.setAttribute("sandbox", "allow-scripts allow-modals");
     f.srcdoc = html;
     box.appendChild(f);
-    running = { box, raf: 0, onEnd, html: true };
+    running = { box, onEnd };
     setTimeout(() => { try { f.focus(); } catch (e) { /* ignore */ } }, 100);
   }
-
   function stopRun() {
     if (!running) return;
-    cancelAnimationFrame(running.raf);
-    if (!running.html) { try { previewVM.stop(); } catch (e) { /* ignore */ } }
     running.box.hidden = true;
     running.box.textContent = "";
     if (running.onEnd) running.onEnd();

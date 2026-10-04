@@ -14,8 +14,8 @@
   const save = (k, v) => { try { storage && storage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
 
   // ---------------------------------------------------------------- settings
-  const settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: true, roastGen: true, codeNeural: true, deepthink: false, htmlMode: false, brain: false, theme: "auto" }, load("sybau_settings", {}));
-  delete settings.learn; // old setting, removed
+  const settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: true, roastGen: true, deepthink: false, brain: false, theme: "auto" }, load("sybau_settings", {}));
+  delete settings.learn; delete settings.codeNeural; delete settings.htmlMode; // old settings, removed
   const THEMES = ["auto", "classic", "light", "terminal", "cyberpunk", "dracula", "amber", "ocean", "paper"];
   if (settings.theme === "dark") settings.theme = "classic";
   if (!THEMES.includes(settings.theme)) settings.theme = "auto";
@@ -41,9 +41,7 @@
       sTitle: "Settings", sFoot: "↑↓ pilih · enter/spasi ganti · ←→ ganti · esc tutup",
       sExp: ["Eksperimental: pahamin semua kata", "kalo ga ngerti, mikir dulu: benerin typo, cari kalimat mirip, cari arti kata asing. masih beta"],
       sRoastGen: ["Roast generatif (tanpa contoh jadi)", "transformer harus ngarang kalimat baru, yang sama persis kayak data training dibuang"],
-      sDeep: ["sybau code: deepthink", "mikir lebih lama: sampe 6 versi kode, dicek kritikus, dan nanya pake pilihan kalo kurang paham"],
-      sHtml: ["sybau code: HTML/JS/CSS (eksperimental)", "game-nya ditulis jadi 1 file .html (canvas + JavaScript + CSS), bukan STS. bisa dibuka di browser mana aja"],
-      sCodeNeural: ["sybau code: AI murni", "transformer nulis kode STS-nya sendiri token per token. off = pake perencana (lebih rapi, tapi itu yang lu bilang template)"],
+      sDeep: ["sybau code: deepthink", "mikir lebih lama: transformer nulis 6 versi, semua dites jalan, dipilih yang paling bagus"],
       thinking: "mikir", understanding: "Cari arti",
       sLang: ["Bahasa balesan", "auto = ngikutin bahasa lu"], sSearch: ["Auto search", "nanya fakta → otomatis cari di Wikipedia/Wikidata"],
       sGrammar: ["Polisi grammar", "roast typo & salah ejaan"], sBrain: ["Tampilin otak", "liat intent, confidence, bahasa (debug)"],
@@ -72,9 +70,7 @@
       sTitle: "Settings", sFoot: "↑↓ navigate · enter/space change · ←→ cycle · esc close",
       sExp: ["Experimental: understand any word", "when lost, think first: fix typos, find a similar sentence, look up unknown words. beta"],
       sRoastGen: ["Generative roasts (no stock lines)", "the transformer must write a new sentence; exact copies of the training data are thrown away"],
-      sDeep: ["sybau code: deepthink", "think longer: up to 6 versions, checked by a critic, and it asks with choices when unsure"],
-      sHtml: ["sybau code: HTML/JS/CSS (experimental)", "the game is written as one .html file (canvas + JavaScript + CSS) instead of STS. opens in any browser"],
-      sCodeNeural: ["sybau code: pure AI", "the transformer writes the STS code itself, token by token. off = the planner (neater, but that's the one u called a template)"],
+      sDeep: ["sybau code: deepthink", "think longer: the transformer writes 6 versions, all test-run, the best one wins"],
       thinking: "thinking", understanding: "Look up",
       sLang: ["Reply language", "auto = match whatever u type"], sSearch: ["Auto search", "factual questions → look up Wikipedia/Wikidata"],
       sGrammar: ["Grammar police", "roast typos & bad spelling"], sBrain: ["Show brain", "intent, confidence, language (debug)"],
@@ -666,9 +662,7 @@
     { key: "grammar", label: () => t().sGrammar },
     { key: "experimental", label: () => t().sExp },
     { key: "roastGen", label: () => t().sRoastGen },
-    { key: "codeNeural", label: () => t().sCodeNeural },
     { key: "deepthink", label: () => t().sDeep },
-    { key: "htmlMode", label: () => t().sHtml },
     { key: "connect", action: () => { closeSettings(); cmdConnect(); }, label: () => t().sConnect, value: () => CONNECT_KEY.slice(0, 13) + "…" },
     { key: "brain", label: () => t().sBrain },
     { key: "theme", choices: THEMES, label: () => t().sTheme },
@@ -763,6 +757,8 @@
     pixels = await pixelsP;
     bot = new BotLib.RoastBot(brain, { storage, grammar,
       settings: { lang: settings.lang, search: settings.search, grammar: settings.grammar, experimental: !!settings.experimental, roastGen: settings.roastGen !== false } });
+    // sybau code (the sc tab) answers small talk with the real chat model
+    window.SybauChat = (text) => { try { return bot.reply(text).text || "oke"; } catch (e) { return "oke"; } };
     await sleep(reduced ? 0 : 350);
     screen.textContent = "";
     welcome();

@@ -4,7 +4,7 @@ Chatbot brainrot yang **benci kamu**. Beda dari AI lain yang baik dan selalu set
 
 - **AI beneran, bukan n-gram**: 2 neural network yang dilatih dari nol pake Python + numpy (backprop ditulis manual, ada gradient check, gak pake PyTorch/TensorFlow).
 - **Ngerti bahasa Indonesia**: termasuk bahasa gaul & singkatan (`gk`, `bgt`, `yg`, `gw/gue/aku`, `lu/lo/km`, `wkwk`...). Bales pake bahasa yang lu pake: ngetik Indo dibales Indo, ngetik English dibales English.
-- **2 tab kayak Claude / Claude Code**: tab **s** buat ngobrol sama sybau, tab **sc** (sybau code) buat bikin game/program STS. Tab terakhir diinget, `#sc` di URL langsung buka sybau code.
+- **2 tab kayak Claude / Claude Code**: tab **s** buat ngobrol sama sybau, tab **sc** (sybau code) buat bikin game/app HTML + CSS + JavaScript. Tab terakhir diinget, `#sc` di URL langsung buka sybau code.
 - **Tampilan terminal ala Claude CLI**: slash command dengan autocomplete (`/help`, `/settings`, `/lang`, `/search`, `/grammar`, `/memory`, `/brain`, `/theme`, `/clear`, `/forget`…), spinner, tampilan tool call (`⏺ Wikidata(...)` → `⎿ hasil`), diff merah/ijo buat koreksi grammar, riwayat pesan pake ↑↓, `esc` buat stop jawaban.
 - **Tombol ⚙ settings** di atas (atau `/settings`): bahasa balesan (auto / indo / english), auto search on/off, polisi grammar on/off, tampilin otak (debug), tema (auto / classic / light / terminal / cyberpunk / dracula / amber / ocean / paper). Disimpen di browser.
 - **Auto search, gak perlu bilang "cari"**: nanya aja. "ibukota kazakstan" → **Astana**, "berapa umur elon musk" → umurnya dihitung dari tanggal lahir, "siapa presiden amerika serikat" → yang *sekarang*, "jumlah penduduk indonesia" → data terbaru. Pertanyaan fakta dijawab dari **Wikidata** (database fakta di balik Wikipedia), pertanyaan "apa itu X" dijawab pake ringkasan **Wikipedia**. Toleran typo ("kazakstan" tetep ketemu). Abis itu tetep nge-roast lu karena gak bisa googling sendiri.
@@ -35,7 +35,7 @@ pesan user ─► normalisasi slang (gk→gak, lu→kamu, wkwkwk→wkwk) + detek
 3. **Grammar checker** (`assets/js/grammar.js`): aturan frasa/kata salah dari `data/grammar_rules.json`, aturan di-/ke- bahasa Indonesia, dan pengecek typo pake 80 ribu kata paling umum (Indo + English): kata yang gak dikenal tapi beda 1 huruf dari kata umum = typo. Slang, singkatan chat, dan ketawa (wkwk) gak dihitung typo.
 4. **Search** (`assets/js/search.js`): parser pertanyaan Indo/English ngenalin ~35 jenis relasi (ibu kota, presiden, CEO, pendiri, penduduk, mata uang, bahasa, luas, tinggi, umur, lahir, tempat lahir, meninggal, pasangan, penemu, penulis, sutradara, benua, didirikan, agama, klub, kantor pusat…). Subjeknya dicari di Wikipedia (redirect + "did you mean" buat typo) → ID Wikidata-nya → properti yang ditanya (yang masih berlaku, bukan yang udah lewat; populasi diambil yang paling baru). Kalo bukan pertanyaan fakta, ambil ringkasan Wikipedia. Search otomatis jalan kalo pesannya pertanyaan dan bukan soal lu/gw (pertanyaan kayak "kenapa lu jahat" tetep dibales roast, bukan di-search).
 
-Total **4,9 juta parameter** chatbot (4.883.655: classifier 1,3 juta + transformer 3,5 juta, 5 layer, d=208) + ~670 ribu generator gambar + ~1,06 juta pembaca request kode STS = ~5 juta parameter. `model/brain.json` ~4,5 MB, `model/coder.json` ~1,4 MB, `model/pixels.json` ~950 KB, `model/lexicon.json` ~650 KB (int8 quantized).
+Total **4,9 juta parameter** chatbot (4.883.655: classifier 1,3 juta + transformer 3,5 juta, 5 layer, d=208) + ~670 ribu generator gambar + **9,1 juta** sybau code (transformer penulis HTML 6,7 juta + pembaca maksud 2,4 juta). `model/brain.json` ~4,5 MB, `model/htmlcode.json` ~9 MB, `model/codenlu.json` ~3 MB, `model/pixels.json` ~950 KB, `model/lexicon.json` ~650 KB (int8 quantized).
 
 ### Kenapa Wikipedia/Wikidata, bukan Google langsung?
 
@@ -43,26 +43,19 @@ Jujur aja: hasil Google gak bisa diambil dari situs statis tanpa API key. Google
 
 Batasannya: pertanyaan yang gak ada di Wikipedia/Wikidata (berita hari ini, harga, cuaca, pertanyaan "kenapa" yang rumit) gak bakal kejawab bagus.
 
-### Gimana sybau nulis kode STS
+### Gimana sybau code nulis game (HTML + CSS + JavaScript)
 
-Ada 2 cara, dipilih di ⚙ settings (**sybau code: AI murni**, default nyala):
+Gak ada template, gak ada perencana. Dua neural network yang dilatih dari nol:
 
-**1. AI murni (transformer nulis kodenya sendiri).** Transformer kedua (`training/train_code.py`, ~2 juta parameter, 4 layer, konteks 384 token) nulis program STS **token per token**: tiap keyword, angka, kurung, indentasi keluar dari neural net-nya, keliatan live pas dia "ngetik". Inputnya request lu jadi token (`<req> game <t1> lempar <t2> ke <t3> </req> <t1> cat:person ...`): benda yang lu sebut diganti slot `<t1>`, `<t2>`, dan hasil riset Wikipedia/database ngasih tau slot itu apa (monster, buah, senjata). Makanya dia bisa nulis kode buat kata yang belum pernah dia liat, terus namanya dibalikin. Dia dilatih kayak model kode beneran: dari korpus ribuan program STS (`node tools/make_sts_corpus.js` → `data/sts/corpus.jsonl`, semuanya udah lolos compiler). Tiap request dia nulis sampe 3 percobaan, masing-masing di-compile pake compiler STS asli (error dibenerin otomatis) terus dites (jalan tanpa error, ada objek, ada yang gerak, tombol ngaruh), yang paling bagus dipake. Biar kodenya ga rusak, decoding-nya *grammar-constrained*: tiap langkah dia cuma boleh milih token yang bikin kode tetep valid (string ditutup, kurung seimbang, indentasi cuma abis baris `:`, slot yang ada doang). Hasil tes terakhir (`node tests/neural.js`, 20 request): 18 lolos compiler, kebanyakan setelah beberapa auto-fix, dan lolos tes umumnya. Jujurnya: ini model 2 juta parameter yang dilatih dari korpus sintetis, jadi kodenya masih sering mirip program yang dia pelajarin, kadang salah paham ("game snake" pernah jadi game dadu), dan program panjang bisa manggil fungsi yang ga dia tulis (dibuang otomatis). Hasil tesnya ditampilin apa adanya. Kalo butuh yang pasti bener, matiin AI murni.
+**1. Pembaca maksud (code NLU, `training/train_codenlu.py`, 2,4 juta parameter).** Sebelum nulis apa-apa, dia baca tiap kata buat tau lu mau apa: **bikin baru** ("bikin game ninja vs zombie", "hapus dan bikin game baru"), **nambahin** ("tambahin bos naga"), **ubah setting** ("ubah speed jadi 10", "nyawanya 5 aja", "background merah", "lebih cepet"), **ganti benda** ("ganti zombie jadi alien", "musuhnya jadi hantu"), **hapus benda** ("hapus zombienya", "delete su"), **hapus semua**, **balikin** (undo), **nanya** ("variabelnya apa aja?", "cara mainnya gimana", "kenapa error") atau **cuma ngobrol** ("lu goblok", dibales sama AI chat). Dia juga nandain kata mana yang benda, setting, dan nilai. Dilatih dari ~70 ribu kalimat (Indo, English, slang, typo), jadi maksudnya ditangkep dari kata-katanya, bukan dari `/`, `?`, atau `!`. Tesnya pake kalimat tulisan tangan yang gak ada di data training: `node tests/codenlu.js`.
 
-**2. Perencana (AI murni dimatiin).** Nyusun desain dulu (siapa pemainnya, gerakan tiap benda, aturan menang/kalah), terus `stsgen.js` nulis kodenya fungsi per fungsi dan dites kelakuannya. Lebih rapi dan lebih bisa diandelin, tapi strukturnya lebih kebaca.
+**2. Transformer penulis kode (`training/train_html.py`, 6,7 juta parameter, 5 layer, d=256, konteks 1024 token).** Nulis **seluruh halaman HTML token per token**: tiap tag, aturan CSS, keyword JavaScript, angka, dan emoji keluar dari network-nya sendiri. Selama nulis, kurung `( [ {`, string, dan komentar dijaga biar halamannya tetep utuh. Tiap hasil **dijalanin dulu di sandbox** (dipencet tombolnya, diklik); kalo ada error JavaScript atau layarnya kosong, dibuang dan ditulis ulang (3 percobaan, 6 kalo deepthink). Kalo tetep gagal, dia bilang jujur, gak ada cadangan template.
 
-**Mode HTML/JS/CSS (eksperimental, ⚙ settings).** Desain yang sama ditulis jadi **satu file `.html`** (canvas + JavaScript + CSS) lewat `assets/js/jsgen.js`, bukan STS. Bisa didownload dan dibuka di browser mana aja; preview-nya jalan di iframe. `node tests/html.js` ngejalanin 18 game HTML di browser palsu selama 5 detik, harus tanpa error.
+Bahan latihannya **111 game & app HTML yang aku tulis tangan** (`data/html/games/`: snake, pong, breakout, flappy, platformer, tetris, pacman, tower defense, RPG, tic tac toe, kuis, kalkulator, todo, piano, dll; `node tools/check_html.js` buka semuanya di browser beneran dan ngecek gak ada error). Tiap game dijadiin 40 variasi (`tools/make_html_corpus.js`): bendanya dituker sama benda lain sejenis dari `data/html/things.json` (~270 benda, nama Indo + English + emoji), request Indo/English dengan pembuka beda-beda, dan modifier yang beneran ngubah kodenya ("pake 5 nyawa" → `let lives = 5`, "yang cepet", "background merah"). Benda di request jadi slot (`<t1> zombie`), jadi dia bisa nyalin kata apa aja ke game, termasuk kata yang belum pernah dia liat.
 
-**100 program STS bikinan tangan** di `data/sts/handmade/` (game, puzzle, app, simulasi, animasi; `node tools/check_handmade.js` ngecek semuanya compile + jalan). Ini bahan latihan paling penting buat transformer kode: tiap program masuk korpus 30 kali dengan variasi warna dan kalimat request.
+**Ngedit beneran ngubah kodenya.** Tiap game punya blok setting di atas script (`let speed = 4; // kecepatan pemain`). "ubah kecepatan zombie jadi 2" dicocokin ke nama variabel *dan* komentarnya, terus nilainya diganti. Ganti benda nuker nama + emojinya. Tiap perubahan dites jalan dulu; kalo bikin error, gak dipake. Semua versi disimpen, jadi bisa "balikin". Chat, kode, dan project terakhir disimpen di browser.
 
-sybau code juga **punya memori**: chat, kode, dan project terakhir disimpen di browser, jadi abis reload dia masih inget. Tanya "tadi kita bikin apa?" buat liat, follow-up pendek ("musuhnya 5", "lebih cepet") langsung ngedit project yang tadi, `/new` buat mulai baru.
-
-
-Bukan nempel program jadi. Tiap request dipecah jadi **benda** ("ninja", "zombie", "shuriken") dan **apa yang dilakuin ke benda itu** (dimainin, dihindarin, dikumpulin, ditembak, ngejar lu, ditangkep, diklik). Tiap benda diriset dulu: artikel Wikipedia-nya dibaca ("Zombi adalah mayat hidup ... berjalan lambat" → monster, lambat → ngejar pelan), ditambah database offline `data/sts/things.json` kalau search mati. Dari situ dibikin desain (siapa pemainnya, kontrolnya, gerakan tiap benda, apa yang terjadi kalau kena, cara menang/kalah), terus `stsgen.js` nulis kodenya: variabel, satu fungsi per kelakuan, objek, event, loop. Kuis soal topik ("kuis tentang majapahit") soalnya dibikin dari kalimat artikel Wikipedia-nya (isian tahun/nama/angka + benar-salah). Abis di-compile pake compiler STS asli, programnya dijalanin tanpa layar dan dites: pemain gerak kalo tombolnya dipencet? musuh beneran gerak? nyentuh musuh beneran ngurangin nyawa? peluru beneran nambah skor? Yang gagal dilaporin jujur.
-
-Game yang punya aturan sendiri dikenalin dari namanya, termasuk typo ("rictactoe" → tic tac toe): **tic tac toe** (lawan komputer yang mikir: menang kalo bisa → ngeblok lu → tengah → pojok, atau 2 pemain), **snake** (badan 30 ruas yang ngikutin kepala), **suit/batu gunting kertas**. Game yang dia ga kenal ("game pacman") dibaca dulu artikel Wikipedia-nya, terus deskripsinya dibaca kayak request ("memakan titik di labirin sambil menghindari 4 hantu yang mengejar" → labirin + titik buat dimakan + 4 hantu ngejar). Kalo artikelnya nyebut aturan yang dia belum bisa (catur), atau dia sama sekali ga ngerti requestnya, dia bilang jujur dan nanya, bukan asal gambar kotak/lingkaran.
-
-Jujurnya: ini bukan AI gede yang bisa nulis program apa aja. Dia ngerti sekitar 30 jenis mekanik (gerak, ngejar, jatuh, mantul, nembak, lompat, flappy, labirin, kuis, clicker, toko, dadu, tic tac toe, snake, suit, dll) yang bisa dicampur bebas, dan benda/game apa aja yang bisa dia riset. Di luar itu dia bilang jujur.
+Jujurnya: 6,7 juta parameter itu kecil banget (ChatGPT ratusan miliar), dan datanya 111 game. Jadi dia jago bikin game yang mirip-mirip yang dia pelajari (dengan benda dan setting apa aja), tapi belum bisa nulis program yang bener-bener baru dan rumit.
 
 > Jujur juga soal "pinter": ChatGPT itu ratusan miliar parameter yang dilatih dari sebagian besar internet; sybau 4,9 juta. Jadi "selalu tau apapun" gak mungkin buat model sekecil ini, makanya dia pake tools (Wikidata/Wikipedia, kalkulator, memori) dan mode eksperimental buat nutupin yang dia gak tau. Ini model kecil yang dilatih dari ~800 contoh balesan dan ~2000 pola chat, jadi jelas gak sepinter ChatGPT. Dia jago di hal yang dilatihin (roasting, ngobrol santai Indo/English, milih pilihan lu terus ngehate, matematika, inget-inget lu, nyari di Wikipedia, ngoreksi typo), tapi dia gak bisa nalar panjang atau jawab pertanyaan rumit.
 
@@ -116,7 +109,8 @@ data/                 data training (edit ini buat ngubah kepribadian)
   intents.json          patterns (contoh chat user) + responses (contoh jawaban bot), 55 intent
   fillers.json          kata pengisi buat augmentasi ({N} nama, {T} hal, {A}/{B} pilihan, {M} matematika, {Y} umur, {Q} topik search)
   roasts.txt            roast tambahan, satu per baris
-  sts/                  data bahasa STS: requests.json (contoh request program), things.json (database benda: zombie = monster, apel = buah...), docs.md, examples/*.sts
+  html/games/           111 game & app HTML/CSS/JS tulisan tangan (bahan latihan transformer kode)
+  html/things.json      ~270 benda: nama Indo + English + emoji, dikelompokin (pemain, musuh, item, peluru, kendaraan...)
   sprites.txt           31 gambar pixel 16x16 (teks) buat ngelatih generator gambar
   slang_id.json         kamus slang/singkatan Indonesia + kata penanda bahasa Indonesia
   grammar_rules.json    aturan grammar & ejaan yang di-roast
@@ -124,7 +118,8 @@ data/                 data training (edit ini buat ngubah kepribadian)
 training/
   train.py              training kedua network (numpy) -> model/brain.json + model/lexicon.json
   transformer.py        transformer GPT kecil dari nol (forward + backprop manual + gradient check)
-  train_coder.py        training pembaca request kode STS (numpy) -> model/coder.json
+  train_codenlu.py      pembaca maksud sybau code (intent + penanda kata) -> model/codenlu.json
+  train_html.py         transformer penulis HTML/CSS/JS -> model/htmlcode.json
   train_pixels.py       training generator gambar (numpy) -> model/pixels.json
   textproc.py           normalisasi teks + hashing (dicerminkan persis di brain.js)
 model/                  hasil training (dipake website)
@@ -134,10 +129,13 @@ assets/js/
   grammar.js            polisi grammar
   search.js             parser pertanyaan + Wikidata/Wikipedia
   pixels.js             generator gambar + baca gambar upload-an
-  learn.js              belajar dari file yang di-upload
-  stsvm.js              loader compiler + VM STS asli (assets/sts/sts.wasm)
-  stscoder.js           baca request -> riset bendanya (Wikipedia + things.json) -> desain game -> compile -> tes kelakuan
-  stsgen.js             nulis kode STS dari desain itu, fungsi per fungsi (labirin digali baru tiap kali)
+  learn.js              belajar dari teks (cuma buat SDK, di web udah dihapus)
+  codenlu.js            pembaca maksud sybau code di browser
+  htmltok.js            tokenizer HTML/CSS/JS (bolak-balik tanpa rusak)
+  htmlreq.js            request -> prompt transformer (slot benda)
+  htmlneural.js         transformer penulis kode di browser (KV cache, decoding yang jaga kurung/string)
+  htmlcoder.js          sybau code: maksud -> nulis / edit / jawab, tes jalan di sandbox
+  code.js               UI tab sc
   app.js                UI terminal (commands, autocomplete, settings)
 sdk/core.js             SDK publik (connect key)
 sybau.js                bundle SDK (dibikin tools/build_sdk.py, jangan diedit langsung)
@@ -151,16 +149,17 @@ tests/                  cek JS == Python, akurasi, grammar, simulasi chat
 ```bash
 pip install -r requirements.txt
 python training/train.py          # chatbot: gradient check, validasi, training, export
-python training/train_coder.py    # pembaca request kode STS
-node tools/make_sts_corpus.js && python training/train_code.py   # transformer penulis kode STS (~80 menit)
+python training/train_codenlu.py  # pembaca maksud sybau code (~5 menit)
+node tools/make_html_corpus.js && python training/train_html.py   # transformer penulis HTML (lama, ~5 jam di 4 core)
 OMP_NUM_THREADS=1 python training/train_pixels.py   # generator gambar (~1 menit; 1 thread malah lebih cepet)
 python tools/build_sdk.py         # bikin ulang sybau.js kalo ada file assets/js yang diubah
 python tests/parity.py            # pastiin JS ngitung sama persis kayak Python (butuh node)
 node tests/grammar.js             # cek polisi grammar (gak boleh salah roast kalimat bener)
 node tests/search.js              # tes jawaban pertanyaan (pake Wikipedia/Wikidata palsu, tests/fake_wiki.js)
-node tests/neural.js              # transformer nulis program STS sendiri: berapa yang lolos compiler + tes
-node tests/codetok.js             # tokenizer kode STS bolak-balik tanpa rusak
-node tests/coder.js               # 36 request STS: lolos compiler + lolos tes kelakuan (pake Wikipedia palsu)
+node tools/check_html.js          # 111 game tulisan tangan dibuka di browser beneran, gak boleh error
+node tests/codenlu.js             # pembaca maksud vs kalimat tulisan tangan
+node tests/htmlcoder.js           # edit: setting, background, ganti benda, undo, hapus
+node tests/htmlneural.js          # transformer nulis game buat 16 request, semua dijalanin di browser
 node tests/chat.js                # simulasi obrolan di terminal (search pake Wikipedia palsu)
 python -m http.server 8765 & node tests/sdk.js   # SDK sybau.js dari "app lain"
 node tests/chat.js "roast gw" "mending kucing atau anjing?" "cari jakarta"
