@@ -1,0 +1,32 @@
+// request: tendangan penalti pilih arah lawan kiper || a penalty kick: pick a side against the keeper
+background("#2e7d32")
+var gol = 0
+var tendang = 0
+on 110 40 draw rect 300 120 color "#ffffff". gawang
+on 120 50 draw rect 280 110 color "#1b5e20". jaring
+on 235 100 draw rect 50 60 color "#ffeb3b". kiper
+on 250 300 draw circle 24 color "#ffffff". bola
+on 16 10 draw text "gol 0/0" 16 color "#ffffff". hud
+on 16 330 draw text "panah kiri / atas / kanan buat nendang" 13 color "#c8e6c9". info
+
+def tendangan(arah):
+    tendang = tendang + 1
+    var kiperArah = randint(0, 2)
+    setpos("kiper", 140 + kiperArah * 95, 100)
+    setpos("bola", 150 + arah * 95, 90)
+    if kiperArah != arah:
+        gol = gol + 1
+        show.popup("GOOOL")
+    else:
+        show.popup("ditangkep kiper")
+    set("hud", "text", "gol " + gol + "/" + tendang)
+    setpos("bola", 250, 300)
+    setpos("kiper", 235, 100)
+
+forever:
+    if key("left"):
+        tendangan(0)
+    if key("up"):
+        tendangan(1)
+    if key("right"):
+        tendangan(2)

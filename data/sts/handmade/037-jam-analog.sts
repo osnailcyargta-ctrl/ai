@@ -1,0 +1,16 @@
+// request: jam analog yang jarumnya gerak || an analog clock with moving hands
+background("#1e1e1e")
+var d = 0
+on 160 80 draw circle 200 color "#f5f5f5". muka
+on 255 175 draw circle 10 color "#222222". poros
+on 260 180 draw line 260 100 color "#d62828". jarumDetik
+on 260 180 draw line 260 120 color "#222222". jarumMenit
+
+forever:
+    d = d + 0.016
+    var a = d * 6 * 0.01745 - 1.5708
+    var m = d / 10 * 0.01745 - 1.5708
+    set("jarumDetik", "w", 260 + cos(a) * 85)
+    set("jarumDetik", "h", 180 + sin(a) * 85)
+    set("jarumMenit", "w", 260 + cos(m) * 65)
+    set("jarumMenit", "h", 180 + sin(m) * 65)

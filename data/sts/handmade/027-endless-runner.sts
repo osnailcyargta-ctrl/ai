@@ -1,0 +1,32 @@
+// request: endless runner, lompatin rintangan yang makin cepet || an endless runner: jump over obstacles that keep speeding up
+background("#87ceeb")
+var vy = 0
+var ditanah = 1
+var cepat = 5
+var skor = 0
+on 0 300 draw rect 520 60 color "#5d8233". tanah
+on 60 260 draw square 40 color "#e63946". pelari
+on 520 270 draw rect 24 30 color "#3d2b1f". kaktus
+on 16 10 draw text "skor 0" 18 color "#1d3557". hud
+
+forever:
+    if (key("space") or key("up")) and ditanah == 1:
+        vy = -12
+        ditanah = 0
+    vy = vy + 0.7
+    move("pelari", 0, vy)
+    if get("pelari", "y") > 260:
+        set("pelari", "y", 260)
+        vy = 0
+        ditanah = 1
+    move("kaktus", 0 - cepat, 0)
+    if get("kaktus", "x") < -30:
+        setpos("kaktus", 540 + randint(0, 200), 270)
+        skor = skor + 1
+        cepat = cepat + 0.3
+        set("hud", "text", "skor " + skor)
+    if touching("pelari", "kaktus"):
+        show.popup("nabrak kaktus. skor " + skor)
+        skor = 0
+        cepat = 5
+        setpos("kaktus", 560, 270)

@@ -1,0 +1,21 @@
+// request: akuarium ikan berenang bolak balik || an aquarium with fish swimming back and forth
+background("#01579b")
+on 0 320 draw rect 520 40 color "#d7ccc8". pasir
+on 60 120 draw ellipse 46 20 color "#ff7043". ikan1
+on 300 200 draw ellipse 36 16 color "#ffee58". ikan2
+on 180 260 draw ellipse 56 24 color "#ab47bc". ikan3
+on 440 300 draw triangle 20 40 color "#2e7d32". rumput
+var v1 = 1.5
+var v2 = -2
+var v3 = 1
+
+def renang(id, v):
+    move(id, v, sin(get(id, "x") / 25) * 0.6)
+    if get(id, "x") < 0 or get(id, "x") > 470:
+        return 0 - v
+    return v
+
+forever:
+    v1 = renang("ikan1", v1)
+    v2 = renang("ikan2", v2)
+    v3 = renang("ikan3", v3)

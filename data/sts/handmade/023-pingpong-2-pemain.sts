@@ -1,0 +1,38 @@
+// request: ping pong 2 pemain, w s sama panah atas bawah || two player ping pong with w/s and the up/down arrows
+background("#000000")
+var bx = 4
+var by = 3
+var kiri = 0
+var kanan = 0
+on 20 140 draw rect 12 80 color "#ffffff". raketKiri
+on 488 140 draw rect 12 80 color "#ffffff". raketKanan
+on 252 170 draw square 14 color "#ffffff". bola
+on 200 10 draw text "0 : 0" 28 color "#ffffff". skor
+
+def tengah():
+    setpos("bola", 252, 170)
+    bx = 0 - bx
+    set("skor", "text", kiri + " : " + kanan)
+
+forever:
+    if key("w"):
+        move("raketKiri", 0, -6)
+    if key("s"):
+        move("raketKiri", 0, 6)
+    if key("up"):
+        move("raketKanan", 0, -6)
+    if key("down"):
+        move("raketKanan", 0, 6)
+    move("bola", bx, by)
+    if get("bola", "y") < 0 or get("bola", "y") > 346:
+        by = 0 - by
+    if touching("bola", "raketKiri") and bx < 0:
+        bx = abs(bx) + 0.3
+    if touching("bola", "raketKanan") and bx > 0:
+        bx = 0 - abs(bx) - 0.3
+    if get("bola", "x") < 0:
+        kanan = kanan + 1
+        tengah()
+    if get("bola", "x") > 520:
+        kiri = kiri + 1
+        tengah()

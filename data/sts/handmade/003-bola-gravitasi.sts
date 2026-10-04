@@ -1,0 +1,19 @@
+// request: bola jatuh pake gravitasi terus mantul di lantai || a ball that falls with gravity and bounces on the floor
+background("#14181f")
+var vy = 0
+var vx = 2.5
+on 0 330 draw rect 520 30 color "#3d4450". lantai
+on 60 40 draw circle 30 color "#ff8a3d". bola
+on 16 10 draw text "klik buat lempar lagi" 14 color "#8892a0". info
+
+onclick /id"bola" check:
+    vy = -12
+
+forever:
+    vy = vy + 0.45
+    move("bola", vx, vy)
+    if get("bola", "y") > 300:
+        set("bola", "y", 300)
+        vy = 0 - vy * 0.75
+    if get("bola", "x") < 0 or get("bola", "x") > 490:
+        vx = 0 - vx

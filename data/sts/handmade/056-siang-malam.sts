@@ -1,0 +1,21 @@
+// request: siklus siang malam, langit ganti warna || a day and night cycle, the sky changes colour
+background("#87ceeb")
+var t = 0
+on 0 280 draw rect 520 80 color "#4caf50". rumput
+on 220 300 draw rect 80 60 color "#8d6e63". rumah
+on 220 80 draw circle 60 color "#ffeb3b". matahari
+
+forever:
+    t = t + 0.01
+    var y = 180 - sin(t) * 150
+    set("matahari", "y", y)
+    set("matahari", "x", 230 + cos(t) * 200)
+    if sin(t) > 0.3:
+        background("#87ceeb")
+        set("matahari", "color", "#ffeb3b")
+    elif sin(t) > -0.1:
+        background("#ff8a65")
+        set("matahari", "color", "#ff7043")
+    else:
+        background("#0d1b2a")
+        set("matahari", "color", "#eceff1")

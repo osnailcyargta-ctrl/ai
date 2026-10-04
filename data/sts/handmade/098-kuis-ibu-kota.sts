@@ -1,0 +1,21 @@
+// request: kuis ibu kota negara pilihan ganda || a multiple choice quiz on capital cities
+background("#1a237e")
+var skor = 0
+on 16 10 draw text "kuis ibu kota" 22 color "#ffeb3b". judul
+on 16 50 draw text "skor 0" 18 color "#ffffff". hud
+
+def soal(tanya, a, b, c, benar):
+    var j = num(show.anspopup(tanya + "  1) " + a + "  2) " + b + "  3) " + c))
+    if j == benar:
+        skor = skor + 1
+        show.popup("bener!")
+    else:
+        show.popup("salah")
+    set("hud", "text", "skor " + skor)
+
+soal("ibu kota jepang?", "osaka", "tokyo", "kyoto", 2)
+soal("ibu kota australia?", "sydney", "melbourne", "canberra", 3)
+soal("ibu kota kazakhstan?", "astana", "almaty", "tashkent", 1)
+soal("ibu kota kanada?", "toronto", "ottawa", "vancouver", 2)
+soal("ibu kota brasil?", "brasilia", "rio de janeiro", "sao paulo", 1)
+show.popup("selesai! skor " + skor + "/5")

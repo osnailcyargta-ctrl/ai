@@ -1,0 +1,38 @@
+// request: shooter top down, nembak ke arah mouse || a top-down shooter that fires towards the mouse
+background("#263238")
+var tembak = 0
+var pvx = 0
+var pvy = 0
+var skor = 0
+on 250 170 draw circle 30 color "#4dd0e1". pemain
+on -20 -20 draw circle 8 color "#ffeb3b". peluru
+on 50 50 draw square 26 color "#ef5350". musuh
+on 16 10 draw text "klik buat nembak · skor 0" 14 color "#ffffff". hud
+
+forever:
+    if key("a"):
+        move("pemain", -3, 0)
+    if key("d"):
+        move("pemain", 3, 0)
+    if key("w"):
+        move("pemain", 0, -3)
+    if key("s"):
+        move("pemain", 0, 3)
+    if mousedown() and tembak == 0:
+        var dx = mousex() - get("pemain", "x") - 15
+        var dy = mousey() - get("pemain", "y") - 15
+        var jarak = max(1, sqrt(dx * dx + dy * dy))
+        pvx = dx / jarak * 9
+        pvy = dy / jarak * 9
+        setpos("peluru", get("pemain", "x") + 11, get("pemain", "y") + 11)
+        tembak = 1
+    if tembak == 1:
+        move("peluru", pvx, pvy)
+        if get("peluru", "x") < -10 or get("peluru", "x") > 530 or get("peluru", "y") < -10 or get("peluru", "y") > 370:
+            tembak = 0
+    if touching("peluru", "musuh"):
+        skor = skor + 1
+        tembak = 0
+        setpos("peluru", -20, -20)
+        setpos("musuh", randint(10, 490), randint(40, 330))
+        set("hud", "text", "klik buat nembak · skor " + skor)

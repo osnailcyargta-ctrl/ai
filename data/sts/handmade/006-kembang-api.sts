@@ -1,0 +1,33 @@
+// request: kembang api yang meledak kalo diklik || fireworks that burst when u click
+background("#05050f")
+var t = 0
+var aktif = 0
+var cx = 260
+var cy = 180
+on 120 330 draw text "klik di mana aja" 16 color "#666688". info
+on -50 -50 draw circle 8 color "#ff4d6d". p1
+on -50 -50 draw circle 8 color "#ffd166". p2
+on -50 -50 draw circle 8 color "#06d6a0". p3
+on -50 -50 draw circle 8 color "#118ab2". p4
+on -50 -50 draw circle 8 color "#ef476f". p5
+on -50 -50 draw circle 8 color "#ffffff". p6
+
+def taruh(id, sudut):
+    setpos(id, cx + cos(sudut) * t * 3, cy + sin(sudut) * t * 3 + t * t * 0.02)
+
+forever:
+    if mousedown():
+        aktif = 1
+        t = 0
+        cx = mousex()
+        cy = mousey()
+    if aktif == 1:
+        t = t + 1
+        taruh("p1", 0)
+        taruh("p2", 1.05)
+        taruh("p3", 2.1)
+        taruh("p4", 3.14)
+        taruh("p5", 4.2)
+        taruh("p6", 5.25)
+        if t > 45:
+            aktif = 0

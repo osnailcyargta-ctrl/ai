@@ -1,0 +1,15 @@
+// request: generator nama random || a random name generator
+background("#1c2833")
+on 16 20 draw text "generator nama" 24 color "#f7dc6f". judul
+on 16 120 draw text "klik tombol" 32 color "#ffffff". nama
+on 16 250 draw rect 200 44 color "#2e86c1". tombol
+on 56 262 draw text "nama baru" 18 color "#ffffff". lt
+
+def depan():
+    return choose(choose("Raka", "Dimas", "Sari", "Nadia", "Bima"), choose("Laras", "Yoga", "Putri", "Arya", "Wulan"))
+
+def belakang():
+    return choose("Pratama", "Saputra", "Lestari", "Wijaya", "Kusuma", "Hidayat", "Permata", "Santoso")
+
+onclick /id"tombol" check:
+    set("nama", "text", depan() + " " + belakang())

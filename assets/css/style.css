@@ -311,3 +311,6 @@ body.brain-on .meta { display: block; }
 .cx-opt-n { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; background: var(--faint); color: var(--fg); font-size: 11px; font-weight: 700; }
 .cx-ask-hint { font-size: 11px; margin-top: 6px; }
 @media (max-width: 560px) { .cx-ask { bottom: 100px; } .cx-ask-opts { grid-template-columns: 1fr 1fr; } }
+/* settings: the list scrolls when there are more switches than fit */
+.panel { display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
+.settings-list { overflow-y: auto; min-height: 0; flex: 1 1 auto; overscroll-behavior: contain; scrollbar-width: thin; }

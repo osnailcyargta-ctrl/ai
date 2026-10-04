@@ -1,0 +1,72 @@
+// request: kalkulator pake tombol angka || a calculator with number buttons
+background("#212121")
+var layar = 0
+var simpan = 0
+var op = 0
+on 40 20 draw rect 440 50 color "#424242". kotakLayar
+on 56 32 draw text "0" 26 color "#ffffff". angka
+
+def tulis():
+    set("angka", "text", str(layar))
+
+def tekan(n):
+    layar = layar * 10 + n
+    tulis()
+
+def operasi(o):
+    simpan = layar
+    layar = 0
+    op = o
+
+def hasil():
+    if op == 1:
+        layar = simpan + layar
+    elif op == 2:
+        layar = simpan - layar
+    elif op == 3:
+        layar = simpan * layar
+    elif op == 4 and layar != 0:
+        layar = simpan / layar
+    op = 0
+    tulis()
+
+on 40 90 draw rect 100 50 color "#616161". t1
+on 80 102 draw text "1" 22 color "#ffffff". n1
+on 150 90 draw rect 100 50 color "#616161". t2
+on 190 102 draw text "2" 22 color "#ffffff". n2
+on 260 90 draw rect 100 50 color "#616161". t3
+on 300 102 draw text "3" 22 color "#ffffff". n3
+on 370 90 draw rect 110 50 color "#ff9800". tambah
+on 418 102 draw text "+" 22 color "#ffffff". nt
+on 40 150 draw rect 100 50 color "#616161". t4
+on 80 162 draw text "4" 22 color "#ffffff". n4
+on 150 150 draw rect 100 50 color "#616161". t5
+on 190 162 draw text "5" 22 color "#ffffff". n5
+on 260 150 draw rect 100 50 color "#616161". t0
+on 300 162 draw text "0" 22 color "#ffffff". n0
+on 370 150 draw rect 110 50 color "#ff9800". kali
+on 418 162 draw text "x" 22 color "#ffffff". nk
+on 40 210 draw rect 210 50 color "#ff9800". kurang
+on 140 222 draw text "-" 22 color "#ffffff". nkr
+on 260 210 draw rect 220 50 color "#4caf50". samadengan
+on 362 222 draw text "=" 22 color "#ffffff". ns
+onclick /id"t1" check:
+    tekan(1)
+onclick /id"t2" check:
+    tekan(2)
+onclick /id"t3" check:
+    tekan(3)
+onclick /id"t4" check:
+    tekan(4)
+onclick /id"t5" check:
+    tekan(5)
+onclick /id"t0" check:
+    tekan(0)
+onclick /id"tambah" check:
+    operasi(1)
+onclick /id"kurang" check:
+    operasi(2)
+onclick /id"kali" check:
+    operasi(3)
+onclick /id"samadengan" check:
+    hasil()

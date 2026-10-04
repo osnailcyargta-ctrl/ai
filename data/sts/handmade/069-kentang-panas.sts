@@ -1,0 +1,30 @@
+// request: game kentang panas, bom meledak random || hot potato: the bomb blows up at a random moment
+background("#3e1f00")
+var pegang = 1
+var ledak = 0
+on 60 160 draw square 60 color "#ff8a65". pemain1
+on 400 160 draw square 60 color "#4fc3f7". pemain2
+on 90 120 draw circle 34 color "#212121". bom
+on 16 10 draw text "spasi = lempar bom" 14 color "#ffffff". info
+
+def meledak():
+    ledak = 1
+    set("bom", "color", "#ff1744")
+    set("bom", "w", 120)
+    set("bom", "h", 120)
+    show.popup("BOOM! pemain " + pegang + " kalah")
+
+countdown {rand(4, 9)} (meledak()). sumbu
+
+forever:
+    if ledak == 0 and key("space"):
+        if pegang == 1:
+            pegang = 2
+        else:
+            pegang = 1
+        wait 0.3
+    if ledak == 0:
+        if pegang == 1:
+            setpos("bom", 73, 110)
+        else:
+            setpos("bom", 413, 110)

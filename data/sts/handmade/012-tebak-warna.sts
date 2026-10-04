@@ -1,0 +1,40 @@
+// request: game tebak warna, klik kotak yang warnanya sesuai tulisan || a colour game: click the box that matches the word
+background("#121212")
+var skor = 0
+var target = 1
+on 16 10 draw text "skor: 0" 18 color "#ffffff". hudSkor
+on 180 60 draw text "MERAH" 36 color "#ffffff". soal
+on 40 160 draw square 90 color "#e63946". kotak1
+on 150 160 draw square 90 color "#2a9d8f". kotak2
+on 260 160 draw square 90 color "#457b9d". kotak3
+on 370 160 draw square 90 color "#f4a261". kotak4
+
+def soalBaru():
+    target = randint(1, 4)
+    if target == 1:
+        set("soal", "text", "MERAH")
+    elif target == 2:
+        set("soal", "text", "HIJAU")
+    elif target == 3:
+        set("soal", "text", "BIRU")
+    else:
+        set("soal", "text", "ORANYE")
+    set("soal", "color", choose("#e63946", "#2a9d8f", "#457b9d", "#f4a261"))
+
+def pilih(n):
+    if n == target:
+        skor = skor + 1
+    else:
+        skor = skor - 1
+    set("hudSkor", "text", "skor: " + skor)
+    soalBaru()
+
+onclick /id"kotak1" check:
+    pilih(1)
+onclick /id"kotak2" check:
+    pilih(2)
+onclick /id"kotak3" check:
+    pilih(3)
+onclick /id"kotak4" check:
+    pilih(4)
+soalBaru()

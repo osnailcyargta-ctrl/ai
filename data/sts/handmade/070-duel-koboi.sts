@@ -1,0 +1,30 @@
+// request: duel koboi, siapa paling cepet pencet pas muncul DOR || a cowboy duel: fastest to press when DOR appears wins
+background("#c2a46b")
+var siap = 0
+var selesai = 0
+on 60 180 draw rect 30 70 color "#5d4037". koboi1
+on 430 180 draw rect 30 70 color "#37474f". koboi2
+on 200 80 draw text "siap..." 36 color "#3e2723". tanda
+on 16 10 draw text "pemain 1: A · pemain 2: L" 14 color "#3e2723". info
+
+def dor():
+    siap = 1
+    set("tanda", "text", "DOR!")
+    set("tanda", "color", "#d50000")
+
+countdown {rand(2, 6)} (dor()). aba
+
+forever:
+    if selesai == 0:
+        if key("a"):
+            selesai = 1
+            if siap == 1:
+                show.popup("pemain 1 menang")
+            else:
+                show.popup("pemain 1 curang, pemain 2 menang")
+        if key("l"):
+            selesai = 1
+            if siap == 1:
+                show.popup("pemain 2 menang")
+            else:
+                show.popup("pemain 2 curang, pemain 1 menang")

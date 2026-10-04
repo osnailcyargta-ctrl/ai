@@ -1,0 +1,33 @@
+// request: flappy bird lewat celah pipa || flappy bird through the gaps in the pipes
+background("#70c5ce")
+var vy = 0
+var celah = 150
+var skor = 0
+on 80 170 draw circle 26 color "#ffd23f". burung
+on 520 0 draw rect 50 150 color "#3a7d44". pipaAtas
+on 520 270 draw rect 50 200 color "#3a7d44". pipaBawah
+on 16 10 draw text "0" 30 color "#ffffff". hud
+
+def pipaBaru():
+    celah = randint(80, 230)
+    setpos("pipaAtas", 540, celah - 380)
+    set("pipaAtas", "h", 380)
+    setpos("pipaBawah", 540, celah + 110)
+
+forever:
+    if key("space") or mousedown():
+        vy = -5
+    vy = vy + 0.35
+    move("burung", 0, vy)
+    move("pipaAtas", -3, 0)
+    move("pipaBawah", -3, 0)
+    if get("pipaAtas", "x") < -60:
+        pipaBaru()
+        skor = skor + 1
+        set("hud", "text", str(skor))
+    if touching("burung", "pipaAtas") or touching("burung", "pipaBawah") or get("burung", "y") > 340 or get("burung", "y") < 0:
+        show.popup("jatuh. skor " + skor)
+        skor = 0
+        vy = 0
+        setpos("burung", 80, 170)
+        pipaBaru()

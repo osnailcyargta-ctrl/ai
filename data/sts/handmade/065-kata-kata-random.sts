@@ -1,0 +1,9 @@
+// request: generator quote motivasi random || a random motivational quote generator
+background("#3e2723")
+on 16 20 draw text "quote hari ini" 22 color "#ffcc80". judul
+on 16 120 draw text "klik buat quote" 18 color "#ffffff". quote
+on 16 280 draw rect 160 40 color "#6d4c41". tombol
+on 40 290 draw text "quote baru" 18 color "#ffffff". lt
+
+onclick /id"tombol" check:
+    set("quote", "text", choose("mulai aja dulu, rapi belakangan", "capek boleh, nyerah jangan", "pelan pelan asal jalan", "error itu guru paling jujur", "tidur cukup, kode lancar", "hari ini lebih baik dari kemarin", "jangan lupa minum air"))

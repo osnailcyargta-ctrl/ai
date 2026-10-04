@@ -1,0 +1,50 @@
+// request: ular tangga mini 2 pemain pake dadu || mini snakes and ladders for 2 players with a dice
+background("#fff8e1")
+var p1 = 1
+var p2 = 1
+var giliran = 1
+on 16 10 draw text "ular tangga 1-30" 20 color "#5d4037". judul
+on 16 60 draw text "" 18 color "#d84315". hud1
+on 16 90 draw text "" 18 color "#1565c0". hud2
+on 16 130 draw text "" 16 color "#5d4037". info
+on 180 250 draw rect 160 44 color "#8d6e63". tombol
+on 220 262 draw text "lempar" 18 color "#ffffff". lt
+
+def efek(pos):
+    if pos == 6:
+        set("info", "text", "naik tangga ke 14!")
+        return 14
+    if pos == 17:
+        set("info", "text", "kena ular, turun ke 4")
+        return 4
+    if pos == 22:
+        set("info", "text", "naik tangga ke 28!")
+        return 28
+    if pos == 26:
+        set("info", "text", "kena ular, turun ke 10")
+        return 10
+    return pos
+
+def tulis():
+    set("hud1", "text", "pemain 1: kotak " + p1)
+    set("hud2", "text", "pemain 2: kotak " + p2)
+
+onclick /id"tombol" check:
+    var d = randint(1, 6)
+    set("info", "text", "dadu: " + d)
+    if giliran == 1:
+        p1 = efek(min(30, p1 + d))
+        giliran = 2
+    else:
+        p2 = efek(min(30, p2 + d))
+        giliran = 1
+    tulis()
+    if p1 == 30 or p2 == 30:
+        if p1 == 30:
+            show.popup("pemain 1 menang!")
+        else:
+            show.popup("pemain 2 menang!")
+        p1 = 1
+        p2 = 1
+        tulis()
+tulis()

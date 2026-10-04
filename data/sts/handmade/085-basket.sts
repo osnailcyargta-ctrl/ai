@@ -1,0 +1,36 @@
+// request: game basket, tahan spasi buat ngatur tenaga lemparan || basketball: hold space to set the throwing power
+background("#ff8a65")
+var tenaga = 0
+var terbang = 0
+var vx = 0
+var vy = 0
+var masuk = 0
+on 420 100 draw rect 70 6 color "#d84315". ring
+on 486 40 draw rect 8 120 color "#ffffff". papan
+on 60 280 draw circle 28 color "#e65100". bola
+on 16 330 draw rect 0 12 color "#ffffff". barTenaga
+on 16 10 draw text "masuk 0" 16 color "#ffffff". hud
+
+forever:
+    if terbang == 0:
+        if key("space"):
+            tenaga = min(100, tenaga + 1.5)
+            set("barTenaga", "w", tenaga * 3)
+        elif tenaga > 0:
+            terbang = 1
+            vx = tenaga * 0.11
+            vy = 0 - tenaga * 0.14
+            tenaga = 0
+    else:
+        vy = vy + 0.25
+        move("bola", vx, vy)
+        if touching("bola", "ring") and vy > 0:
+            masuk = masuk + 1
+            set("hud", "text", "masuk " + masuk)
+            show.popup("MASUK!")
+            terbang = 0
+            setpos("bola", 60, 280)
+        if get("bola", "y") > 360 or get("bola", "x") > 520:
+            terbang = 0
+            setpos("bola", 60, 280)
+            set("barTenaga", "w", 0)

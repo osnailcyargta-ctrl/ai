@@ -1,0 +1,24 @@
+// request: salju turun pelan pelan || snow falling slowly
+background("#0e1a2b")
+on 0 0 draw circle 8 color "#ffffff". s1
+on 0 0 draw circle 6 color "#ffffff". s2
+on 0 0 draw circle 10 color "#ffffff". s3
+on 0 0 draw circle 5 color "#ffffff". s4
+on 0 0 draw circle 7 color "#ffffff". s5
+setpos("s1", 50, 10)
+setpos("s2", 150, -60)
+setpos("s3", 260, -20)
+setpos("s4", 360, -90)
+setpos("s5", 460, -40)
+
+def melayang(id):
+    move(id, sin(get(id, "y") / 20) * 0.8, 1.2)
+    if get(id, "y") > 370:
+        setpos(id, randint(0, 510), -10)
+
+forever:
+    melayang("s1")
+    melayang("s2")
+    melayang("s3")
+    melayang("s4")
+    melayang("s5")

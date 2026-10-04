@@ -1,0 +1,25 @@
+// request: hitung mundur tahun baru 10 detik terus kembang api || a 10 second new year countdown then fireworks
+background("#0a0a1a")
+var n = 10
+on 220 120 draw text "10" 80 color "#ffffff". angka
+on -50 -50 draw circle 40 color "#ff4081". api1
+on -50 -50 draw circle 30 color "#ffd740". api2
+
+def tahunBaru():
+    set("angka", "text", "2027!")
+    set("angka", "x", 160)
+    setpos("api1", 100, 60)
+    setpos("api2", 380, 80)
+
+def kurang():
+    if n > 0:
+        n = n - 1
+        set("angka", "text", str(n))
+        if n == 0:
+            tahunBaru()
+
+timer every 1 (kurang()). jam
+forever:
+    if n == 0:
+        set("api1", "color", choose("#ff4081", "#40c4ff", "#69f0ae"))
+        set("api2", "color", choose("#ffd740", "#e040fb", "#ff6e40"))

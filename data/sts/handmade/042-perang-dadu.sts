@@ -1,0 +1,24 @@
+// request: adu dadu lawan komputer, angka gede menang || a dice battle against the computer, higher roll wins
+background("#2c2c54")
+var menang = 0
+var kalah = 0
+on 80 60 draw square 100 color "#ffffff". daduLu
+on 116 85 draw text "?" 44 color "#2c2c54". angkaLu
+on 340 60 draw square 100 color "#ffffff". daduKom
+on 376 85 draw text "?" 44 color "#2c2c54". angkaKom
+on 100 170 draw text "lu" 18 color "#ffffff". l1
+on 340 170 draw text "komputer" 18 color "#ffffff". l2
+on 190 220 draw rect 140 44 color "#ff5252". tombol
+on 222 232 draw text "LEMPAR" 18 color "#ffffff". lt
+on 16 310 draw text "menang 0 · kalah 0" 16 color "#d1ccc0". hud
+
+onclick /id"tombol" check:
+    var x = randint(1, 6)
+    var y = randint(1, 6)
+    set("angkaLu", "text", str(x))
+    set("angkaKom", "text", str(y))
+    if x > y:
+        menang = menang + 1
+    elif y > x:
+        kalah = kalah + 1
+    set("hud", "text", "menang " + menang + " · kalah " + kalah)

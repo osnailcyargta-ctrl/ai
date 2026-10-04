@@ -1,0 +1,15 @@
+// request: generator roast lucu || a funny roast generator
+background("#000000")
+on 16 20 draw text "roast generator 🥀" 22 color "#ff5252". judul
+on 16 120 draw text "" 18 color "#ffffff". roast
+on 16 280 draw rect 160 40 color "#b71c1c". tombol
+on 44 290 draw text "roast gw" 18 color "#ffffff". lt
+
+def bagian1():
+    return choose("muka lu", "skill lu", "rizz lu", "wifi lu", "nilai lu", "selera musik lu")
+
+def bagian2():
+    return choose("kayak charger kw", "kayak nasi basi", "kayak update windows", "kayak sinyal di gunung", "kayak npc pojok map")
+
+onclick /id"tombol" check:
+    set("roast", "text", bagian1() + " " + bagian2() + " 🥀")

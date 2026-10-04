@@ -1,0 +1,34 @@
+// request: lampu penyebrangan pake tombol buat pejalan kaki || a pedestrian crossing light with a push button
+background("#222831")
+var minta = 0
+on 60 60 draw rect 80 180 color "#111111". tiang
+on 75 75 draw circle 50 color "#d72323". merah
+on 75 165 draw circle 50 color "#333333". hijau
+on 200 120 draw rect 160 50 color "#eeeeee". tombol
+on 222 135 draw text "tekan buat nyebrang" 13 color "#222222". lt
+on 200 200 draw text "" 18 color "#ffffff". status
+
+def nyala():
+    set("merah", "color", "#333333")
+    set("hijau", "color", "#2ecc71")
+    set("status", "text", "silakan nyebrang")
+    countdown start. selesai
+
+def mati():
+    set("merah", "color", "#d72323")
+    set("hijau", "color", "#333333")
+    set("status", "text", "")
+    minta = 0
+
+countdown 3 (nyala()). tunggu
+countdown 5 (mati()). selesai
+countdown stop. tunggu
+countdown stop. selesai
+
+onclick /id"tombol" check:
+    if minta == 0:
+        minta = 1
+        set("status", "text", "tunggu ya...")
+        countdown start. tunggu
+forever:
+    wait 1

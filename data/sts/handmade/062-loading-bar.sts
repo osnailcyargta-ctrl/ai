@@ -1,0 +1,17 @@
+// request: animasi loading bar sampe 100 persen || a loading bar animation up to 100 percent
+background("#121212")
+var p = 0
+on 60 160 draw rect 400 30 color "#2b2b2b". jalur
+on 60 160 draw rect 1 30 color "#00e676". isi
+on 220 210 draw text "0%" 22 color "#ffffff". persen
+on 150 110 draw text "loading kehidupan lu..." 18 color "#aaaaaa". judul
+
+forever:
+    if p < 100:
+        p = p + rand(0.1, 0.8)
+        if p > 100:
+            p = 100
+        set("isi", "w", 4 * p)
+        set("persen", "text", floor(p) + "%")
+    else:
+        set("judul", "text", "selesai. tetep error sih")

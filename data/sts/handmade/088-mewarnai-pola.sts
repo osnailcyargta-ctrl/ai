@@ -1,0 +1,31 @@
+// request: klik kotak buat ganti warna jadi pola sendiri || click squares to change their colour and make your own pattern
+background("#fafafa")
+on 16 10 draw text "klik kotak buat ganti warna" 16 color "#333333". info
+
+def ganti(id):
+    set(id, "color", choose("#ef5350", "#ab47bc", "#42a5f5", "#66bb6a", "#ffee58", "#ffa726", "#eeeeee"))
+
+on 100 60 draw square 70 color "#eeeeee". a1
+on 180 60 draw square 70 color "#eeeeee". a2
+on 260 60 draw square 70 color "#eeeeee". a3
+on 340 60 draw square 70 color "#eeeeee". a4
+on 100 140 draw square 70 color "#eeeeee". b1
+on 180 140 draw square 70 color "#eeeeee". b2
+on 260 140 draw square 70 color "#eeeeee". b3
+on 340 140 draw square 70 color "#eeeeee". b4
+onclick /id"a1" check:
+    ganti("a1")
+onclick /id"a2" check:
+    ganti("a2")
+onclick /id"a3" check:
+    ganti("a3")
+onclick /id"a4" check:
+    ganti("a4")
+onclick /id"b1" check:
+    ganti("b1")
+onclick /id"b2" check:
+    ganti("b2")
+onclick /id"b3" check:
+    ganti("b3")
+onclick /id"b4" check:
+    ganti("b4")

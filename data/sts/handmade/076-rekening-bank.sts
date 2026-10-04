@@ -1,0 +1,23 @@
+// request: simulasi rekening bank, setor dan tarik || a bank account simulation, deposit and withdraw
+background("#0d47a1")
+var saldo = 100000
+on 16 20 draw text "bank sybau" 24 color "#ffffff". judul
+on 16 80 draw text "saldo: 100000" 26 color "#ffeb3b". hud
+on 30 200 draw rect 200 44 color "#43a047". setor
+on 95 212 draw text "setor" 18 color "#ffffff". l1
+on 290 200 draw rect 200 44 color "#e53935". tarik
+on 360 212 draw text "tarik" 18 color "#ffffff". l2
+
+onclick /id"setor" check:
+    var n = num(show.anspopup("setor berapa?"))
+    if n > 0:
+        saldo = saldo + n
+    set("hud", "text", "saldo: " + saldo)
+
+onclick /id"tarik" check:
+    var n = num(show.anspopup("tarik berapa?"))
+    if n > saldo:
+        show.popup("saldo ga cukup, miskin 🥀")
+    elif n > 0:
+        saldo = saldo - n
+    set("hud", "text", "saldo: " + saldo)

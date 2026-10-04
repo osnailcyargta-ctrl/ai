@@ -1,0 +1,25 @@
+// request: pesawat kertas terbang naik turun ikutin mouse, hindarin awan petir || a paper plane that follows the mouse up and down, avoiding thunderclouds
+background("#b3e5fc")
+var jarak = 0
+on 80 170 draw triangle 40 20 color "#ffffff". pesawat
+on 520 80 draw ellipse 90 50 color "#546e7a". awan1
+on 760 250 draw ellipse 110 56 color "#546e7a". awan2
+on 16 10 draw text "jarak 0" 16 color "#01579b". hud
+
+def geser(id):
+    move(id, -3 - jarak / 500, 0)
+    if get(id, "x") < -120:
+        setpos(id, 540 + randint(0, 200), randint(30, 300))
+    if touching("pesawat", id):
+        show.popup("kesamber petir! jarak " + floor(jarak))
+        jarak = 0
+        setpos(id, 600, randint(30, 300))
+
+forever:
+    var dy = mousey() - get("pesawat", "y") - 10
+    move("pesawat", 0, dy * 0.06)
+    set("pesawat", "rot", dy * 0.3)
+    jarak = jarak + 1
+    set("hud", "text", "jarak " + floor(jarak / 10))
+    geser("awan1")
+    geser("awan2")

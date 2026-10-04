@@ -1,0 +1,19 @@
+// request: saklar lampu kamar yang bisa nyala mati || a room light switch that turns on and off
+background("#111111")
+var nyala = 0
+on 210 40 draw circle 100 color "#333333". bohlam
+on 240 145 draw rect 40 30 color "#555555". fitting
+on 220 250 draw rect 80 60 color "#dddddd". saklar
+on 248 260 draw rect 24 20 color "#888888". tuas
+
+onclick /id"saklar" check:
+    if nyala == 0:
+        nyala = 1
+        set("bohlam", "color", "#fff59d")
+        background("#3a3520")
+        set("tuas", "y", 280)
+    else:
+        nyala = 0
+        set("bohlam", "color", "#333333")
+        background("#111111")
+        set("tuas", "y", 260)

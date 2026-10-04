@@ -1,0 +1,20 @@
+// request: kalkulator bmi || a bmi calculator
+background("#0f1d1a")
+on 16 20 draw text "kalkulator BMI" 24 color "#7fffd4". judul
+on 16 80 draw text "" 20 color "#ffffff". hasil
+on 16 120 draw text "" 18 color "#bbbbbb". kategori
+var berat = num(show.anspopup("berat badan (kg)?"))
+var tinggi = num(show.anspopup("tinggi badan (cm)?"))
+if tinggi <= 0:
+    tinggi = 1
+var m = tinggi / 100
+var bmi = round(berat / (m * m) * 10) / 10
+set("hasil", "text", "BMI lu: " + bmi)
+if bmi < 18.5:
+    set("kategori", "text", "kurus. makan dong")
+elif bmi < 25:
+    set("kategori", "text", "normal. aman")
+elif bmi < 30:
+    set("kategori", "text", "kelebihan berat dikit")
+else:
+    set("kategori", "text", "obesitas. jalan kaki yuk")

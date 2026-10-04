@@ -1,0 +1,16 @@
+// request: tebak angka 2 pemain, yang satu ngumpetin angka || 2 player number guessing: one hides a number, the other guesses
+background("#263238")
+on 16 20 draw text "tebak angka 2 pemain" 22 color "#80cbc4". judul
+on 16 80 draw text "" 18 color "#ffffff". hud
+var rahasia = num(show.anspopup("pemain 1: masukin angka rahasia 1-100 (jangan diliat)"))
+var tebakan = 0
+var coba = 0
+while tebakan != rahasia:
+    tebakan = num(show.anspopup("pemain 2: tebak angkanya"))
+    coba = coba + 1
+    if tebakan < rahasia:
+        show.popup("kekecilan")
+    elif tebakan > rahasia:
+        show.popup("kegedean")
+    set("hud", "text", "percobaan: " + coba)
+show.popup("bener! pemain 2 nebak dalam " + coba + " kali")

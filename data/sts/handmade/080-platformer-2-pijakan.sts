@@ -1,0 +1,35 @@
+// request: platformer lompat ke pijakan buat ambil bintang || a platformer: jump onto platforms to grab the star
+background("#1a237e")
+var vy = 0
+var dipijak = 1
+on 0 330 draw rect 520 30 color "#5d4037". lantai
+on 140 250 draw rect 120 14 color "#8d6e63". pijakan1
+on 300 170 draw rect 120 14 color "#8d6e63". pijakan2
+on 350 120 draw triangle 26 26 color "#ffd600". bintang
+on 40 300 draw square 28 color "#ff7043". pemain
+
+def mendarat(id):
+    if touching("pemain", id) and vy > 0:
+        set("pemain", "y", get(id, "y") - 28)
+        vy = 0
+        dipijak = 1
+
+forever:
+    if key("left"):
+        move("pemain", -4, 0)
+    if key("right"):
+        move("pemain", 4, 0)
+    if key("space") and dipijak == 1:
+        vy = -11
+        dipijak = 0
+    vy = vy + 0.55
+    move("pemain", 0, vy)
+    mendarat("pijakan1")
+    mendarat("pijakan2")
+    if get("pemain", "y") > 302:
+        set("pemain", "y", 302)
+        vy = 0
+        dipijak = 1
+    if touching("pemain", "bintang"):
+        show.popup("dapet bintang!")
+        setpos("pemain", 40, 300)

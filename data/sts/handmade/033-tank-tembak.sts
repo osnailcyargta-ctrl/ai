@@ -1,0 +1,32 @@
+// request: tank yang bisa muter dan nembak ke arah depan || a tank that turns and shoots where it faces
+background("#3b4a2a")
+var sudut = 0
+var tembak = 0
+var pvx = 0
+var pvy = 0
+on 240 160 draw rect 40 30 color "#556b2f". tank
+on -20 -20 draw circle 8 color "#ffeb3b". peluru
+on 400 60 draw square 30 color "#b22222". sasaran
+on 16 10 draw text "panah kiri/kanan muter, atas maju, spasi nembak" 12 color "#d0d0d0". info
+
+forever:
+    if key("left"):
+        sudut = sudut - 3
+    if key("right"):
+        sudut = sudut + 3
+    set("tank", "rot", sudut)
+    if key("up"):
+        move("tank", cos(sudut * 0.01745) * 3, sin(sudut * 0.01745) * 3)
+    if key("space") and tembak == 0:
+        tembak = 1
+        setpos("peluru", get("tank", "x") + 16, get("tank", "y") + 11)
+        pvx = cos(sudut * 0.01745) * 8
+        pvy = sin(sudut * 0.01745) * 8
+    if tembak == 1:
+        move("peluru", pvx, pvy)
+        if get("peluru", "x") < -10 or get("peluru", "x") > 530 or get("peluru", "y") < -10 or get("peluru", "y") > 370:
+            tembak = 0
+    if touching("peluru", "sasaran"):
+        tembak = 0
+        setpos("peluru", -20, -20)
+        setpos("sasaran", randint(20, 480), randint(40, 320))

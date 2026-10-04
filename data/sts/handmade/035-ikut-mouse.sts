@@ -1,0 +1,12 @@
+// request: bola yang ngikutin mouse pelan pelan || a ball that slowly follows the mouse
+background("#0d1117")
+on 250 170 draw circle 40 color "#58a6ff". bola
+on 250 170 draw circle 16 color "#f78166". ekor
+
+forever:
+    var dx = mousex() - get("bola", "x") - 20
+    var dy = mousey() - get("bola", "y") - 20
+    move("bola", dx * 0.08, dy * 0.08)
+    var ex = get("bola", "x") + 12 - get("ekor", "x")
+    var ey = get("bola", "y") + 12 - get("ekor", "y")
+    move("ekor", ex * 0.05, ey * 0.05)

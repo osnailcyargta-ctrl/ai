@@ -1,0 +1,23 @@
+// request: lampu lalu lintas yang ganti tiap diklik || a traffic light that changes every time u click it
+background("#37474f")
+var keadaan = 0
+on 210 30 draw rect 100 290 color "#212121". tiang
+on 230 45 draw circle 60 color "#d50000". merah
+on 230 135 draw circle 60 color "#424242". kuning
+on 230 225 draw circle 60 color "#424242". hijau
+on 340 160 draw text "klik lampunya" 16 color "#ffffff". info
+
+def tampil():
+    set("merah", "color", "#424242")
+    set("kuning", "color", "#424242")
+    set("hijau", "color", "#424242")
+    if keadaan == 0:
+        set("merah", "color", "#d50000")
+    elif keadaan == 1:
+        set("hijau", "color", "#00c853")
+    else:
+        set("kuning", "color", "#ffd600")
+
+onclick /id"tiang" check:
+    keadaan = (keadaan + 1) % 3
+    tampil()

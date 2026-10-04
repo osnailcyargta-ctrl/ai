@@ -1,0 +1,29 @@
+// request: pecahin gelembung yang naik ke atas || pop the bubbles floating up
+background("#00334e")
+var pecah = 0
+on 80 380 draw circle 40 color "#8fd3fe". g1
+on 230 450 draw circle 30 color "#8fd3fe". g2
+on 380 520 draw circle 50 color "#8fd3fe". g3
+on 16 10 draw text "pecah 0" 16 color "#ffffff". hud
+
+def naik(id, v):
+    move(id, sin(get(id, "y") / 30), 0 - v)
+    if get(id, "y") < -60:
+        setpos(id, randint(20, 460), 380)
+
+def pop(id):
+    pecah = pecah + 1
+    set("hud", "text", "pecah " + pecah)
+    setpos(id, randint(20, 460), 400)
+
+onclick /id"g1" check:
+    pop("g1")
+onclick /id"g2" check:
+    pop("g2")
+onclick /id"g3" check:
+    pop("g3")
+
+forever:
+    naik("g1", 1.5)
+    naik("g2", 2.2)
+    naik("g3", 1.1)

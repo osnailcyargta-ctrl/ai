@@ -1,0 +1,15 @@
+// request: lampu disko yang ganti ganti warna || disco lights that keep changing colour
+background("#000000")
+on 40 60 draw circle 90 color "#ff3366". lampu1
+on 160 60 draw circle 90 color "#33ff99". lampu2
+on 280 60 draw circle 90 color "#3399ff". lampu3
+on 400 60 draw circle 90 color "#ffcc00". lampu4
+on 150 250 draw text "PARTY" 40 color "#ffffff". tulisan
+
+def acak():
+    return choose("#ff3366", "#33ff99", "#3399ff", "#ffcc00", "#cc33ff", "#ff6600", "#00ffff")
+
+timer every 0.3 (set("lampu1", "color", acak()); set("lampu2", "color", acak()); set("lampu3", "color", acak()); set("lampu4", "color", acak())). ritme
+timer every 0.6 (set("tulisan", "color", acak())). kedip
+forever:
+    wait 1

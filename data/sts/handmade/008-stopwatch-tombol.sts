@@ -1,0 +1,22 @@
+// request: stopwatch pake tombol start stop || a stopwatch with start and stop buttons
+background("#161616")
+var jalan = 0
+var waktu = 0
+on 140 80 draw text "0.0" 64 color "#e8e8e8". angka
+on 80 220 draw rect 150 50 color "#2e8b57". tombolStart
+on 120 234 draw text "start" 20 color "#ffffff". l1
+on 290 220 draw rect 150 50 color "#b22222". tombolStop
+on 335 234 draw text "stop" 20 color "#ffffff". l2
+
+onclick /id"tombolStart" check:
+    jalan = 1
+
+onclick /id"tombolStop" check:
+    if jalan == 0:
+        waktu = 0
+    jalan = 0
+
+forever:
+    if jalan == 1:
+        waktu = waktu + 0.016
+    set("angka", "text", str(round(waktu * 10) / 10))

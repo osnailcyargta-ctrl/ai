@@ -1,0 +1,34 @@
+// request: hindarin laser yang kedip kedip || dodge the blinking lasers
+background("#0b0c10")
+var t = 0
+var bertahan = 0
+on 250 300 draw square 22 color "#66fcf1". pemain
+on 0 120 draw rect 520 8 color "#330000". laser1
+on 0 220 draw rect 520 8 color "#330000". laser2
+on 16 10 draw text "bertahan 0" 16 color "#ffffff". hud
+
+def laser(id, fase):
+    var nyala = (t + fase) % 120 > 80
+    if nyala:
+        set(id, "color", "#ff1744")
+        if touching("pemain", id):
+            show.popup("kesetrum! bertahan " + floor(bertahan) + " detik")
+            bertahan = 0
+            setpos("pemain", 250, 300)
+    else:
+        set(id, "color", "#330000")
+
+forever:
+    t = t + 1
+    bertahan = bertahan + 0.016
+    set("hud", "text", "bertahan " + floor(bertahan))
+    if key("up"):
+        move("pemain", 0, -4)
+    if key("down"):
+        move("pemain", 0, 4)
+    if key("left"):
+        move("pemain", -4, 0)
+    if key("right"):
+        move("pemain", 4, 0)
+    laser("laser1", 0)
+    laser("laser2", 60)

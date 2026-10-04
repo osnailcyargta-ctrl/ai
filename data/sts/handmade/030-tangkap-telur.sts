@@ -1,0 +1,30 @@
+// request: tangkap telur yang jatuh pake keranjang || catch falling eggs with a basket
+background("#fff3e0")
+var dapat = 0
+var pecah = 0
+on 220 320 draw rect 80 24 color "#8d6e63". keranjang
+on 100 -20 draw ellipse 18 24 color "#ffffff". telur1
+on 300 -150 draw ellipse 18 24 color "#ffffff". telur2
+on 16 10 draw text "dapet 0 · pecah 0" 16 color "#5d4037". hud
+
+def jatuh(id):
+    move(id, 0, 3 + dapat / 8)
+    if touching("keranjang", id):
+        dapat = dapat + 1
+        setpos(id, randint(20, 480), -30)
+    if get(id, "y") > 360:
+        pecah = pecah + 1
+        setpos(id, randint(20, 480), -30)
+    set("hud", "text", "dapet " + dapat + " · pecah " + pecah)
+
+forever:
+    if key("left"):
+        move("keranjang", -7, 0)
+    if key("right"):
+        move("keranjang", 7, 0)
+    jatuh("telur1")
+    jatuh("telur2")
+    if pecah >= 5:
+        show.popup("5 telur pecah. dapet " + dapat)
+        pecah = 0
+        dapat = 0

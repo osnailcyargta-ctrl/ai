@@ -1,0 +1,30 @@
+// request: counter yang ada batas maksimal dan tombol reset || a counter with a maximum and a reset button
+background("#14213d")
+var angka = 0
+var maks = 20
+on 200 60 draw text "0 / 20" 40 color "#fca311". layar
+on 120 180 draw rect 80 50 color "#2b9348". plus
+on 150 192 draw text "+" 28 color "#ffffff". lp
+on 220 180 draw rect 80 50 color "#d00000". minus
+on 252 192 draw text "-" 28 color "#ffffff". lm
+on 320 180 draw rect 80 50 color "#6c757d". nol
+on 340 196 draw text "reset" 16 color "#ffffff". lr
+
+def tulis():
+    set("layar", "text", angka + " / " + maks)
+    if angka == maks:
+        set("layar", "color", "#ff4d4d")
+    else:
+        set("layar", "color", "#fca311")
+
+onclick /id"plus" check:
+    if angka < maks:
+        angka = angka + 1
+    tulis()
+onclick /id"minus" check:
+    if angka > 0:
+        angka = angka - 1
+    tulis()
+onclick /id"nol" check:
+    angka = 0
+    tulis()

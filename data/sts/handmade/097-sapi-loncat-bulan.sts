@@ -1,0 +1,28 @@
+// request: game lucu sapi loncat ngelewatin bulan, tahan spasi buat loncat tinggi || a silly game: hold space to make the cow jump over the moon
+background("#0d1b2a")
+var vy = 0
+var tenaga = 0
+var lewat = 0
+on 0 320 draw rect 520 40 color "#2e7d32". rumput
+on 340 60 draw circle 60 color "#fff9c4". bulan
+on 60 280 draw rect 50 40 color "#ffffff". sapi
+on 16 10 draw text "lewat 0" 16 color "#ffffff". hud
+
+forever:
+    if get("sapi", "y") >= 280:
+        if key("space"):
+            tenaga = min(18, tenaga + 0.4)
+        elif tenaga > 0:
+            vy = 0 - tenaga
+            tenaga = 0
+    vy = vy + 0.4
+    move("sapi", 2, vy)
+    if get("sapi", "y") > 280:
+        set("sapi", "y", 280)
+        vy = 0
+    if get("sapi", "x") > 520:
+        set("sapi", "x", -50)
+    if get("sapi", "y") < 60 and get("sapi", "x") > 320 and get("sapi", "x") < 400:
+        lewat = lewat + 1
+        set("hud", "text", "lewat " + lewat)
+        set("sapi", "x", 420)

@@ -1,0 +1,22 @@
+// request: pukul tikus dari 3 lubang || whack-a-mole with 3 holes
+background("#6b4226")
+var skor = 0
+var posisi = 1
+on 60 220 draw ellipse 100 30 color "#2b1a0e". lubang1
+on 210 220 draw ellipse 100 30 color "#2b1a0e". lubang2
+on 360 220 draw ellipse 100 30 color "#2b1a0e". lubang3
+on 85 170 draw circle 50 color "#9e9e9e". tikus
+on 16 10 draw text "skor 0" 18 color "#ffffff". hud
+
+def pindah():
+    posisi = randint(1, 3)
+    setpos("tikus", 85 + (posisi - 1) * 150, 170)
+
+timer every 0.9 (pindah()). gerak
+
+onclick /id"tikus" check:
+    skor = skor + 1
+    set("hud", "text", "skor " + skor)
+    setpos("tikus", -100, -100)
+forever:
+    wait 1

@@ -1,0 +1,27 @@
+// request: ramalan cuaca random lucu-lucuan || a silly random weather forecast
+background("#90caf9")
+on 16 20 draw text "ramalan cuaca sybau" 22 color "#0d47a1". judul
+on 200 90 draw circle 110 color "#ffeb3b". ikon
+on 16 240 draw text "" 22 color "#0d47a1". cuaca
+on 16 280 draw text "" 16 color "#1565c0". saran
+on 380 300 draw rect 120 40 color "#1976d2". tombol
+on 400 311 draw text "ramal" 16 color "#ffffff". lt
+
+onclick /id"tombol" check:
+    var n = randint(1, 4)
+    if n == 1:
+        set("ikon", "color", "#ffeb3b")
+        set("cuaca", "text", "cerah " + randint(28, 35) + " C")
+        set("saran", "text", "pake sunscreen")
+    elif n == 2:
+        set("ikon", "color", "#9e9e9e")
+        set("cuaca", "text", "hujan deres")
+        set("saran", "text", "bawa payung, jangan sok kuat")
+    elif n == 3:
+        set("ikon", "color", "#cfd8dc")
+        set("cuaca", "text", "mendung galau")
+        set("saran", "text", "cocok buat dengerin lagu sedih")
+    else:
+        set("ikon", "color", "#ff7043")
+        set("cuaca", "text", "panas neraka")
+        set("saran", "text", "jangan keluar rumah")
