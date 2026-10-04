@@ -314,3 +314,4 @@ body.brain-on .meta { display: block; }
 /* settings: the list scrolls when there are more switches than fit */
 .panel { display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
 .settings-list { overflow-y: auto; min-height: 0; flex: 1 1 auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.cx-frame { display: block; width: 100%; aspect-ratio: 520 / 400; border: 1px solid var(--border); border-radius: 6px; background: #000; }

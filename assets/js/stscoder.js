@@ -24,6 +24,7 @@
   const Lib = root.BrainLib || (typeof require === "function" ? require("./brain.js") : null);
   const Sts = root.StsLib || (typeof require === "function" ? require("./stsvm.js") : null);
   const Gen = root.StsGenLib || (typeof require === "function" ? require("./stsgen.js") : null);
+  const JsGen = root.JsGenLib || (typeof require === "function" ? (() => { try { return require("./jsgen.js"); } catch (e) { return null; } })() : null);
   const { cap, camel } = Gen;
 
   // ------------------------------------------------------------------ vocabulary
@@ -1395,10 +1396,22 @@
           "honestly i don't get what u want to build. describe the game: who u play as, what's in it, what u do (collect, dodge, shoot, jump, guess...), how u win or lose. e.g. \"a cat collecting fish while a dog chases it, 3 lives\" 🥀") };
       }
 
-      if (opts.neural && this.neural) return this._neural(A, know, steps, say, opts);
+      if (opts.neural && this.neural && !opts.html) return this._neural(A, know, steps, say, opts);
       say(L("3. desain", "3. design"));
       const d = design(A, know, this.rand);
       for (const r of d.reasons) say("   - " + r);
+      if (opts.html && JsGen) {
+        // experimental: the same design, written as one HTML file (canvas + JavaScript + CSS)
+        say(L("4. nulis game-nya jadi HTML + JavaScript + CSS (eksperimental)", "4. writing the game as HTML + JavaScript + CSS (experimental)"));
+        const page = JsGen.write(d);
+        let ok = true, why = "";
+        try { new Function(page.js); } catch (e) { ok = false; why = e.message; }
+        say(L(`   ${page.lines} baris, `, `   ${page.lines} lines, `) + (ok ? L("JavaScript-nya valid ✓", "the JavaScript parses ✓") : L("JavaScript error: ", "JavaScript error: ") + why));
+        const name = camel(d.title).slice(0, 24) || "sybauGame";
+        this.last = { A, d, sts: null, title: d.title, file: name + ".html" };
+        return { kind: "code", html: page, steps, design: d, program: { roots: [{ index: 0, name: "main", code: page.js }], stage: d.stage, title: d.title }, sts: page.html, file: name + ".html",
+          compiled: ok ? true : false, fixes: [], tests: [{ ok, msg: ok ? L("JavaScript valid", "valid JavaScript") : why }], features: [...A.mech], lang: A.lang };
+      }
       say(L("4. nulis kode STS dari desain itu", "4. writing STS code for that design"));
       const prog = Gen.write(d, { rand: this.rand });
       const name = camel(prog.title).slice(0, 24) || "sybauGame";

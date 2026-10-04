@@ -53,6 +53,10 @@ Ada 2 cara, dipilih di ⚙ settings (**sybau code: AI murni**, default nyala):
 
 **2. Perencana (AI murni dimatiin).** Nyusun desain dulu (siapa pemainnya, gerakan tiap benda, aturan menang/kalah), terus `stsgen.js` nulis kodenya fungsi per fungsi dan dites kelakuannya. Lebih rapi dan lebih bisa diandelin, tapi strukturnya lebih kebaca.
 
+**Mode HTML/JS/CSS (eksperimental, ⚙ settings).** Desain yang sama ditulis jadi **satu file `.html`** (canvas + JavaScript + CSS) lewat `assets/js/jsgen.js`, bukan STS. Bisa didownload dan dibuka di browser mana aja; preview-nya jalan di iframe. `node tests/html.js` ngejalanin 18 game HTML di browser palsu selama 5 detik, harus tanpa error.
+
+**100 program STS bikinan tangan** di `data/sts/handmade/` (game, puzzle, app, simulasi, animasi; `node tools/check_handmade.js` ngecek semuanya compile + jalan). Ini bahan latihan paling penting buat transformer kode: tiap program masuk korpus 30 kali dengan variasi warna dan kalimat request.
+
 sybau code juga **punya memori**: chat, kode, dan project terakhir disimpen di browser, jadi abis reload dia masih inget. Tanya "tadi kita bikin apa?" buat liat, follow-up pendek ("musuhnya 5", "lebih cepet") langsung ngedit project yang tadi, `/new` buat mulai baru.
 
 

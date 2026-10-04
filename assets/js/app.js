@@ -14,7 +14,7 @@
   const save = (k, v) => { try { storage && storage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
 
   // ---------------------------------------------------------------- settings
-  const settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: true, roastGen: true, codeNeural: true, deepthink: false, brain: false, theme: "auto" }, load("sybau_settings", {}));
+  const settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: true, roastGen: true, codeNeural: true, deepthink: false, htmlMode: false, brain: false, theme: "auto" }, load("sybau_settings", {}));
   delete settings.learn; // old setting, removed
   const CONNECT_KEY = "sybau-ck-7f3a9c2e1b8d4f60a5e3"; // same everywhere, forever (see sdk/core.js)
   const SITE = location.origin + location.pathname.replace(/[^/]*$/, "");
@@ -39,6 +39,7 @@
       sExp: ["Eksperimental: pahamin semua kata", "kalo ga ngerti, mikir dulu: benerin typo, cari kalimat mirip, cari arti kata asing. masih beta"],
       sRoastGen: ["Roast generatif (tanpa contoh jadi)", "transformer harus ngarang kalimat baru, yang sama persis kayak data training dibuang"],
       sDeep: ["sybau code: deepthink", "mikir lebih lama: sampe 6 versi kode, dicek kritikus, dan nanya pake pilihan kalo kurang paham"],
+      sHtml: ["sybau code: HTML/JS/CSS (eksperimental)", "game-nya ditulis jadi 1 file .html (canvas + JavaScript + CSS), bukan STS. bisa dibuka di browser mana aja"],
       sCodeNeural: ["sybau code: AI murni", "transformer nulis kode STS-nya sendiri token per token. off = pake perencana (lebih rapi, tapi itu yang lu bilang template)"],
       thinking: "mikir", understanding: "Cari arti",
       sLang: ["Bahasa balesan", "auto = ngikutin bahasa lu"], sSearch: ["Auto search", "nanya fakta → otomatis cari di Wikipedia/Wikidata"],
@@ -69,6 +70,7 @@
       sExp: ["Experimental: understand any word", "when lost, think first: fix typos, find a similar sentence, look up unknown words. beta"],
       sRoastGen: ["Generative roasts (no stock lines)", "the transformer must write a new sentence; exact copies of the training data are thrown away"],
       sDeep: ["sybau code: deepthink", "think longer: up to 6 versions, checked by a critic, and it asks with choices when unsure"],
+      sHtml: ["sybau code: HTML/JS/CSS (experimental)", "the game is written as one .html file (canvas + JavaScript + CSS) instead of STS. opens in any browser"],
       sCodeNeural: ["sybau code: pure AI", "the transformer writes the STS code itself, token by token. off = the planner (neater, but that's the one u called a template)"],
       thinking: "thinking", understanding: "Look up",
       sLang: ["Reply language", "auto = match whatever u type"], sSearch: ["Auto search", "factual questions → look up Wikipedia/Wikidata"],
@@ -830,6 +832,7 @@
     { key: "roastGen", label: () => t().sRoastGen },
     { key: "codeNeural", label: () => t().sCodeNeural },
     { key: "deepthink", label: () => t().sDeep },
+    { key: "htmlMode", label: () => t().sHtml },
     { key: "connect", action: () => { closeSettings(); cmdConnect(); }, label: () => t().sConnect, value: () => CONNECT_KEY.slice(0, 13) + "…" },
     { key: "brain", label: () => t().sBrain },
     { key: "theme", choices: ["auto", "dark", "light"], label: () => t().sTheme },

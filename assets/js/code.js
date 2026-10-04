@@ -230,7 +230,7 @@
     remember({ role: "u", text: shown });
     try {
       await ensure();
-      res = await coder.handle(text, Object.assign({ experimental: !!settings().experimental, search: settings().search !== false, lang: lang(), neural: settings().codeNeural !== false, deepthink: !!settings().deepthink }, extra, {
+      res = await coder.handle(text, Object.assign({ experimental: !!settings().experimental, search: settings().search !== false, lang: lang(), neural: settings().codeNeural !== false, deepthink: !!settings().deepthink, html: !!settings().htmlMode }, extra, {
         onStep: (s) => { lines.appendChild(el("div", "line dim", s)); ui.log.scrollTop = ui.log.scrollHeight; },
         // the transformer "typing" its code, live
         onCode: (attempt, toks, slots) => {
@@ -279,7 +279,7 @@
     say(line.replace("{n}", n));
     put(codeBlock(res, n));
     remember({ role: "b", text: line.replace("{n}", n) });
-    remember({ role: "code", res: { file: res.file, sts: res.sts, program: res.program, compiled: res.compiled, tests: res.tests, fixes: res.fixes, lang: res.lang } });
+    remember({ role: "code", res: { file: res.file, sts: res.sts, program: res.program, compiled: res.compiled, tests: res.tests, fixes: res.fixes, lang: res.lang, html: res.html ? { lines: res.html.lines } : null } });
 
   }
 
@@ -288,14 +288,14 @@
     const head = el("div", "cx-code-head");
     const tests = res.tests || [], passed = tests.filter((x) => x.ok).length;
     const good = res.compiled === true && passed === tests.length;
-    const status = el("span", good ? "green" : "red", (res.compiled === true ? "✓ " + t().ok : "× " + t().warn) + (tests.length ? " · " + passed + "/" + tests.length + " " + t().tests : ""));
+    const status = el("span", good ? "green" : "red", (res.compiled === true ? "✓ " + (res.html ? "HTML + JavaScript + CSS" : t().ok) : "× " + t().warn) + (tests.length ? " · " + passed + "/" + tests.length + " " + t().tests : ""));
     head.append(el("span", "bold", res.file), el("span", "dim", " · " + n + (lang() === "id" ? " baris · " : " lines · ")), status);
     const btns = el("span", "cx-btns");
-    const dl = el("button", "btn", t().dl);
+    const dl = el("button", "btn", res.html ? "download .html" : t().dl);
     dl.type = "button";
     dl.addEventListener("click", () => {
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([res.sts], { type: "text/plain" }));
+      a.href = URL.createObjectURL(new Blob([res.sts], { type: res.html ? "text/html" : "text/plain" }));
       a.download = res.file;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -308,13 +308,14 @@
     btns.append(dl, cp, run);
     head.appendChild(btns);
     const pre = el("pre", "cx-pre");
-    pre.innerHTML = highlight(res.sts);
+    if (res.html) pre.textContent = res.sts; else pre.innerHTML = highlight(res.sts);
     const stage = el("div", "cx-stage");
     stage.hidden = true;
     run.addEventListener("click", () => {
       if (running && running.box === stage) { stopRun(); run.textContent = t().run; return; }
       stopRun();
-      startRun(res.program, stage, () => (run.textContent = t().run));
+      if (res.html) runHtml(res.sts, stage, () => (run.textContent = t().run));
+      else startRun(res.program, stage, () => (run.textContent = t().run));
       run.textContent = t().stop;
     });
     if (res.compiled !== true) run.disabled = true;
@@ -388,10 +389,22 @@
     running = st;
     cv.focus();
   }
+  /** HTML mode: the page runs in a sandboxed frame */
+  function runHtml(html, box, onEnd) {
+    box.hidden = false;
+    box.textContent = "";
+    const f = el("iframe", "cx-frame");
+    f.setAttribute("sandbox", "allow-scripts allow-modals");
+    f.srcdoc = html;
+    box.appendChild(f);
+    running = { box, raf: 0, onEnd, html: true };
+    setTimeout(() => { try { f.focus(); } catch (e) { /* ignore */ } }, 100);
+  }
+
   function stopRun() {
     if (!running) return;
     cancelAnimationFrame(running.raf);
-    try { previewVM.stop(); } catch (e) { /* ignore */ }
+    if (!running.html) { try { previewVM.stop(); } catch (e) { /* ignore */ } }
     running.box.hidden = true;
     running.box.textContent = "";
     if (running.onEnd) running.onEnd();
