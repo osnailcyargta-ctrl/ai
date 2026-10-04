@@ -1,0 +1,48 @@
+<!-- request: game of life conway | simulasi sel hidup mati || conway's game of life | cellular automaton simulation -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Game of Life</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #111; color: #ccc; font-family: monospace; text-align: center; }
+  canvas { background: #000; cursor: pointer; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="c" width="480" height="360"></canvas>
+  <p>spasi = jalan/stop · klik = hidupin sel · R = acak</p>
+</div>
+<script>
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const S = 8, COLS = cv.width / S, ROWS = cv.height / S;
+  let tickMs = 80; // kecepatan
+  let grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0)), running = true;
+
+  function randomize() { grid = grid.map((row) => row.map(() => (Math.random() < 0.25 ? 1 : 0))); }
+  function step() {
+    const next = grid.map((row) => row.slice());
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) n += grid[(y + dy + ROWS) % ROWS][(x + dx + COLS) % COLS];
+      next[y][x] = n === 3 || (n === 2 && grid[y][x]) ? 1 : 0;
+    }
+    grid = next;
+  }
+  function draw() {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = "#7CFC00";
+    grid.forEach((row, y) => row.forEach((v, x) => { if (v) ctx.fillRect(x * S, y * S, S - 1, S - 1); }));
+  }
+
+  onkeydown = (e) => { if (e.key === " ") running = !running; if (e.key === "r") randomize(); draw(); };
+  cv.onclick = (e) => { grid[Math.floor(e.offsetY / S)][Math.floor(e.offsetX / S)] = 1; draw(); };
+  setInterval(() => { if (running) { step(); draw(); } }, tickMs);
+  randomize();
+  draw();
+</script>
+</body>
+</html>

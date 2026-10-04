@@ -1,0 +1,66 @@
+<!-- request: minesweeper | game cari ranjau || minesweeper | find the mines game -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Minesweeper</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #c0c0c0; font-family: sans-serif; text-align: center; }
+  .grid { display: grid; gap: 2px; }
+  .c { width: 30px; height: 30px; background: #9a9a9a; font-weight: bold; display: grid; place-items: center; cursor: pointer; user-select: none; }
+  .c.open { background: #e8e8e8; cursor: default; }
+</style>
+</head>
+<body>
+<div>
+  <h2 id="msg">klik kiri buka, klik kanan bendera</h2>
+  <div class="grid" id="grid"></div>
+</div>
+<script>
+  let size = 9; // ukuran papan
+  let mines = 10; // jumlah ranjau
+  const gridEl = document.getElementById("grid"), msg = document.getElementById("msg");
+  gridEl.style.gridTemplateColumns = "repeat(" + size + ", 30px)";
+  const cells = [];
+  let over = false, opened = 0;
+  for (let i = 0; i < size * size; i++) {
+    const el = document.createElement("div");
+    el.className = "c";
+    const cell = { el, mine: false, open: false, flag: false, x: i % size, y: Math.floor(i / size) };
+    el.onclick = () => open(cell);
+    el.oncontextmenu = (e) => { e.preventDefault(); if (!cell.open && !over) { cell.flag = !cell.flag; el.textContent = cell.flag ? "🚩" : ""; } };
+    gridEl.appendChild(el);
+    cells.push(cell);
+  }
+  for (let k = 0; k < mines;) { const c = cells[Math.floor(Math.random() * cells.length)]; if (!c.mine) { c.mine = true; k++; } }
+
+  function around(c) {
+    const out = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const x = c.x + dx, y = c.y + dy;
+      if ((dx || dy) && x >= 0 && y >= 0 && x < size && y < size) out.push(cells[y * size + x]);
+    }
+    return out;
+  }
+
+  function open(c) {
+    if (over || c.open || c.flag) return;
+    c.open = true;
+    c.el.classList.add("open");
+    if (c.mine) {
+      over = true;
+      for (const m of cells) if (m.mine) m.el.textContent = "💣";
+      msg.textContent = "DUAR! kena ranjau";
+      return;
+    }
+    opened++;
+    const n = around(c).filter((o) => o.mine).length;
+    c.el.textContent = n || "";
+    c.el.style.color = ["", "#00f", "#080", "#f00", "#008", "#800", "#088", "#000", "#888"][n];
+    if (!n) around(c).forEach(open);
+    if (opened === size * size - mines) { over = true; msg.textContent = "Aman semua! Menang 🎉"; }
+  }
+</script>
+</body>
+</html>

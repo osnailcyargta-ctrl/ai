@@ -1,0 +1,58 @@
+<!-- request: klik zombie sebelum nyampe rumah | tembak zombie pake mouse || click the zombies before they reach the house | point and click zombie shooter -->
+<!-- things: foe=zombie:🧟 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Klik Zombie</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #1b1b1b; color: #fff; font-family: sans-serif; }
+  canvas { background: #3a5a40; cursor: crosshair; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="560" height="340"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let foeSpeed = 0.7; // kecepatan zombie
+  let houseHp = 5; // nyawa rumah
+  let foes = [], score = 0, hp = houseHp, booms = [];
+
+  cv.onclick = (e) => {
+    if (hp <= 0) { hp = houseHp; score = 0; foes = []; return; }
+    for (const f of foes) if (Math.hypot(f.x - e.offsetX, f.y - e.offsetY) < 22) { f.hp--; booms.push({ x: f.x, y: f.y, t: 12 }); if (f.hp <= 0) { f.dead = true; score++; } break; }
+  };
+
+  function update() {
+    if (hp <= 0) return;
+    if (Math.random() < 0.02 + score / 3000) foes.push({ x: W + 20, y: 40 + Math.random() * (H - 80), hp: Math.random() < 0.2 ? 3 : 1 });
+    for (const f of foes) {
+      f.x -= foeSpeed + score / 100;
+      if (f.x < 70) { f.dead = true; hp--; }
+    }
+    foes = foes.filter((f) => !f.dead);
+    for (const b of booms) b.t--;
+    booms = booms.filter((b) => b.t > 0);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = "60px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🏠", 36, H / 2);
+    for (const f of foes) { ctx.font = (f.hp > 1 ? 38 : 28) + "px serif"; ctx.fillText("🧟", f.x, f.y); }
+    ctx.font = "22px serif";
+    for (const b of booms) ctx.fillText("💥", b.x, b.y);
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px sans-serif";
+    ctx.fillText("Zombie: " + score + "   Rumah: " + "❤️".repeat(Math.max(0, hp)), W / 2, 16);
+    if (hp <= 0) { ctx.font = "26px sans-serif"; ctx.fillText("Rumah jebol! klik buat ulang", W / 2, H / 2); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!-- request: game pacman makan titik dikejar hantu | pacman || pacman eating dots chased by a ghost | a pac-man game -->
+<!-- things: foe=hantu:👻 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pacman</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #000; color: #fff; font-family: monospace; text-align: center; }
+  canvas { background: #000; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="420" height="300"></canvas>
+  <p id="msg"></p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d"), msg = document.getElementById("msg");
+  const MAP = [
+    "##############",
+    "#............#",
+    "#.##.####.##.#",
+    "#.#........#.#",
+    "#.#.##..##.#.#",
+    "#......##....#",
+    "#.##.#....#..#",
+    "#....#.##.#.##",
+    "#.##........##",
+    "##############",
+  ];
+  const S = 30;
+  let tickMs = 160; // kecepatan
+  let dots, me, foe, dir, want, over;
+
+  function reset() {
+    dots = new Set();
+    MAP.forEach((r, y) => [...r].forEach((c, x) => { if (c === ".") dots.add(x + "," + y); }));
+    me = { x: 1, y: 1 }; foe = { x: 12, y: 8 }; dir = [1, 0]; want = dir; over = "";
+  }
+  const open = (x, y) => MAP[y] && MAP[y][x] && MAP[y][x] !== "#";
+
+  onkeydown = (e) => {
+    const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (d) { e.preventDefault(); want = d; }
+    if (over && e.key === " ") reset();
+  };
+
+  function step() {
+    if (over) return;
+    if (open(me.x + want[0], me.y + want[1])) dir = want;
+    if (open(me.x + dir[0], me.y + dir[1])) { me.x += dir[0]; me.y += dir[1]; }
+    dots.delete(me.x + "," + me.y);
+    const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => open(foe.x + dx, foe.y + dy));
+    opts.sort((a, b) => Math.hypot(foe.x + a[0] - me.x, foe.y + a[1] - me.y) - Math.hypot(foe.x + b[0] - me.x, foe.y + b[1] - me.y));
+    const pick = Math.random() < 0.75 ? opts[0] : opts[Math.floor(Math.random() * opts.length)];
+    foe.x += pick[0]; foe.y += pick[1];
+    if (foe.x === me.x && foe.y === me.y) over = "Ketangkep hantu! spasi = ulang";
+    if (!dots.size) over = "Semua titik habis! Menang 🎉";
+  }
+
+  function draw() {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    MAP.forEach((r, y) => [...r].forEach((c, x) => { if (c === "#") { ctx.fillStyle = "#1e3bd8"; ctx.fillRect(x * S + 2, y * S + 2, S - 4, S - 4); } }));
+    ctx.fillStyle = "#ffd6a5";
+    for (const d of dots) { const [x, y] = d.split(",").map(Number); ctx.fillRect(x * S + S / 2 - 2, y * S + S / 2 - 2, 4, 4); }
+    const mouth = Math.abs(Math.sin(Date.now() / 100)) * 0.7, ang = Math.atan2(dir[1], dir[0]);
+    ctx.fillStyle = "#ffeb3b";
+    ctx.beginPath();
+    ctx.moveTo(me.x * S + S / 2, me.y * S + S / 2);
+    ctx.arc(me.x * S + S / 2, me.y * S + S / 2, S / 2 - 3, ang + mouth / 2, ang + Math.PI * 2 - mouth / 2);
+    ctx.fill();
+    ctx.font = "24px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("👻", foe.x * S + S / 2, foe.y * S + S / 2);
+    msg.textContent = over || "Titik sisa: " + dots.size;
+    requestAnimationFrame(draw);
+  }
+
+  reset();
+  setInterval(step, tickMs);
+  draw();
+</script>
+</body>
+</html>

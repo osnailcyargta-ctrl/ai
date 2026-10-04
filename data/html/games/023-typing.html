@@ -1,0 +1,54 @@
+<!-- request: game ngetik cepet | tes kecepatan mengetik || typing speed test | typing game -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ngetik Cepet</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #222831; color: #eeeeee; font-family: monospace; text-align: center; }
+  #word { font-size: 44px; color: #00adb5; margin: 16px; }
+  input { font-size: 26px; padding: 8px; width: 280px; text-align: center; border-radius: 8px; border: none; }
+</style>
+</head>
+<body>
+<div>
+  <p id="stats">Waktu: 30 · Skor: 0</p>
+  <div id="word"></div>
+  <input id="typed" placeholder="ketik di sini" autofocus>
+  <p id="msg"></p>
+</div>
+<script>
+  let seconds = 30; // lama main
+  const WORDS = ["kucing", "pelangi", "komputer", "sepeda", "nasi goreng", "jendela", "matahari", "keyboard", "gajah", "es krim", "bintang", "kereta", "pisang", "hujan", "monitor"];
+  let score = 0, left = seconds, word = "", running = false;
+  const wordEl = document.getElementById("word"), typed = document.getElementById("typed");
+  const stats = document.getElementById("stats"), msg = document.getElementById("msg");
+
+  function nextWord() { word = WORDS[Math.floor(Math.random() * WORDS.length)]; wordEl.textContent = word; }
+
+  typed.oninput = () => {
+    if (!running && left > 0) {
+      running = true;
+      const t = setInterval(() => {
+        left--;
+        stats.textContent = "Waktu: " + left + " · Skor: " + score;
+        if (left <= 0) {
+          clearInterval(t);
+          running = false;
+          typed.disabled = true;
+          msg.textContent = "Waktu habis! " + score + " kata (" + Math.round(score * 60 / seconds) + " kata/menit)";
+        }
+      }, 1000);
+    }
+    if (typed.value.trim() === word) {
+      score++;
+      typed.value = "";
+      stats.textContent = "Waktu: " + left + " · Skor: " + score;
+      nextWord();
+    }
+  };
+  nextWord();
+</script>
+</body>
+</html>

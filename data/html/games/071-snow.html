@@ -1,0 +1,40 @@
+<!-- request: animasi salju turun | hujan salju natal || falling snow animation | christmas snowfall -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Salju</title>
+<style>
+  body { margin: 0; overflow: hidden; background: linear-gradient(#0b132b, #3a506b); height: 100vh; }
+  canvas { display: block; }
+  h1 { position: fixed; top: 40%; width: 100%; text-align: center; color: #fff; font-family: serif; margin: 0; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<h1>Selamat Natal ☃️</h1>
+<script>
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  let flakes = 250; // jumlah salju
+  let windPower = 0.5; // angin
+  const snow = Array.from({ length: flakes }, () => ({ x: Math.random() * cv.width, y: Math.random() * cv.height, r: 1 + Math.random() * 3, s: 0.5 + Math.random() }));
+  let t = 0;
+
+  function loop() {
+    t += 0.01;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = "#fff";
+    for (const f of snow) {
+      f.y += f.s;
+      f.x += Math.sin(t + f.r) * windPower;
+      if (f.y > cv.height) { f.y = -5; f.x = Math.random() * cv.width; }
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill();
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+</script>
+</body>
+</html>

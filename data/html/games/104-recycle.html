@@ -1,0 +1,49 @@
+<!-- request: game pilah sampah drag ke tong | drag and drop sampah organik anorganik || sort the trash into the right bin | drag and drop recycling game -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pilah Sampah</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #e9f5db; font-family: sans-serif; text-align: center; }
+  #item { font-size: 70px; cursor: grab; user-select: none; display: inline-block; }
+  .bins { display: flex; gap: 20px; justify-content: center; margin-top: 20px; }
+  .bin { width: 140px; height: 120px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; color: #fff; }
+  .bin.over { outline: 4px dashed #333; }
+</style>
+</head>
+<body>
+<div>
+  <h2 id="msg">tarik sampahnya ke tong yang bener</h2>
+  <div id="item" draggable="true"></div>
+  <div class="bins">
+    <div class="bin" data-kind="organik" style="background:#588157">🟢 Organik</div>
+    <div class="bin" data-kind="anorganik" style="background:#f4a261">🟡 Anorganik</div>
+  </div>
+  <p id="score">Benar 0 · Salah 0</p>
+</div>
+<script>
+  const TRASH = [["🍌", "organik"], ["🍎", "organik"], ["🥚", "organik"], ["🍂", "organik"], ["🥤", "anorganik"], ["🧴", "anorganik"], ["🥫", "anorganik"], ["🔋", "anorganik"]];
+  const item = document.getElementById("item"), msg = document.getElementById("msg"), scoreEl = document.getElementById("score");
+  let current, right = 0, wrong = 0;
+
+  function next() { current = TRASH[Math.floor(Math.random() * TRASH.length)]; item.textContent = current[0]; }
+  item.ondragstart = (e) => e.dataTransfer.setData("text", "x");
+  for (const bin of document.querySelectorAll(".bin")) {
+    bin.ondragover = (e) => { e.preventDefault(); bin.classList.add("over"); };
+    bin.ondragleave = () => bin.classList.remove("over");
+    const drop = () => {
+      bin.classList.remove("over");
+      if (bin.dataset.kind === current[1]) { right++; msg.textContent = "✅ betul, " + current[1]; }
+      else { wrong++; msg.textContent = "❌ itu " + current[1]; }
+      scoreEl.textContent = "Benar " + right + " · Salah " + wrong;
+      next();
+    };
+    bin.ondrop = (e) => { e.preventDefault(); drop(); };
+    bin.onclick = drop;
+  }
+  next();
+</script>
+</body>
+</html>

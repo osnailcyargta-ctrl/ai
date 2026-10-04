@@ -1,0 +1,33 @@
+<!-- request: counter tambah kurang | penghitung klik || counter with plus and minus | a click counter -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Counter</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8edeb; font-family: sans-serif; text-align: center; }
+  #n { font-size: 96px; font-weight: bold; color: #333; }
+  button { font-size: 32px; width: 70px; height: 70px; margin: 8px; border-radius: 50%; border: none; background: #ffb5a7; cursor: pointer; }
+  button#reset { font-size: 16px; width: auto; height: auto; padding: 8px 16px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div>
+  <div id="n">0</div>
+  <button id="minus">−</button>
+  <button id="plus">+</button>
+  <br><button id="reset">reset</button>
+</div>
+<script>
+  let step = 1; // tambah berapa tiap klik
+  let n = 0;
+  const nEl = document.getElementById("n");
+  function show() { nEl.textContent = n; nEl.style.color = n > 0 ? "#2a9d8f" : n < 0 ? "#e63946" : "#333"; }
+  document.getElementById("plus").onclick = () => { n += step; show(); };
+  document.getElementById("minus").onclick = () => { n -= step; show(); };
+  document.getElementById("reset").onclick = () => { n = 0; show(); };
+  onkeydown = (e) => { if (e.key === "+" || e.key === "ArrowUp") n += step; if (e.key === "-" || e.key === "ArrowDown") n -= step; show(); };
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!-- request: nyetir mobil dari atas kumpulin bensin | mobil top down muter muter || top down car driving collecting fuel | drive a car around from above -->
+<!-- things: ride=mobil:🚙 item=bensin:⛽ -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Nyetir</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #2d6a4f; color: #fff; font-family: sans-serif; }
+  canvas { background: #6c757d; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="520" height="380"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let accel = 0.15; // gas
+  let turn = 0.05; // setir
+  let fuelUse = 0.05; // bensin kepake
+  const car = { x: W / 2, y: H / 2, a: 0, v: 0 };
+  let fuel = 100, score = 0, item = spot();
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (fuel <= 0 && e.key === " ") { fuel = 100; score = 0; car.v = 0; } };
+  onkeyup = (e) => { keys[e.key] = false; };
+  function spot() { return { x: 30 + Math.random() * (W - 60), y: 30 + Math.random() * (H - 60) }; }
+
+  function update() {
+    if (fuel <= 0) { car.v *= 0.95; return; }
+    if (keys["ArrowUp"]) car.v += accel;
+    if (keys["ArrowDown"]) car.v -= accel;
+    car.v *= 0.97;
+    if (keys["ArrowLeft"]) car.a -= turn * Math.sign(car.v);
+    if (keys["ArrowRight"]) car.a += turn * Math.sign(car.v);
+    car.x += Math.cos(car.a) * car.v;
+    car.y += Math.sin(car.a) * car.v;
+    car.x = (car.x + W) % W;
+    car.y = (car.y + H) % H;
+    fuel -= fuelUse + Math.abs(car.v) * 0.02;
+    if (Math.hypot(car.x - item.x, car.y - item.y) < 26) { fuel = Math.min(100, fuel + 30); score++; item = spot(); }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = "26px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("⛽", item.x, item.y);
+    ctx.save();
+    ctx.translate(car.x, car.y);
+    ctx.rotate(car.a);
+    ctx.scale(-1, 1);
+    ctx.fillText("🚙", 0, 0);
+    ctx.restore();
+    ctx.fillStyle = "#222";
+    ctx.fillRect(10, 10, 104, 14);
+    ctx.fillStyle = fuel > 25 ? "#52b788" : "#e63946";
+    ctx.fillRect(12, 12, Math.max(0, fuel), 10);
+    ctx.fillStyle = "#fff";
+    ctx.font = "15px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Isi bensin: " + score, 124, 18);
+    if (fuel <= 0) { ctx.textAlign = "center"; ctx.font = "26px sans-serif"; ctx.fillText("Bensin habis! spasi = ulang", W / 2, H / 2); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

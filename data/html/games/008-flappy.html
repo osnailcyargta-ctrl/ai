@@ -1,0 +1,77 @@
+<!-- request: flappy bird | game burung terbang lewatin pipa || flappy bird | a bird flying through pipes -->
+<!-- things: hero=burung:🐦 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Flappy Burung</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #222; font-family: sans-serif; }
+  canvas { background: #70c5ce; border-radius: 6px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="360" height="480"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let gravity = 0.4; // gravitasi
+  let jump = -7; // kekuatan lompat
+  let gap = 140; // celah pipa
+  let pipeSpeed = 2.2; // kecepatan pipa
+  let bird, pipes, score, state;
+
+  function reset() { bird = { x: 90, y: H / 2, vy: 0 }; pipes = []; score = 0; state = "ready"; }
+  function flap() {
+    if (state === "over") { reset(); return; }
+    state = "play";
+    bird.vy = jump;
+  }
+  onkeydown = (e) => { if (e.key === " " || e.key === "ArrowUp") flap(); };
+  cv.onclick = flap;
+
+  function update() {
+    if (state !== "play") return;
+    bird.vy += gravity;
+    bird.y += bird.vy;
+    if (!pipes.length || pipes[pipes.length - 1].x < W - 180) pipes.push({ x: W, top: 40 + Math.random() * (H - gap - 80), passed: false });
+    for (const p of pipes) {
+      p.x -= pipeSpeed;
+      if (!p.passed && p.x + 50 < bird.x) { p.passed = true; score++; }
+      if (bird.x + 14 > p.x && bird.x - 14 < p.x + 50 && (bird.y - 14 < p.top || bird.y + 14 > p.top + gap)) state = "over";
+    }
+    pipes = pipes.filter((p) => p.x > -60);
+    if (bird.y > H - 10 || bird.y < 0) state = "over";
+  }
+
+  function draw() {
+    ctx.fillStyle = "#70c5ce";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#5ab04a";
+    for (const p of pipes) {
+      ctx.fillRect(p.x, 0, 50, p.top);
+      ctx.fillRect(p.x, p.top + gap, 50, H - p.top - gap);
+    }
+    ctx.save();
+    ctx.translate(bird.x, bird.y);
+    ctx.rotate(Math.max(-0.5, Math.min(1, bird.vy / 10)));
+    ctx.font = "30px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🐦", 0, 0);
+    ctx.restore();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 36px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(score, W / 2, 60);
+    ctx.font = "18px sans-serif";
+    if (state === "ready") ctx.fillText("klik / spasi buat terbang", W / 2, H / 2 + 60);
+    if (state === "over") ctx.fillText("Nabrak! klik buat ulang", W / 2, H / 2 + 60);
+  }
+
+  reset();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

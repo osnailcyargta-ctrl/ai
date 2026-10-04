@@ -1,0 +1,78 @@
+<!-- request: game mancing ikan | mancing pas waktunya || fishing game | catch fish with good timing -->
+<!-- things: item=ikan:🐟 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mancing</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #023e8a; color: #fff; font-family: sans-serif; }
+  canvas { background: linear-gradient(#90e0ef 0 25%, #0077b6 25%); border-radius: 10px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, SURFACE = H * 0.25;
+  let fishCount = 6; // jumlah ikan
+  let hookSpeed = 3; // kecepatan kail
+  const fish = [];
+  for (let i = 0; i < fishCount; i++) fish.push({ x: Math.random() * W, y: SURFACE + 40 + Math.random() * (H - SURFACE - 60), vx: (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random()) });
+  const hook = { x: W / 2, y: SURFACE, state: "up" };
+  let caught = 0, hooked = null;
+
+  onkeydown = (e) => {
+    if (e.key === "ArrowLeft") hook.x = Math.max(10, hook.x - 12);
+    if (e.key === "ArrowRight") hook.x = Math.min(W - 10, hook.x + 12);
+    if (e.key === " " && hook.state === "up") hook.state = "down";
+  };
+  cv.onclick = (e) => { hook.x = e.offsetX; if (hook.state === "up") hook.state = "down"; };
+
+  function update() {
+    for (const f of fish) {
+      if (f === hooked) continue;
+      f.x += f.vx;
+      if (f.x < -20) f.x = W + 20;
+      if (f.x > W + 20) f.x = -20;
+    }
+    if (hook.state === "down") {
+      hook.y += hookSpeed;
+      const f = fish.find((o) => Math.hypot(o.x - hook.x, o.y - hook.y) < 16);
+      if (f) { hooked = f; hook.state = "reel"; }
+      if (hook.y > H - 10) hook.state = "reel";
+    } else if (hook.state === "reel") {
+      hook.y -= hookSpeed * 1.5;
+      if (hooked) { hooked.x = hook.x; hooked.y = hook.y + 10; }
+      if (hook.y <= SURFACE) {
+        hook.y = SURFACE;
+        hook.state = "up";
+        if (hooked) { caught++; hooked.x = -20; hooked.y = SURFACE + 40 + Math.random() * (H - SURFACE - 60); hooked = null; }
+      }
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = "#222";
+    ctx.beginPath(); ctx.moveTo(hook.x, 0); ctx.lineTo(hook.x, hook.y); ctx.stroke();
+    ctx.fillStyle = "#ccc";
+    ctx.fillRect(hook.x - 3, hook.y - 3, 6, 6);
+    ctx.font = "28px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const f of fish) {
+      ctx.save(); ctx.translate(f.x, f.y); if (f.vx > 0) ctx.scale(-1, 1); ctx.fillText("🐟", 0, 0); ctx.restore();
+    }
+    ctx.fillStyle = "#03045e";
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Ikan ketangkep: " + caught, W / 2, 20);
+    ctx.font = "13px sans-serif";
+    ctx.fillText("panah geser, spasi lempar kail", W / 2, 44);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

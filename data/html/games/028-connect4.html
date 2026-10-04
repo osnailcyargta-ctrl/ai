@@ -1,0 +1,62 @@
+<!-- request: game connect 4 | empat sejajar 2 pemain || connect four | four in a row for two players -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Connect 4</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #13293d; color: #fff; font-family: sans-serif; text-align: center; }
+  canvas { background: #1b65b5; border-radius: 12px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div>
+  <h2 id="msg">Giliran: Merah</h2>
+  <canvas id="game" width="420" height="360"></canvas>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d"), msg = document.getElementById("msg");
+  const COLS = 7, ROWS = 6, S = 60;
+  const NAMES = ["", "Merah", "Kuning"], COLORS = ["#0d2b4f", "#e63946", "#ffd166"];
+  let grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0)), turn = 1, over = false;
+
+  function wins(r, c) {
+    const p = grid[r][c];
+    for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+      let n = 1;
+      for (const s of [1, -1]) {
+        let rr = r + dr * s, cc = c + dc * s;
+        while (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && grid[rr][cc] === p) { n++; rr += dr * s; cc += dc * s; }
+      }
+      if (n >= 4) return true;
+    }
+    return false;
+  }
+
+  cv.onclick = (e) => {
+    if (over) { grid = grid.map((row) => row.fill(0)); over = false; turn = 1; msg.textContent = "Giliran: Merah"; draw(); return; }
+    const c = Math.floor(e.offsetX / S);
+    let r = ROWS - 1;
+    while (r >= 0 && grid[r][c]) r--;
+    if (r < 0) return;
+    grid[r][c] = turn;
+    if (wins(r, c)) { over = true; msg.textContent = NAMES[turn] + " menang! klik buat ulang"; }
+    else if (grid[0].every((v) => v)) { over = true; msg.textContent = "Seri!"; }
+    else { turn = 3 - turn; msg.textContent = "Giliran: " + NAMES[turn]; }
+    draw();
+  };
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      ctx.fillStyle = COLORS[grid[r][c]];
+      ctx.beginPath();
+      ctx.arc(c * S + S / 2, r * S + S / 2, S / 2 - 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  draw();
+</script>
+</body>
+</html>

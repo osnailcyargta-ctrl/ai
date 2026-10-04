@@ -1,0 +1,76 @@
+<!-- request: game ular | bikin snake | game snake makan apel || snake game | classic snake | a snake that eats apples -->
+<!-- things: item=apel:🍎 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Snake</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #111; color: #eee; font-family: monospace; }
+  canvas { background: #1e3a1e; }
+  p { text-align: center; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="400" height="400"></canvas>
+  <p id="info">panah buat jalan</p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const info = document.getElementById("info");
+  const CELL = 20, N = cv.width / CELL;
+  let tickMs = 110; // kecepatan ular (makin kecil makin cepet)
+  let snake, dir, next, food, score, dead;
+
+  function reset() {
+    snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+    dir = { x: 1, y: 0 }; next = dir; score = 0; dead = false;
+    food = place();
+  }
+  function place() {
+    let p;
+    do p = { x: Math.floor(Math.random() * N), y: Math.floor(Math.random() * N) };
+    while (snake.some((s) => s.x === p.x && s.y === p.y));
+    return p;
+  }
+
+  onkeydown = (e) => {
+    const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (d && (d[0] !== -dir.x || d[1] !== -dir.y)) next = { x: d[0], y: d[1] };
+    if (dead && e.key === " ") reset();
+  };
+
+  function step() {
+    if (dead) return;
+    dir = next;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    if (head.x < 0 || head.y < 0 || head.x >= N || head.y >= N || snake.some((s) => s.x === head.x && s.y === head.y)) {
+      dead = true;
+      info.textContent = "nabrak! skor " + score + " — spasi buat ulang";
+      return;
+    }
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) { score++; food = place(); }
+    else snake.pop();
+    info.textContent = "skor: " + score;
+  }
+
+  function draw() {
+    ctx.fillStyle = "#1e3a1e";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.font = "18px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🍎", food.x * CELL + CELL / 2, food.y * CELL + CELL / 2);
+    snake.forEach((s, i) => {
+      ctx.fillStyle = i === 0 ? "#9f9" : "#4c4";
+      ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+    });
+  }
+
+  reset();
+  setInterval(() => { step(); draw(); }, tickMs);
+</script>
+</body>
+</html>

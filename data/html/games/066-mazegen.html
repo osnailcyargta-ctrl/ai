@@ -1,0 +1,74 @@
+<!-- request: labirin acak tiap main | generator maze random || random maze generator | a new random maze every time -->
+<!-- things: hero=semut:🐜 item=gula:🍬 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Labirin Acak</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #2b2d42; color: #fff; font-family: sans-serif; text-align: center; }
+  canvas { background: #edf2f4; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="420" height="420"></canvas>
+  <p id="msg">bawa semut ke gula</p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d"), msg = document.getElementById("msg");
+  let size = 14; // ukuran labirin
+  let S, cells, hero, level = 1;
+
+  function generate() {
+    S = cv.width / size;
+    cells = Array.from({ length: size * size }, () => ({ n: true, s: true, e: true, w: true, seen: false }));
+    const stack = [0];
+    cells[0].seen = true;
+    while (stack.length) {
+      const i = stack[stack.length - 1], x = i % size, y = Math.floor(i / size);
+      const opts = [[0, -1, "n", "s"], [0, 1, "s", "n"], [1, 0, "e", "w"], [-1, 0, "w", "e"]]
+        .filter(([dx, dy]) => x + dx >= 0 && y + dy >= 0 && x + dx < size && y + dy < size && !cells[(y + dy) * size + x + dx].seen);
+      if (!opts.length) { stack.pop(); continue; }
+      const [dx, dy, a, b] = opts[Math.floor(Math.random() * opts.length)];
+      const j = (y + dy) * size + x + dx;
+      cells[i][a] = false; cells[j][b] = false; cells[j].seen = true;
+      stack.push(j);
+    }
+    hero = { x: 0, y: 0 };
+    draw();
+  }
+
+  onkeydown = (e) => {
+    const m = { ArrowUp: [0, -1, "n"], ArrowDown: [0, 1, "s"], ArrowLeft: [-1, 0, "w"], ArrowRight: [1, 0, "e"] }[e.key];
+    if (!m) return;
+    e.preventDefault();
+    if (cells[hero.y * size + hero.x][m[2]]) return;
+    hero.x += m[0]; hero.y += m[1];
+    if (hero.x === size - 1 && hero.y === size - 1) { level++; size += 2; msg.textContent = "Level " + level + "!"; generate(); return; }
+    draw();
+  };
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = "#2b2d42";
+    ctx.lineWidth = 2;
+    cells.forEach((c, i) => {
+      const x = (i % size) * S, y = Math.floor(i / size) * S;
+      ctx.beginPath();
+      if (c.n) { ctx.moveTo(x, y); ctx.lineTo(x + S, y); }
+      if (c.s) { ctx.moveTo(x, y + S); ctx.lineTo(x + S, y + S); }
+      if (c.w) { ctx.moveTo(x, y); ctx.lineTo(x, y + S); }
+      if (c.e) { ctx.moveTo(x + S, y); ctx.lineTo(x + S, y + S); }
+      ctx.stroke();
+    });
+    ctx.font = S * 0.75 + "px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🍬", (size - 0.5) * S, (size - 0.5) * S);
+    ctx.fillText("🐜", (hero.x + 0.5) * S, (hero.y + 0.5) * S);
+  }
+  generate();
+</script>
+</body>
+</html>

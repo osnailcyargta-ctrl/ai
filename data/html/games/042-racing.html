@@ -1,0 +1,63 @@
+<!-- request: game balapan mobil hindarin mobil lain | mobil ngebut di jalan tol || car racing dodging traffic | race a car down the highway -->
+<!-- things: ride=mobil:🏎️ foe=truk:🚚 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Balapan</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #1b4332; color: #fff; font-family: sans-serif; }
+  canvas { background: #444; }
+</style>
+</head>
+<body>
+<canvas id="game" width="300" height="480"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, LANES = 3, LW = W / LANES;
+  let roadSpeed = 4; // kecepatan jalan
+  let lane = 1, traffic = [], dist = 0, over = false, stripe = 0;
+
+  onkeydown = (e) => {
+    if (over) { if (e.key === " ") { over = false; traffic = []; dist = 0; roadSpeed = 4; } return; }
+    if (e.key === "ArrowLeft") lane = Math.max(0, lane - 1);
+    if (e.key === "ArrowRight") lane = Math.min(LANES - 1, lane + 1);
+  };
+
+  function update() {
+    if (over) return;
+    dist += roadSpeed;
+    roadSpeed += 0.002;
+    stripe = (stripe + roadSpeed) % 40;
+    if (Math.random() < 0.02) traffic.push({ lane: Math.floor(Math.random() * LANES), y: -40 });
+    for (const t of traffic) {
+      t.y += roadSpeed * 0.7;
+      if (t.lane === lane && t.y > H - 110 && t.y < H - 30) over = true;
+    }
+    traffic = traffic.filter((t) => t.y < H + 40);
+  }
+
+  function draw() {
+    ctx.fillStyle = "#444";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#fff";
+    for (let l = 1; l < LANES; l++) for (let y = -40 + stripe; y < H; y += 40) ctx.fillRect(l * LW - 2, y, 4, 20);
+    ctx.font = "40px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const t of traffic) ctx.fillText("🚚", t.lane * LW + LW / 2, t.y);
+    ctx.save();
+    ctx.translate(lane * LW + LW / 2, H - 70);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("🏎️", 0, 0);
+    ctx.restore();
+    ctx.font = "16px sans-serif";
+    ctx.fillText(Math.floor(dist / 100) + " m", W / 2, 20);
+    if (over) { ctx.font = "24px sans-serif"; ctx.fillText("TABRAKAN!", W / 2, H / 2); ctx.font = "15px sans-serif"; ctx.fillText("spasi buat ulang", W / 2, H / 2 + 28); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

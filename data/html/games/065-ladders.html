@@ -1,0 +1,68 @@
+<!-- request: ular tangga | game ular tangga 2 pemain || snakes and ladders | snakes and ladders board game for two -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ular Tangga</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fefae0; font-family: sans-serif; text-align: center; }
+  canvas { border: 3px solid #333; }
+  button { font-size: 18px; padding: 8px 18px; margin: 8px; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="board" width="400" height="400"></canvas>
+  <p id="msg">Pemain 1 mulai</p>
+  <button id="roll">🎲 kocok</button>
+</div>
+<script>
+  const cv = document.getElementById("board"), ctx = cv.getContext("2d"), msg = document.getElementById("msg");
+  const S = 40;
+  const JUMPS = { 3: 22, 8: 30, 28: 84, 58: 77, 75: 86, 80: 99, 17: 4, 52: 29, 62: 19, 88: 24, 95: 56, 97: 78 };
+  const players = [{ pos: 1, color: "#e63946" }, { pos: 1, color: "#1d3557" }];
+  let turn = 0, over = false;
+
+  function cell(n) {
+    const r = Math.floor((n - 1) / 10), c = (n - 1) % 10;
+    return { x: (r % 2 ? 9 - c : c) * S + S / 2, y: (9 - r) * S + S / 2 };
+  }
+
+  function draw() {
+    for (let n = 1; n <= 100; n++) {
+      const p = cell(n);
+      ctx.fillStyle = (Math.floor((n - 1) / 10) + n) % 2 ? "#ffe8a3" : "#c9e4ca";
+      ctx.fillRect(p.x - S / 2, p.y - S / 2, S, S);
+      ctx.fillStyle = "#555";
+      ctx.font = "10px sans-serif";
+      ctx.fillText(n, p.x - 16, p.y - 8);
+    }
+    ctx.lineWidth = 4;
+    for (const [a, b] of Object.entries(JUMPS)) {
+      const p = cell(+a), q = cell(b);
+      ctx.strokeStyle = b > a ? "#8d6e63" : "#43a047";
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    }
+    players.forEach((pl, i) => {
+      const p = cell(pl.pos);
+      ctx.fillStyle = pl.color;
+      ctx.beginPath(); ctx.arc(p.x + (i ? 8 : -8), p.y + 6, 8, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+
+  document.getElementById("roll").onclick = () => {
+    if (over) { players.forEach((p) => { p.pos = 1; }); over = false; turn = 0; msg.textContent = "Pemain 1 mulai"; draw(); return; }
+    const d = 1 + Math.floor(Math.random() * 6), pl = players[turn];
+    let text = "Pemain " + (turn + 1) + " dapet " + d;
+    if (pl.pos + d <= 100) pl.pos += d;
+    if (JUMPS[pl.pos]) { text += JUMPS[pl.pos] > pl.pos ? " · naik tangga! 🪜" : " · dimakan ular! 🐍"; pl.pos = JUMPS[pl.pos]; }
+    if (pl.pos === 100) { text = "Pemain " + (turn + 1) + " menang! 🏆 (kocok = ulang)"; over = true; }
+    else turn = 1 - turn;
+    msg.textContent = text;
+    draw();
+  };
+  draw();
+</script>
+</body>
+</html>

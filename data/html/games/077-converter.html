@@ -1,0 +1,46 @@
+<!-- request: konversi suhu celcius ke fahrenheit | konverter satuan || temperature converter celsius fahrenheit | unit converter -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Konverter</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8f9fa; font-family: sans-serif; }
+  .row { display: flex; gap: 10px; align-items: center; margin: 10px 0; }
+  input { font-size: 20px; width: 120px; padding: 6px; }
+  select { font-size: 16px; padding: 6px; }
+</style>
+</head>
+<body>
+<div>
+  <h2>Konverter Satuan</h2>
+  <select id="kind">
+    <option value="temp">Suhu</option>
+    <option value="length">Panjang</option>
+    <option value="weight">Berat</option>
+  </select>
+  <div class="row"><input id="a" type="number" value="100"> <span id="ua"></span></div>
+  <div class="row"><input id="b" type="number"> <span id="ub"></span></div>
+</div>
+<script>
+  const KINDS = {
+    temp: { units: ["°C", "°F"], to: (c) => c * 9 / 5 + 32, from: (f) => (f - 32) * 5 / 9 },
+    length: { units: ["km", "mil"], to: (k) => k * 0.621371, from: (m) => m / 0.621371 },
+    weight: { units: ["kg", "pon"], to: (k) => k * 2.20462, from: (p) => p / 2.20462 },
+  };
+  const a = document.getElementById("a"), b = document.getElementById("b"), kind = document.getElementById("kind");
+  const round = (v) => Math.round(v * 100) / 100;
+  function setUnits() {
+    const k = KINDS[kind.value];
+    document.getElementById("ua").textContent = k.units[0];
+    document.getElementById("ub").textContent = k.units[1];
+    b.value = round(k.to(Number(a.value)));
+  }
+  a.oninput = () => { b.value = round(KINDS[kind.value].to(Number(a.value))); };
+  b.oninput = () => { a.value = round(KINDS[kind.value].from(Number(b.value))); };
+  kind.onchange = setUnits;
+  setUnits();
+</script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!-- request: puzzle lights out | matiin semua lampu || lights out puzzle | turn off all the lights -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Lights Out</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111; color: #eee; font-family: sans-serif; text-align: center; }
+  .grid { display: grid; grid-template-columns: repeat(5, 60px); gap: 6px; }
+  .l { width: 60px; height: 60px; border-radius: 8px; background: #333; cursor: pointer; }
+  .l.on { background: #ffd60a; box-shadow: 0 0 14px #ffd60a; }
+</style>
+</head>
+<body>
+<div>
+  <h2 id="msg">matiin semua lampu</h2>
+  <div class="grid" id="grid"></div>
+</div>
+<script>
+  let size = 5; // ukuran papan
+  const gridEl = document.getElementById("grid"), msg = document.getElementById("msg");
+  let on = Array(size * size).fill(false), moves = 0;
+  const cells = on.map((_, i) => {
+    const d = document.createElement("div");
+    d.className = "l";
+    d.onclick = () => { toggle(i); moves++; render(); };
+    gridEl.appendChild(d);
+    return d;
+  });
+
+  function toggle(i) {
+    const x = i % size, y = Math.floor(i / size);
+    for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && ny >= 0 && nx < size && ny < size) on[ny * size + nx] = !on[ny * size + nx];
+    }
+  }
+  function render() {
+    cells.forEach((c, i) => c.classList.toggle("on", on[i]));
+    msg.textContent = on.some((v) => v) ? "Langkah: " + moves : "Gelap semua! " + moves + " langkah 🎉";
+  }
+  for (let k = 0; k < 12; k++) toggle(Math.floor(Math.random() * size * size));
+  render();
+</script>
+</body>
+</html>

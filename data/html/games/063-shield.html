@@ -1,0 +1,79 @@
+<!-- request: hindarin batu terus ambil perisai | game kabur dari batu pake power up || dodge rocks and grab shield powerups | avoid rocks with a shield power-up -->
+<!-- things: hero=astronot:🧑‍🚀 foe=batu:🪨 item=perisai:🛡️ -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Astronot Perisai</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #000814; color: #fff; font-family: sans-serif; }
+  canvas { background: radial-gradient(#001d3d, #000814); border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="380"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 4; // kecepatan pemain
+  let shieldTime = 300; // lama perisai (frame)
+  const hero = { x: W / 2, y: H / 2 };
+  let foes = [], items = [], shield = 0, time = 0, over = false;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (over && e.key === " ") { over = false; foes = []; items = []; time = 0; shield = 0; } };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function edge() {
+    const a = Math.random() * Math.PI * 2;
+    return { x: W / 2 + Math.cos(a) * 320, y: H / 2 + Math.sin(a) * 320 };
+  }
+
+  function update() {
+    if (over) return;
+    time++;
+    if (keys["ArrowLeft"]) hero.x -= speed;
+    if (keys["ArrowRight"]) hero.x += speed;
+    if (keys["ArrowUp"]) hero.y -= speed;
+    if (keys["ArrowDown"]) hero.y += speed;
+    hero.x = Math.max(12, Math.min(W - 12, hero.x));
+    hero.y = Math.max(12, Math.min(H - 12, hero.y));
+    if (Math.random() < 0.04 + time / 40000) {
+      const p = edge(), a = Math.atan2(hero.y - p.y, hero.x - p.x);
+      foes.push({ x: p.x, y: p.y, vx: Math.cos(a) * 2.5, vy: Math.sin(a) * 2.5 });
+    }
+    if (Math.random() < 0.003) items.push({ x: 30 + Math.random() * (W - 60), y: 30 + Math.random() * (H - 60) });
+    for (const f of foes) {
+      f.x += f.vx; f.y += f.vy;
+      if (Math.hypot(f.x - hero.x, f.y - hero.y) < 22) { if (shield > 0) f.dead = true; else over = true; }
+    }
+    for (const it of items) if (Math.hypot(it.x - hero.x, it.y - hero.y) < 24) { it.dead = true; shield = shieldTime; }
+    if (shield > 0) shield--;
+    foes = foes.filter((f) => !f.dead && Math.hypot(f.x - W / 2, f.y - H / 2) < 400);
+    items = items.filter((it) => !it.dead);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "24px serif";
+    for (const f of foes) ctx.fillText("🪨", f.x, f.y);
+    for (const it of items) ctx.fillText("🛡️", it.x, it.y);
+    if (shield > 0) {
+      ctx.strokeStyle = "rgba(100, 200, 255, " + (0.4 + (shield % 20) / 40) + ")";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(hero.x, hero.y, 22, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.font = "28px serif";
+    ctx.fillText("🧑‍🚀", hero.x, hero.y);
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px sans-serif";
+    ctx.fillText("Bertahan " + Math.floor(time / 60) + " detik" + (shield > 0 ? " · perisai " + Math.ceil(shield / 60) : ""), W / 2, 18);
+    if (over) ctx.fillText("Kena batu! spasi buat ulang", W / 2, H / 2 + 40);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

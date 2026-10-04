@@ -1,0 +1,76 @@
+<!-- request: space invaders | alien baris turun pelan pelan tembak || space invaders | rows of aliens moving down -->
+<!-- things: foe=alien:👽 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Space Invaders</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #000; color: #0f0; font-family: monospace; }
+  canvas { background: #000; border: 2px solid #0f0; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="400"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 5; // kecepatan meriam
+  let foeStep = 0.6; // kecepatan alien
+  let player = { x: W / 2 }, foes = [], shots = [], bombs = [], dir = 1, score = 0, state = "play", cool = 0;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (state !== "play" && e.key === "Enter") start(); };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function start() {
+    foes = [];
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) foes.push({ x: 60 + c * 46, y: 40 + r * 36 });
+    shots = []; bombs = []; state = "play"; score = 0;
+  }
+
+  function update() {
+    if (state !== "play") return;
+    if (keys["ArrowLeft"]) player.x -= speed;
+    if (keys["ArrowRight"]) player.x += speed;
+    player.x = Math.max(16, Math.min(W - 16, player.x));
+    if (cool > 0) cool--;
+    if (keys[" "] && !cool) { shots.push({ x: player.x, y: H - 40 }); cool = 20; }
+    let edge = false;
+    for (const f of foes) { f.x += dir * (foeStep + (32 - foes.length) * 0.05); if (f.x < 16 || f.x > W - 16) edge = true; }
+    if (edge) { dir *= -1; for (const f of foes) f.y += 14; }
+    if (foes.length && Math.random() < 0.02) { const f = foes[Math.floor(Math.random() * foes.length)]; bombs.push({ x: f.x, y: f.y }); }
+    for (const s of shots) { s.y -= 7; for (const f of foes) if (!f.dead && Math.abs(f.x - s.x) < 16 && Math.abs(f.y - s.y) < 14) { f.dead = s.done = true; score += 10; } }
+    for (const b of bombs) { b.y += 3; if (Math.abs(b.x - player.x) < 16 && b.y > H - 40) state = "lose"; }
+    foes = foes.filter((f) => !f.dead);
+    shots = shots.filter((s) => !s.done && s.y > 0);
+    bombs = bombs.filter((b) => b.y < H);
+    if (foes.some((f) => f.y > H - 60)) state = "lose";
+    if (!foes.length) state = "win";
+  }
+
+  function draw() {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = "26px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const f of foes) ctx.fillText("👽", f.x, f.y);
+    ctx.fillStyle = "#0f0";
+    ctx.fillRect(player.x - 16, H - 30, 32, 12);
+    ctx.fillRect(player.x - 3, H - 38, 6, 8);
+    for (const s of shots) ctx.fillRect(s.x - 1, s.y - 6, 3, 10);
+    ctx.fillStyle = "#f44";
+    for (const b of bombs) ctx.fillRect(b.x - 2, b.y - 4, 4, 8);
+    ctx.fillStyle = "#0f0";
+    ctx.font = "16px monospace";
+    ctx.fillText("SKOR " + score, W / 2, 14);
+    if (state === "win") ctx.fillText("BUMI SELAMAT! ENTER = ULANG", W / 2, H / 2);
+    if (state === "lose") ctx.fillText("INVASI BERHASIL... ENTER = ULANG", W / 2, H / 2);
+  }
+
+  start();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

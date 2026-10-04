@@ -1,0 +1,47 @@
+<!-- request: jam analog | jam dinding pake jarum || analog clock | a wall clock with hands -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Jam</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #edede9; font-family: sans-serif; text-align: center; }
+  #digital { font-size: 24px; color: #333; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="c" width="300" height="300"></canvas>
+  <div id="digital"></div>
+</div>
+<script>
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const R = 140;
+  function hand(angle, len, width, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(150, 150); ctx.lineTo(150 + Math.sin(angle) * len, 150 - Math.cos(angle) * len); ctx.stroke();
+  }
+  function draw() {
+    const d = new Date(), s = d.getSeconds() + d.getMilliseconds() / 1000, m = d.getMinutes() + s / 60, h = (d.getHours() % 12) + m / 60;
+    ctx.clearRect(0, 0, 300, 300);
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(150, 150, R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#333"; ctx.lineWidth = 6; ctx.stroke();
+    ctx.fillStyle = "#333";
+    ctx.font = "20px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let k = 1; k <= 12; k++) ctx.fillText(k, 150 + Math.sin(k * Math.PI / 6) * 115, 150 - Math.cos(k * Math.PI / 6) * 115);
+    hand(h * Math.PI / 6, 70, 7, "#333");
+    hand(m * Math.PI / 30, 100, 4, "#333");
+    hand(s * Math.PI / 30, 115, 2, "#e63946");
+    document.getElementById("digital").textContent = d.toLocaleTimeString("id-ID");
+    requestAnimationFrame(draw);
+  }
+  draw();
+</script>
+</body>
+</html>

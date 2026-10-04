@@ -1,0 +1,61 @@
+<!-- request: pukul tikus yang muncul | game whack a mole | geplak tikus tanah || whack a mole | hit the moles that pop up -->
+<!-- things: critter=tikus:🐹 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pukul Tikus</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #3d6b35; color: #fff; font-family: sans-serif; }
+  .board { display: grid; grid-template-columns: repeat(3, 100px); gap: 14px; }
+  .hole { width: 100px; height: 100px; border-radius: 50%; background: #5a3b22; font-size: 56px; display: grid; place-items: center; cursor: pointer; user-select: none; }
+  .hole.up { background: #7a5233; }
+  h1 { text-align: center; margin: 0 0 14px; }
+</style>
+</head>
+<body>
+<div>
+  <h1 id="info">Skor: 0 · Waktu: 30</h1>
+  <div class="board" id="board"></div>
+</div>
+<script>
+  const board = document.getElementById("board"), info = document.getElementById("info");
+  let gameTime = 30; // lama main (detik)
+  let popMs = 800; // tikus muncul berapa lama
+  let score = 0, left = gameTime, up = -1;
+  const holes = [];
+  for (let i = 0; i < 9; i++) {
+    const h = document.createElement("div");
+    h.className = "hole";
+    h.onclick = () => {
+      if (i !== up || left <= 0) return;
+      score++;
+      h.textContent = "💥";
+      up = -1;
+    };
+    board.appendChild(h);
+    holes.push(h);
+  }
+
+  function pop() {
+    if (left <= 0) return;
+    holes.forEach((h) => { h.textContent = ""; h.classList.remove("up"); });
+    up = Math.floor(Math.random() * 9);
+    holes[up].textContent = "🐹";
+    holes[up].classList.add("up");
+    setTimeout(pop, popMs - Math.min(400, score * 15));
+  }
+
+  const timer = setInterval(() => {
+    left--;
+    info.textContent = "Skor: " + score + " · Waktu: " + left;
+    if (left <= 0) {
+      clearInterval(timer);
+      holes.forEach((h) => { h.textContent = ""; });
+      info.textContent = "Selesai! Skor kamu " + score;
+    }
+  }, 1000);
+  pop();
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!-- request: tes refleks | game reaksi klik pas ijo || reaction time test | click when it turns green -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tes Refleks</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; font-family: sans-serif; color: #fff; cursor: pointer; user-select: none; transition: background 0.1s; }
+  h1 { font-size: 40px; text-align: center; }
+</style>
+</head>
+<body>
+<h1 id="msg">klik buat mulai</h1>
+<script>
+  const msg = document.getElementById("msg");
+  let state = "idle", start = 0, timer = null, best = Infinity;
+  document.body.style.background = "#2b4c7e";
+
+  document.body.onclick = () => {
+    if (state === "idle" || state === "done") {
+      state = "wait";
+      document.body.style.background = "#c0392b";
+      msg.textContent = "tunggu ijo...";
+      timer = setTimeout(() => {
+        state = "go";
+        start = performance.now();
+        document.body.style.background = "#27ae60";
+        msg.textContent = "KLIK!";
+      }, 1000 + Math.random() * 3000);
+    } else if (state === "wait") {
+      clearTimeout(timer);
+      state = "done";
+      document.body.style.background = "#8e44ad";
+      msg.textContent = "kecepetan! klik buat coba lagi";
+    } else if (state === "go") {
+      const ms = Math.round(performance.now() - start);
+      best = Math.min(best, ms);
+      state = "done";
+      document.body.style.background = "#2b4c7e";
+      msg.textContent = ms + " ms (terbaik " + best + " ms) · klik lagi";
+    }
+  };
+</script>
+</body>
+</html>

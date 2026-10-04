@@ -1,0 +1,75 @@
+<!-- request: daratin roket di bulan | lunar lander pelan pelan mendarat || land the rocket on the moon | lunar lander game -->
+<!-- things: ride=roket:🚀 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pendaratan</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #000; color: #fff; font-family: monospace; }
+  canvas { background: #050510; border: 1px solid #333; }
+</style>
+</head>
+<body>
+<canvas id="game" width="520" height="380"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, GROUND = H - 30;
+  let gravity = 0.03; // gravitasi bulan
+  let thrust = 0.07; // dorongan mesin
+  let fuelMax = 300; // bensin
+  let ship, pad, state;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (state !== "fly" && e.key === "Enter") reset(); };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function reset() { ship = { x: 80, y: 40, vx: 1, vy: 0, fuel: fuelMax }; pad = 300 + Math.random() * 160; state = "fly"; }
+
+  function update() {
+    if (state !== "fly") return;
+    ship.vy += gravity;
+    if (ship.fuel > 0) {
+      if (keys["ArrowUp"]) { ship.vy -= thrust; ship.fuel--; }
+      if (keys["ArrowLeft"]) { ship.vx -= thrust / 2; ship.fuel -= 0.5; }
+      if (keys["ArrowRight"]) { ship.vx += thrust / 2; ship.fuel -= 0.5; }
+    }
+    ship.x += ship.vx; ship.y += ship.vy;
+    if (ship.y >= GROUND - 14) {
+      const soft = Math.abs(ship.vy) < 1.2 && Math.abs(ship.vx) < 0.8, onPad = Math.abs(ship.x - pad) < 30;
+      state = soft && onPad ? "land" : "crash";
+      ship.y = GROUND - 14;
+    }
+    if (ship.x < 0 || ship.x > W) state = "crash";
+  }
+
+  function draw() {
+    ctx.fillStyle = "#050510";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#888";
+    ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = "#ffd60a";
+    ctx.fillRect(pad - 30, GROUND - 4, 60, 4);
+    ctx.font = "28px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.save();
+    ctx.translate(ship.x, ship.y);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillText(state === "crash" ? "💥" : "🚀", 0, 0);
+    ctx.restore();
+    if (keys["ArrowUp"] && ship.fuel > 0 && state === "fly") ctx.fillText("🔥", ship.x, ship.y + 22);
+    ctx.fillStyle = "#fff";
+    ctx.font = "14px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("BENSIN " + Math.max(0, Math.floor(ship.fuel)) + "  VX " + ship.vx.toFixed(1) + "  VY " + ship.vy.toFixed(1), 10, 16);
+    ctx.textAlign = "center";
+    if (state === "land") ctx.fillText("MENDARAT MULUS! 🎉 ENTER", W / 2, H / 2);
+    if (state === "crash") ctx.fillText("NABRAK... ENTER BUAT ULANG", W / 2, H / 2);
+  }
+
+  reset();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

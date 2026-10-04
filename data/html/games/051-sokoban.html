@@ -1,0 +1,77 @@
+<!-- request: game sokoban dorong kotak | dorong peti ke tujuan || sokoban pushing boxes | push the crates onto the targets -->
+<!-- things: hero=pekerja:👷 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sokoban</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #3d2c2e; color: #fff; font-family: sans-serif; text-align: center; }
+  canvas { background: #c2a878; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="320" height="280"></canvas>
+  <p id="msg">panah buat dorong · R = ulang</p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d"), msg = document.getElementById("msg");
+  const LEVEL = [
+    "########",
+    "#  .   #",
+    "# $$ # #",
+    "#  @ . #",
+    "#  $ . #",
+    "#      #",
+    "########",
+  ];
+  const S = 40;
+  let walls, goals, boxes, hero, moves;
+
+  function load() {
+    walls = new Set(); goals = []; boxes = []; moves = 0;
+    LEVEL.forEach((row, y) => [...row].forEach((ch, x) => {
+      if (ch === "#") walls.add(x + "," + y);
+      if (ch === ".") goals.push({ x, y });
+      if (ch === "$") boxes.push({ x, y });
+      if (ch === "@") hero = { x, y };
+    }));
+    draw();
+  }
+  const boxAt = (x, y) => boxes.find((b) => b.x === x && b.y === y);
+  const won = () => boxes.every((b) => goals.some((g) => g.x === b.x && g.y === b.y));
+
+  onkeydown = (e) => {
+    if (e.key === "r") return load();
+    const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (!d || won()) return;
+    const nx = hero.x + d[0], ny = hero.y + d[1];
+    if (walls.has(nx + "," + ny)) return;
+    const b = boxAt(nx, ny);
+    if (b) {
+      const bx = nx + d[0], by = ny + d[1];
+      if (walls.has(bx + "," + by) || boxAt(bx, by)) return;
+      b.x = bx; b.y = by;
+    }
+    hero.x = nx; hero.y = ny; moves++;
+    draw();
+  };
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = "#5e4b3c";
+    for (const w of walls) { const [x, y] = w.split(",").map(Number); ctx.fillRect(x * S, y * S, S, S); }
+    ctx.fillStyle = "#e76f51";
+    for (const g of goals) { ctx.beginPath(); ctx.arc(g.x * S + S / 2, g.y * S + S / 2, 8, 0, Math.PI * 2); ctx.fill(); }
+    ctx.font = "30px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const b of boxes) ctx.fillText("📦", b.x * S + S / 2, b.y * S + S / 2);
+    ctx.fillText("👷", hero.x * S + S / 2, hero.y * S + S / 2);
+    msg.textContent = won() ? "Beres dalam " + moves + " langkah! 🎉 (R = ulang)" : "Langkah: " + moves + " · R = ulang";
+  }
+  load();
+</script>
+</body>
+</html>

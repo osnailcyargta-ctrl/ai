@@ -1,0 +1,31 @@
+<!-- request: tombol yang kabur pas mau diklik | prank tombol lari || a button that runs away from the mouse | prank button you can't click -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tangkap Tombolnya</title>
+<style>
+  body { margin: 0; height: 100vh; overflow: hidden; background: #fff0f3; font-family: sans-serif; }
+  h1 { text-align: center; margin-top: 30px; color: #c9184a; }
+  #btn { position: absolute; left: 45%; top: 50%; font-size: 20px; padding: 12px 22px; border-radius: 30px; border: none; background: #ff4d6d; color: #fff; cursor: pointer; transition: left 0.15s, top 0.15s; }
+</style>
+</head>
+<body>
+<h1 id="title">Mau dapet hadiah? klik tombolnya 😈</h1>
+<button id="btn">klik aku</button>
+<script>
+  let escapes = 15; // berapa kali tombol kabur
+  const btn = document.getElementById("btn"), title = document.getElementById("title");
+  let n = 0;
+  btn.onmouseenter = () => {
+    if (n >= escapes) return;
+    n++;
+    btn.style.left = Math.random() * (innerWidth - 140) + "px";
+    btn.style.top = 80 + Math.random() * (innerHeight - 140) + "px";
+    title.textContent = ["eits", "hampir", "kurang cepet", "lagi dong", "wkwk", "nyerah?"][n % 6] + " (" + n + "/" + escapes + ")";
+  };
+  btn.onclick = () => { title.textContent = "Oke oke kamu menang 🎉 hadiahnya: rasa bangga"; btn.textContent = "🏆"; };
+</script>
+</body>
+</html>

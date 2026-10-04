@@ -1,0 +1,57 @@
+<!-- request: pecahin balon | game klik balon yang terbang || pop the balloons | click the floating balloons -->
+<!-- things: critter=balon:🎈 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pecahin Balon</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #caf0f8; font-family: sans-serif; }
+  canvas { background: linear-gradient(#a2d2ff, #ffffff); border-radius: 12px; cursor: pointer; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="380"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let gameTime = 30; // lama main (detik)
+  let riseSpeed = 1.2; // kecepatan naik
+  let items = [], pops = [], score = 0, left = gameTime;
+
+  cv.onclick = (e) => {
+    if (left <= 0) { left = gameTime; score = 0; items = []; return; }
+    for (const b of items) if (Math.hypot(b.x - e.offsetX, b.y - e.offsetY) < b.size / 2) {
+      b.done = true; score++;
+      pops.push({ x: b.x, y: b.y, t: 20 });
+    }
+  };
+  setInterval(() => { if (left > 0) left--; }, 1000);
+
+  function update() {
+    if (left <= 0) return;
+    if (Math.random() < 0.04) items.push({ x: 20 + Math.random() * (W - 40), y: H + 30, size: 30 + Math.random() * 20, sway: Math.random() * 6 });
+    for (const b of items) { b.y -= riseSpeed + score / 40; b.x += Math.sin((b.y + b.sway * 50) / 30) * 0.6; }
+    items = items.filter((b) => !b.done && b.y > -40);
+    for (const p of pops) p.t--;
+    pops = pops.filter((p) => p.t > 0);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const b of items) { ctx.font = b.size + "px serif"; ctx.fillText("🎈", b.x, b.y); }
+    ctx.font = "26px serif";
+    for (const p of pops) ctx.fillText("💥", p.x, p.y);
+    ctx.fillStyle = "#023047";
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Pecah: " + score + "   Waktu: " + left, W / 2, 20);
+    if (left <= 0) { ctx.font = "28px sans-serif"; ctx.fillText("Waktu habis! " + score + " balon", W / 2, H / 2); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

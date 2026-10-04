@@ -1,0 +1,78 @@
+<!-- request: game panahan ada angin | memanah target || archery with wind | shoot arrows at a target -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Panahan</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #dad7cd; font-family: sans-serif; }
+  canvas { background: linear-gradient(#a3cef1 70%, #588157 70%); border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="560" height="340"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let gravity = 0.15; // gravitasi
+  let arrows = 5; // jumlah panah
+  const target = { x: 500, y: 170 };
+  let wind, arrow, angle = -0.2, charge = 0, charging = false, total = 0, left = arrows, last = "";
+
+  function newWind() { wind = (Math.random() - 0.5) * 0.08; }
+  onkeydown = (e) => {
+    if (e.key === "ArrowUp") angle -= 0.03;
+    if (e.key === "ArrowDown") angle += 0.03;
+    if (e.key === " " && !arrow && left > 0) charging = true;
+    if (e.key === "Enter" && left <= 0) { left = arrows; total = 0; last = ""; }
+  };
+  onkeyup = (e) => {
+    if (e.key !== " " || !charging) return;
+    charging = false;
+    const p = 4 + charge * 10;
+    arrow = { x: 40, y: 200, vx: Math.cos(angle) * p, vy: Math.sin(angle) * p };
+    charge = 0;
+    left--;
+  };
+
+  function update() {
+    if (charging) charge = Math.min(1, charge + 0.02);
+    if (!arrow) return;
+    arrow.vy += gravity;
+    arrow.vx += wind;
+    arrow.x += arrow.vx; arrow.y += arrow.vy;
+    if (arrow.x >= target.x) {
+      const d = Math.abs(arrow.y - target.y), pts = d < 8 ? 10 : d < 20 ? 7 : d < 34 ? 4 : d < 50 ? 1 : 0;
+      total += pts; last = pts ? "+" + pts : "meleset";
+      arrow = null; newWind();
+    } else if (arrow.y > H) { arrow = null; last = "jatuh"; newWind(); }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (const [r, c] of [[50, "#fff"], [34, "#222"], [20, "#1d4ed8"], [8, "#e11d48"]]) {
+      ctx.fillStyle = c; ctx.fillRect(target.x, target.y - r, 14, r * 2);
+    }
+    ctx.strokeStyle = "#5c3d2e";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(40, 200); ctx.lineTo(40 + Math.cos(angle) * 40, 200 + Math.sin(angle) * 40); ctx.stroke();
+    if (arrow) {
+      const a = Math.atan2(arrow.vy, arrow.vx);
+      ctx.beginPath(); ctx.moveTo(arrow.x, arrow.y); ctx.lineTo(arrow.x - Math.cos(a) * 24, arrow.y - Math.sin(a) * 24); ctx.stroke();
+    }
+    ctx.fillStyle = "#e76f51";
+    ctx.fillRect(20, 300, charge * 120, 10);
+    ctx.fillStyle = "#111";
+    ctx.font = "16px sans-serif";
+    ctx.fillText("Poin " + total + " · Panah " + left + " · Angin " + (wind > 0 ? "→ " : "← ") + Math.abs(wind * 100).toFixed(1) + "  " + last, 12, 22);
+    ctx.fillText("↑↓ arah, tahan spasi buat narik", 12, 44);
+    if (left <= 0 && !arrow) ctx.fillText("Selesai! total " + total + " (Enter = ulang)", 180, 170);
+  }
+
+  newWind();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

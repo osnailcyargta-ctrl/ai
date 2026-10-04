@@ -1,0 +1,64 @@
+<!-- request: balapan kumpulin bintang 2 pemain | lomba ambil bintang berdua || two players racing to collect stars | 2 player star collecting race -->
+<!-- things: item=bintang:⭐ -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Rebutan Bintang</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #240046; color: #fff; font-family: sans-serif; text-align: center; }
+  canvas { background: #3c096c; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="520" height="360"></canvas>
+  <p>🔴 WASD · 🔵 panah · duluan 10 menang</p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 3.5; // kecepatan pemain
+  let goal = 10; // target bintang
+  const players = [
+    { x: 60, y: H / 2, color: "#ff4d6d", keys: ["w", "s", "a", "d"], score: 0 },
+    { x: W - 60, y: H / 2, color: "#4cc9f0", keys: ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"], score: 0 },
+  ];
+  let item = spot(), winner = null;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (winner && e.key === " ") { players.forEach((p) => { p.score = 0; }); winner = null; } };
+  onkeyup = (e) => { keys[e.key] = false; };
+  function spot() { return { x: 30 + Math.random() * (W - 60), y: 30 + Math.random() * (H - 60) }; }
+
+  function update() {
+    if (winner) return;
+    for (const p of players) {
+      const [u, d, l, r] = p.keys;
+      if (keys[u]) p.y -= speed;
+      if (keys[d]) p.y += speed;
+      if (keys[l]) p.x -= speed;
+      if (keys[r]) p.x += speed;
+      p.x = Math.max(14, Math.min(W - 14, p.x));
+      p.y = Math.max(14, Math.min(H - 14, p.y));
+      if (Math.hypot(p.x - item.x, p.y - item.y) < 24) { p.score++; item = spot(); if (p.score >= goal) winner = p; }
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = "26px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("⭐", item.x, item.y);
+    for (const p of players) { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = "#fff";
+    ctx.font = "20px sans-serif";
+    ctx.fillText(players[0].score + " - " + players[1].score, W / 2, 20);
+    if (winner) ctx.fillText((winner === players[0] ? "Merah" : "Biru") + " menang! spasi = ulang", W / 2, H / 2);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!-- request: kuis benar salah | game fakta atau hoax || true or false quiz | fact or fake game -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Benar atau Salah</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #22223b; color: #f2e9e4; font-family: sans-serif; text-align: center; }
+  #fact { font-size: 22px; width: 360px; min-height: 70px; }
+  button { font-size: 20px; padding: 10px 26px; margin: 8px; border-radius: 12px; border: none; cursor: pointer; }
+  #yes { background: #52b788; } #no { background: #e63946; color: #fff; }
+</style>
+</head>
+<body>
+<div>
+  <p id="score">Skor 0</p>
+  <div id="fact"></div>
+  <button id="yes">Benar</button>
+  <button id="no">Salah</button>
+  <p id="msg"></p>
+</div>
+<script>
+  const FACTS = [
+    ["Matahari itu bintang", true],
+    ["Laba-laba punya 6 kaki", false],
+    ["Air bisa membeku di 0°C", true],
+    ["Paus termasuk ikan", false],
+    ["Indonesia punya lebih dari 17 ribu pulau", true],
+    ["Bulan memancarkan cahaya sendiri", false],
+    ["Jantung manusia punya 4 ruang", true],
+  ];
+  let order = FACTS.map((_, i) => i).sort(() => Math.random() - 0.5), k = 0, score = 0;
+  const fact = document.getElementById("fact"), msg = document.getElementById("msg"), scoreEl = document.getElementById("score");
+
+  function show() {
+    if (k >= order.length) { fact.textContent = "Selesai! skor " + score + "/" + FACTS.length; msg.textContent = "refresh buat main lagi"; return; }
+    fact.textContent = FACTS[order[k]][0] + "?";
+  }
+  function answer(v) {
+    if (k >= order.length) return;
+    const right = FACTS[order[k]][1] === v;
+    if (right) score++;
+    msg.textContent = right ? "✅ betul" : "❌ salah";
+    scoreEl.textContent = "Skor " + score;
+    k++;
+    show();
+  }
+  document.getElementById("yes").onclick = () => answer(true);
+  document.getElementById("no").onclick = () => answer(false);
+  show();
+</script>
+</body>
+</html>

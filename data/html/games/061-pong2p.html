@@ -1,0 +1,64 @@
+<!-- request: pong 2 pemain | pingpong berdua satu keyboard || two player pong | pong for 2 people on one keyboard -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pong 2P</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #03071e; color: #fff; font-family: monospace; text-align: center; }
+  canvas { background: #370617; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="480" height="320"></canvas>
+  <p>kiri: W/S · kanan: ↑/↓</p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, PH = 70;
+  let paddleSpeed = 6; // kecepatan raket
+  let winScore = 5; // skor menang
+  const p1 = { y: H / 2, score: 0 }, p2 = { y: H / 2, score: 0 };
+  const ball = { x: W / 2, y: H / 2, vx: 4, vy: 2 };
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (e.key === " " && Math.max(p1.score, p2.score) >= winScore) { p1.score = p2.score = 0; } };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function update() {
+    if (Math.max(p1.score, p2.score) >= winScore) return;
+    if (keys["w"]) p1.y -= paddleSpeed;
+    if (keys["s"]) p1.y += paddleSpeed;
+    if (keys["ArrowUp"]) p2.y -= paddleSpeed;
+    if (keys["ArrowDown"]) p2.y += paddleSpeed;
+    for (const p of [p1, p2]) p.y = Math.max(PH / 2, Math.min(H - PH / 2, p.y));
+    ball.x += ball.vx; ball.y += ball.vy;
+    if (ball.y < 5 || ball.y > H - 5) ball.vy *= -1;
+    if (ball.x < 26 && ball.vx < 0 && Math.abs(ball.y - p1.y) < PH / 2) ball.vx *= -1.08;
+    if (ball.x > W - 26 && ball.vx > 0 && Math.abs(ball.y - p2.y) < PH / 2) ball.vx *= -1.08;
+    if (ball.x < 0 || ball.x > W) {
+      (ball.x < 0 ? p2 : p1).score++;
+      Object.assign(ball, { x: W / 2, y: H / 2, vx: ball.x < 0 ? 4 : -4, vy: Math.random() * 4 - 2 });
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = "#370617";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#ffba08";
+    ctx.fillRect(12, p1.y - PH / 2, 10, PH);
+    ctx.fillRect(W - 22, p2.y - PH / 2, 10, PH);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(ball.x - 5, ball.y - 5, 10, 10);
+    ctx.font = "30px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(p1.score + "  " + p2.score, W / 2, 36);
+    if (Math.max(p1.score, p2.score) >= winScore) ctx.fillText((p1.score > p2.score ? "KIRI" : "KANAN") + " MENANG", W / 2, H / 2);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

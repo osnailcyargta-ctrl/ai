@@ -1,0 +1,56 @@
+<!-- request: tic tac toe 2 pemain | xo berdua || two player tic tac toe | tictactoe for 2 players -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tic Tac Toe 2 Player</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #fdf6e3; font-family: sans-serif; }
+  canvas { background: #fff; box-shadow: 0 4px 20px #0002; cursor: pointer; }
+  p { text-align: center; font-size: 20px; color: #333; }
+</style>
+</head>
+<body>
+<div>
+  <p id="msg">Giliran: X</p>
+  <canvas id="game" width="300" height="300"></canvas>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d"), msg = document.getElementById("msg");
+  const S = 100;
+  const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+  let cells = Array(9).fill(""), turn = "X", over = false;
+
+  cv.onclick = (e) => {
+    if (over) { cells = Array(9).fill(""); turn = "X"; over = false; msg.textContent = "Giliran: X"; draw(); return; }
+    const i = Math.floor(e.offsetY / S) * 3 + Math.floor(e.offsetX / S);
+    if (cells[i]) return;
+    cells[i] = turn;
+    const line = LINES.find(([a, b, c]) => cells[a] && cells[a] === cells[b] && cells[a] === cells[c]);
+    if (line) { over = true; msg.textContent = turn + " menang! klik buat ulang"; }
+    else if (cells.every((v) => v)) { over = true; msg.textContent = "Seri! klik buat ulang"; }
+    else { turn = turn === "X" ? "O" : "X"; msg.textContent = "Giliran: " + turn; }
+    draw();
+  };
+
+  function draw() {
+    ctx.clearRect(0, 0, 300, 300);
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 4;
+    for (let k = 1; k < 3; k++) {
+      ctx.beginPath(); ctx.moveTo(k * S, 10); ctx.lineTo(k * S, 290); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(10, k * S); ctx.lineTo(290, k * S); ctx.stroke();
+    }
+    ctx.font = "64px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    cells.forEach((v, i) => {
+      ctx.fillStyle = v === "X" ? "#e63946" : "#457b9d";
+      ctx.fillText(v, (i % 3) * S + S / 2, Math.floor(i / 3) * S + S / 2 + 4);
+    });
+  }
+  draw();
+</script>
+</body>
+</html>

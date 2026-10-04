@@ -1,0 +1,77 @@
+<!-- request: lawan bos naga | boss fight sama naga pake pedang || fight a dragon boss | boss battle against a dragon -->
+<!-- things: hero=ksatria:🤺 foe=naga:🐉 shot=api:🔥 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ksatria vs Naga</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #1a0f0f; color: #fff; font-family: sans-serif; }
+  canvas { background: #3b2416; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="520" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 4; // kecepatan ksatria
+  let bossHpMax = 30; // darah bos
+  let lives = 3; // nyawa
+  const hero = { x: W / 2, y: H - 40 };
+  const boss = { x: W / 2, y: 60, vx: 2, hp: bossHpMax };
+  let fire = [], slashes = [], cool = 0, hurt = 0, t = 0;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (e.key === "Enter" && (lives <= 0 || boss.hp <= 0)) { lives = 3; boss.hp = bossHpMax; fire = []; } };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function update() {
+    if (lives <= 0 || boss.hp <= 0) return;
+    t++;
+    if (keys["ArrowLeft"]) hero.x -= speed;
+    if (keys["ArrowRight"]) hero.x += speed;
+    hero.x = Math.max(16, Math.min(W - 16, hero.x));
+    if (cool > 0) cool--;
+    if (keys[" "] && cool === 0) { slashes.push({ x: hero.x, y: hero.y - 20 }); cool = 15; }
+    boss.x += boss.vx;
+    if (boss.x < 40 || boss.x > W - 40) boss.vx *= -1;
+    if (t % 40 === 0) for (let k = -1; k <= 1; k++) fire.push({ x: boss.x, y: boss.y + 30, vx: k * 1.5, vy: 3 });
+    for (const s of slashes) { s.y -= 7; if (Math.abs(s.x - boss.x) < 40 && Math.abs(s.y - boss.y) < 30) { s.done = true; boss.hp--; } }
+    for (const f of fire) {
+      f.x += f.vx; f.y += f.vy;
+      if (hurt <= 0 && Math.hypot(f.x - hero.x, f.y - hero.y) < 20) { f.done = true; lives--; hurt = 50; }
+    }
+    if (hurt > 0) hurt--;
+    slashes = slashes.filter((s) => !s.done && s.y > 0);
+    fire = fire.filter((f) => !f.done && f.y < H + 20);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "64px serif";
+    if (boss.hp > 0) ctx.fillText("🐉", boss.x, boss.y);
+    ctx.font = "28px serif";
+    if (hurt % 10 < 5) ctx.fillText("🤺", hero.x, hero.y);
+    ctx.font = "20px serif";
+    for (const f of fire) ctx.fillText("🔥", f.x, f.y);
+    ctx.fillStyle = "#cfe";
+    for (const s of slashes) ctx.fillRect(s.x - 2, s.y - 10, 4, 20);
+    ctx.fillStyle = "#400";
+    ctx.fillRect(110, 10, 300, 12);
+    ctx.fillStyle = "#e33";
+    ctx.fillRect(110, 10, 300 * boss.hp / bossHpMax, 12);
+    ctx.fillStyle = "#fff";
+    ctx.font = "15px sans-serif";
+    ctx.fillText("❤️".repeat(Math.max(0, lives)), 40, 16);
+    ctx.font = "28px sans-serif";
+    if (boss.hp <= 0) ctx.fillText("Naga kalah! Kamu menang 🏆", W / 2, H / 2);
+    if (lives <= 0) ctx.fillText("Kebakar naga... Enter = ulang", W / 2, H / 2);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

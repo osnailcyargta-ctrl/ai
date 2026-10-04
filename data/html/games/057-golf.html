@@ -1,0 +1,70 @@
+<!-- request: game golf tarik terus lepas | mini golf masukin bola ke lubang || mini golf drag to shoot | putt the ball into the hole -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mini Golf</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #1b4332; color: #fff; font-family: sans-serif; }
+  canvas { background: #52b788; border: 8px solid #7f5539; border-radius: 6px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="320"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let power = 0.12; // kekuatan pukulan
+  let friction = 0.985; // gesekan rumput
+  const hole = { x: 400, y: 160 };
+  const walls = [{ x: 220, y: 60, w: 20, h: 200 }];
+  const ball = { x: 70, y: 160, vx: 0, vy: 0 };
+  let drag = null, strokes = 0, inHole = false;
+
+  cv.onmousedown = (e) => { if (Math.hypot(ball.vx, ball.vy) < 0.1 && !inHole) drag = { x: e.offsetX, y: e.offsetY }; };
+  cv.onmousemove = (e) => { if (drag) { drag.x = e.offsetX; drag.y = e.offsetY; } };
+  onmouseup = () => {
+    if (inHole) { Object.assign(ball, { x: 70, y: 160, vx: 0, vy: 0 }); strokes = 0; inHole = false; return; }
+    if (!drag) return;
+    ball.vx = (ball.x - drag.x) * power;
+    ball.vy = (ball.y - drag.y) * power;
+    strokes++;
+    drag = null;
+  };
+
+  function update() {
+    ball.x += ball.vx; ball.y += ball.vy;
+    ball.vx *= friction; ball.vy *= friction;
+    if (ball.x < 6 || ball.x > W - 6) { ball.vx *= -1; ball.x = Math.max(6, Math.min(W - 6, ball.x)); }
+    if (ball.y < 6 || ball.y > H - 6) { ball.vy *= -1; ball.y = Math.max(6, Math.min(H - 6, ball.y)); }
+    for (const w of walls) if (ball.x > w.x - 6 && ball.x < w.x + w.w + 6 && ball.y > w.y - 6 && ball.y < w.y + w.h + 6) {
+      if (Math.min(Math.abs(ball.x - w.x), Math.abs(ball.x - w.x - w.w)) < Math.min(Math.abs(ball.y - w.y), Math.abs(ball.y - w.y - w.h))) ball.vx *= -1;
+      else ball.vy *= -1;
+      ball.x += ball.vx; ball.y += ball.vy;
+    }
+    if (!inHole && Math.hypot(ball.x - hole.x, ball.y - hole.y) < 10 && Math.hypot(ball.vx, ball.vy) < 4) { inHole = true; ball.vx = ball.vy = 0; ball.x = hole.x; ball.y = hole.y; }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#1b1b1b";
+    ctx.beginPath(); ctx.arc(hole.x, hole.y, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#7f5539";
+    for (const w of walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+    if (drag) {
+      ctx.strokeStyle = "#fff";
+      ctx.beginPath(); ctx.moveTo(ball.x, ball.y); ctx.lineTo(ball.x * 2 - drag.x, ball.y * 2 - drag.y); ctx.stroke();
+    }
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.font = "16px sans-serif";
+    ctx.fillText("Pukulan: " + strokes, 10, 20);
+    if (inHole) { ctx.font = "24px sans-serif"; ctx.fillText("Masuk! " + strokes + " pukulan (klik)", 120, 30); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

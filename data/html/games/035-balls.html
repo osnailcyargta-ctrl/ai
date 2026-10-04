@@ -1,0 +1,49 @@
+<!-- request: bola mantul mantul | banyak bola memantul warna warni || bouncing balls | colourful balls bouncing around -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bola Mantul</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #0d0d0d; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  let count = 25; // jumlah bola
+  let gravity = 0.25; // gravitasi
+  let bounce = 0.9; // seberapa mantul
+  function fit() { cv.width = innerWidth; cv.height = innerHeight; }
+  fit();
+  onresize = fit;
+  const balls = [];
+  function addBall(x, y) {
+    balls.push({ x, y, vx: Math.random() * 8 - 4, vy: Math.random() * -6, r: 8 + Math.random() * 18, color: "hsl(" + Math.random() * 360 + ", 80%, 60%)" });
+  }
+  for (let i = 0; i < count; i++) addBall(Math.random() * cv.width, Math.random() * cv.height / 2);
+  cv.onclick = (e) => addBall(e.clientX, e.clientY);
+
+  function loop() {
+    ctx.fillStyle = "rgba(13, 13, 13, 0.3)";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    for (const b of balls) {
+      b.vy += gravity;
+      b.x += b.vx;
+      b.y += b.vy;
+      if (b.y + b.r > cv.height) { b.y = cv.height - b.r; b.vy *= -bounce; }
+      if (b.x - b.r < 0 || b.x + b.r > cv.width) { b.vx *= -1; b.x = Math.max(b.r, Math.min(cv.width - b.r, b.x)); }
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+</script>
+</body>
+</html>

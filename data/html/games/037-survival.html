@@ -1,0 +1,93 @@
+<!-- request: ninja lempar shuriken ke zombie | bertahan dari serangan zombie | game ninja vs zombie || a ninja throwing shurikens at zombies | survive the zombie waves | ninja vs zombies -->
+<!-- things: hero=ninja:🥷 foe=zombie:🧟 shot=shuriken:✴️ -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ninja vs Zombie</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #121212; color: #eee; font-family: sans-serif; }
+  canvas { background: #2f3b2a; border-radius: 8px; cursor: crosshair; }
+</style>
+</head>
+<body>
+<canvas id="game" width="520" height="380"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 3; // kecepatan ninja
+  let foeSpeed = 0.9; // kecepatan zombie
+  let shotSpeed = 7; // kecepatan shuriken
+  let lives = 5; // nyawa
+  let hero, foes, shots, score, wave, hurt;
+  const keys = {}, mouse = { x: W / 2, y: 0 };
+  onkeydown = (e) => { keys[e.key.toLowerCase()] = true; if (lives <= 0 && e.key === "Enter") reset(); };
+  onkeyup = (e) => { keys[e.key.toLowerCase()] = false; };
+  cv.onmousemove = (e) => { mouse.x = e.offsetX; mouse.y = e.offsetY; };
+  cv.onclick = () => {
+    if (lives <= 0) return;
+    const a = Math.atan2(mouse.y - hero.y, mouse.x - hero.x);
+    shots.push({ x: hero.x, y: hero.y, vx: Math.cos(a) * shotSpeed, vy: Math.sin(a) * shotSpeed, spin: 0 });
+  };
+
+  function reset() { hero = { x: W / 2, y: H / 2 }; foes = []; shots = []; score = 0; wave = 1; hurt = 0; lives = 5; spawnWave(); }
+  function spawnWave() {
+    for (let i = 0; i < 3 + wave * 2; i++) {
+      const side = Math.floor(Math.random() * 4);
+      const x = side === 0 ? -20 : side === 1 ? W + 20 : Math.random() * W;
+      const y = side === 2 ? -20 : side === 3 ? H + 20 : Math.random() * H;
+      foes.push({ x, y, hp: 1 + Math.floor(wave / 3) });
+    }
+  }
+
+  function update() {
+    if (lives <= 0) return;
+    if (keys["a"] || keys["arrowleft"]) hero.x -= speed;
+    if (keys["d"] || keys["arrowright"]) hero.x += speed;
+    if (keys["w"] || keys["arrowup"]) hero.y -= speed;
+    if (keys["s"] || keys["arrowdown"]) hero.y += speed;
+    hero.x = Math.max(12, Math.min(W - 12, hero.x));
+    hero.y = Math.max(12, Math.min(H - 12, hero.y));
+    for (const s of shots) { s.x += s.vx; s.y += s.vy; s.spin += 0.4; }
+    for (const f of foes) {
+      const a = Math.atan2(hero.y - f.y, hero.x - f.x);
+      f.x += Math.cos(a) * (foeSpeed + wave * 0.1);
+      f.y += Math.sin(a) * (foeSpeed + wave * 0.1);
+      for (const s of shots) if (!s.done && Math.hypot(s.x - f.x, s.y - f.y) < 18) { s.done = true; f.hp--; }
+      if (f.hp <= 0 && !f.dead) { f.dead = true; score += 10; }
+      if (!f.dead && hurt <= 0 && Math.hypot(hero.x - f.x, hero.y - f.y) < 22) { lives--; hurt = 60; }
+    }
+    if (hurt > 0) hurt--;
+    shots = shots.filter((s) => !s.done && s.x > -20 && s.x < W + 20 && s.y > -20 && s.y < H + 20);
+    foes = foes.filter((f) => !f.dead);
+    if (!foes.length) { wave++; spawnWave(); }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "26px serif";
+    for (const f of foes) ctx.fillText("🧟", f.x, f.y);
+    if (hurt % 10 < 5) ctx.fillText("🥷", hero.x, hero.y);
+    ctx.font = "16px serif";
+    for (const s of shots) {
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.spin); ctx.fillText("✴️", 0, 0); ctx.restore();
+    }
+    ctx.fillStyle = "#fff";
+    ctx.font = "15px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Gelombang " + wave + "  Skor " + score + "  " + "❤️".repeat(Math.max(0, lives)), 10, 16);
+    if (lives <= 0) {
+      ctx.textAlign = "center";
+      ctx.font = "28px sans-serif";
+      ctx.fillText("Zombie menang... Enter buat ulang", W / 2, H / 2);
+    }
+  }
+
+  reset();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

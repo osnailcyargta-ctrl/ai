@@ -1,0 +1,75 @@
+<!-- request: game tank 2 pemain saling tembak | perang tank berdua || two player tank battle | tanks shooting each other -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tank Duel</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #222; color: #fff; font-family: monospace; text-align: center; }
+  canvas { background: #a3b18a; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="560" height="380"></canvas>
+  <p>Ijo: WASD + F · Merah: panah + L</p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 2; // kecepatan tank
+  let bulletSpeed = 6; // kecepatan peluru
+  const tanks = [
+    { x: 60, y: H / 2, a: 0, color: "#2d6a4f", keys: ["w", "s", "a", "d", "f"], score: 0, cool: 0 },
+    { x: W - 60, y: H / 2, a: Math.PI, color: "#c1121f", keys: ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "l"], score: 0, cool: 0 },
+  ];
+  let bullets = [];
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (e.key.startsWith("Arrow")) e.preventDefault(); };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function update() {
+    for (const t of tanks) {
+      const [up, down, left, right, fire] = t.keys;
+      if (keys[left]) t.a -= 0.05;
+      if (keys[right]) t.a += 0.05;
+      const v = (keys[up] ? speed : 0) - (keys[down] ? speed : 0);
+      t.x = Math.max(16, Math.min(W - 16, t.x + Math.cos(t.a) * v));
+      t.y = Math.max(16, Math.min(H - 16, t.y + Math.sin(t.a) * v));
+      if (t.cool > 0) t.cool--;
+      if (keys[fire] && !t.cool) { bullets.push({ x: t.x + Math.cos(t.a) * 20, y: t.y + Math.sin(t.a) * 20, vx: Math.cos(t.a) * bulletSpeed, vy: Math.sin(t.a) * bulletSpeed, from: t, life: 120 }); t.cool = 30; }
+    }
+    for (const b of bullets) {
+      b.x += b.vx; b.y += b.vy; b.life--;
+      if (b.x < 0 || b.x > W) b.vx *= -1;
+      if (b.y < 0 || b.y > H) b.vy *= -1;
+      for (const t of tanks) if (t !== b.from && Math.hypot(t.x - b.x, t.y - b.y) < 16) { b.life = 0; b.from.score++; }
+    }
+    bullets = bullets.filter((b) => b.life > 0);
+  }
+
+  function draw() {
+    ctx.fillStyle = "#a3b18a";
+    ctx.fillRect(0, 0, W, H);
+    for (const t of tanks) {
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      ctx.rotate(t.a);
+      ctx.fillStyle = t.color;
+      ctx.fillRect(-14, -11, 28, 22);
+      ctx.fillRect(0, -3, 22, 6);
+      ctx.restore();
+    }
+    ctx.fillStyle = "#111";
+    for (const b of bullets) { ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill(); }
+    ctx.font = "20px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(tanks[0].score + " : " + tanks[1].score, W / 2, 24);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

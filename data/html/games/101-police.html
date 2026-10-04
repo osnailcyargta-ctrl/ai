@@ -1,0 +1,72 @@
+<!-- request: kabur dari polisi naik mobil | mobil dikejar polisi || escape the police in a car | a car chased by police -->
+<!-- things: ride=mobil:🚗 foe=polisi:🚓 item=uang:💰 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kabur dari Polisi</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #111; color: #fff; font-family: sans-serif; }
+  canvas { background: #495057; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="520" height="380"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 3.4; // kecepatan mobil
+  let foeSpeed = 1.5; // kecepatan polisi
+  let hero, foes, item, score, over;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (over && e.key === " ") reset(); };
+  onkeyup = (e) => { keys[e.key] = false; };
+  const spot = () => ({ x: 30 + Math.random() * (W - 60), y: 30 + Math.random() * (H - 60) });
+
+  function reset() { hero = { x: W / 2, y: H / 2 }; foes = [{ x: 20, y: 20 }]; item = spot(); score = 0; over = false; }
+
+  function update() {
+    if (over) return;
+    if (keys["ArrowLeft"]) hero.x -= speed;
+    if (keys["ArrowRight"]) hero.x += speed;
+    if (keys["ArrowUp"]) hero.y -= speed;
+    if (keys["ArrowDown"]) hero.y += speed;
+    hero.x = Math.max(14, Math.min(W - 14, hero.x));
+    hero.y = Math.max(14, Math.min(H - 14, hero.y));
+    foes.forEach((f, i) => {
+      const a = Math.atan2(hero.y - f.y, hero.x - f.x) + Math.sin(Date.now() / 500 + i) * 0.4;
+      f.x += Math.cos(a) * foeSpeed;
+      f.y += Math.sin(a) * foeSpeed;
+      if (Math.hypot(f.x - hero.x, f.y - hero.y) < 24) over = true;
+    });
+    if (Math.hypot(item.x - hero.x, item.y - hero.y) < 24) {
+      score++;
+      item = spot();
+      if (score % 3 === 0) foes.push({ x: Math.random() < 0.5 ? 0 : W, y: Math.random() * H });
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = "#ffd60a";
+    ctx.setLineDash([16, 14]);
+    ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = "28px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("💰", item.x, item.y);
+    ctx.fillText("🚗", hero.x, hero.y);
+    for (const f of foes) ctx.fillText("🚓", f.x, f.y);
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px sans-serif";
+    ctx.fillText("Uang: " + score + " · Polisi: " + foes.length, W / 2, 16);
+    if (over) { ctx.font = "26px sans-serif"; ctx.fillText("Ketangkep! spasi = ulang", W / 2, H / 2 + 40); }
+  }
+
+  reset();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!-- request: game platformer lompat ke bendera | game lompat lompat di platform || platformer jumping to the flag | a jump and run platform game -->
+<!-- things: hero=ninja:🥷 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ninja Platformer</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #1b1b2f; color: #fff; font-family: sans-serif; }
+  canvas { background: linear-gradient(#2b5876, #4e4376); border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="560" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 3.5; // kecepatan jalan
+  let jumpPower = 10; // kekuatan lompat
+  let gravity = 0.5; // gravitasi
+  const platforms = [
+    { x: 0, y: 330, w: 560, h: 30 },
+    { x: 90, y: 270, w: 90, h: 12 },
+    { x: 220, y: 215, w: 90, h: 12 },
+    { x: 350, y: 165, w: 80, h: 12 },
+    { x: 460, y: 110, w: 90, h: 12 },
+  ];
+  const flag = { x: 520, y: 80 };
+  const hero = { x: 30, y: 300, vx: 0, vy: 0, w: 24, h: 28, ground: false };
+  let won = false;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (won && e.key === "Enter") { won = false; hero.x = 30; hero.y = 300; } };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function update() {
+    if (won) return;
+    hero.vx = (keys["ArrowRight"] || keys["d"] ? speed : 0) - (keys["ArrowLeft"] || keys["a"] ? speed : 0);
+    if ((keys["ArrowUp"] || keys[" "] || keys["w"]) && hero.ground) { hero.vy = -jumpPower; hero.ground = false; }
+    hero.vy += gravity;
+    hero.x = Math.max(0, Math.min(W - hero.w, hero.x + hero.vx));
+    hero.y += hero.vy;
+    hero.ground = false;
+    for (const p of platforms) {
+      if (hero.x + hero.w > p.x && hero.x < p.x + p.w && hero.y + hero.h > p.y && hero.y + hero.h - hero.vy <= p.y + 1) {
+        hero.y = p.y - hero.h; hero.vy = 0; hero.ground = true;
+      }
+    }
+    if (Math.abs(hero.x - flag.x) < 24 && Math.abs(hero.y - flag.y) < 30) won = true;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#3e2c23";
+    for (const p of platforms) ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.fillStyle = "#5c4";
+    for (const p of platforms) ctx.fillRect(p.x, p.y, p.w, 4);
+    ctx.font = "28px serif";
+    ctx.textBaseline = "top";
+    ctx.fillText("🚩", flag.x, flag.y);
+    ctx.fillText("🥷", hero.x - 2, hero.y - 2);
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px sans-serif";
+    ctx.fillText("panah = jalan, spasi = lompat", 10, 10);
+    if (won) { ctx.font = "30px sans-serif"; ctx.fillText("Sampai bendera! Menang", 140, 150); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

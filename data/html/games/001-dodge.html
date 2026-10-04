@@ -1,0 +1,68 @@
+<!-- request: game hindarin meteor yang jatuh | kabur dari meteor jatuh || dodge the falling meteors | avoid falling meteors -->
+<!-- things: hero=kucing:🐱 foe=meteor:☄️ -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hindarin Meteor</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #101418; color: #eee; font-family: sans-serif; }
+  canvas { background: #1c2733; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 5; // kecepatan pemain
+  let fallSpeed = 2; // kecepatan jatuh
+  let lives = 3; // nyawa
+  let score = 0;
+  const player = { x: W / 2, y: H - 30, size: 28 };
+  let foes = [];
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (lives <= 0 && e.key === " ") restart(); };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function restart() { lives = 3; score = 0; foes = []; player.x = W / 2; }
+
+  function update() {
+    if (lives <= 0) return;
+    if (keys["ArrowLeft"] || keys["a"]) player.x -= speed;
+    if (keys["ArrowRight"] || keys["d"]) player.x += speed;
+    player.x = Math.max(14, Math.min(W - 14, player.x));
+    if (Math.random() < 0.03 + score / 20000) foes.push({ x: Math.random() * W, y: -20, vy: fallSpeed + Math.random() * 2 });
+    for (const f of foes) {
+      f.y += f.vy;
+      if (Math.hypot(f.x - player.x, f.y - player.y) < 24) { f.y = H + 50; lives--; }
+    }
+    foes = foes.filter((f) => f.y < H + 30);
+    score++;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = "28px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🐱", player.x, player.y);
+    for (const f of foes) ctx.fillText("☄️", f.x, f.y);
+    ctx.font = "16px sans-serif";
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "left";
+    ctx.fillText("Skor: " + Math.floor(score / 10) + "   Nyawa: " + "❤️".repeat(lives), 10, 18);
+    if (lives <= 0) {
+      ctx.textAlign = "center";
+      ctx.font = "32px sans-serif";
+      ctx.fillText("Kena meteor! Game over", W / 2, H / 2);
+      ctx.font = "16px sans-serif";
+      ctx.fillText("tekan spasi buat main lagi", W / 2, H / 2 + 34);
+    }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

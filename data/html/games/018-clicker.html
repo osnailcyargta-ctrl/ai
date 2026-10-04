@@ -1,0 +1,60 @@
+<!-- request: game clicker pake toko upgrade | cookie clicker || cookie clicker with an upgrade shop | idle clicker game -->
+<!-- things: item=kue:🍪 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kue Clicker</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #3e2723; color: #fff3e0; font-family: sans-serif; text-align: center; }
+  #big { font-size: 120px; background: none; border: none; cursor: pointer; transition: transform 0.05s; }
+  #big:active { transform: scale(0.92); }
+  .shop button { display: block; width: 260px; margin: 6px auto; padding: 10px; font-size: 16px; border-radius: 8px; border: none; background: #ffcc80; cursor: pointer; }
+  .shop button:disabled { opacity: 0.4; }
+</style>
+</head>
+<body>
+<div>
+  <h1 id="count">0 kue</h1>
+  <p id="rate">0 per detik</p>
+  <button id="big">🍪</button>
+  <div class="shop" id="shop"></div>
+</div>
+<script>
+  let perClick = 1; // kue per klik
+  let count = 0, perSec = 0;
+  const shop = [
+    { name: "Klik +1", cost: 15, click: 1 },
+    { name: "Nenek (+1/detik)", cost: 50, sec: 1 },
+    { name: "Oven (+5/detik)", cost: 300, sec: 5 },
+    { name: "Pabrik (+25/detik)", cost: 1500, sec: 25 },
+  ];
+  const countEl = document.getElementById("count"), rateEl = document.getElementById("rate"), shopEl = document.getElementById("shop");
+
+  document.getElementById("big").onclick = () => { count += perClick; render(); };
+  for (const item of shop) {
+    item.btn = document.createElement("button");
+    item.btn.onclick = () => {
+      if (count < item.cost) return;
+      count -= item.cost;
+      perClick += item.click || 0;
+      perSec += item.sec || 0;
+      item.cost = Math.ceil(item.cost * 1.4);
+      render();
+    };
+    shopEl.appendChild(item.btn);
+  }
+
+  function render() {
+    countEl.textContent = Math.floor(count) + " kue";
+    rateEl.textContent = perSec + " per detik · " + perClick + " per klik";
+    for (const item of shop) {
+      item.btn.textContent = item.name + " — " + item.cost;
+      item.btn.disabled = count < item.cost;
+    }
+  }
+  setInterval(() => { count += perSec / 10; render(); }, 100);
+  render();
+</script>
+</body>
+</html>

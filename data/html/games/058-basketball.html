@@ -1,0 +1,71 @@
+<!-- request: game basket lempar bola ke ring | tembak bola basket || basketball shooting game | throw the ball into the hoop -->
+<!-- things: item=bola:🏀 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Basket</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #3d2b1f; color: #fff; font-family: sans-serif; }
+  canvas { background: linear-gradient(#ffe8d6, #ddbea9); border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="520" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let gravity = 0.3; // gravitasi
+  let shots = 10; // jumlah lemparan
+  const hoop = { x: 430, y: 130 };
+  let ball, aim = { x: 0, y: 0 }, score = 0, left = shots, flying = false;
+
+  function ready() { ball = { x: 80, y: 280, vx: 0, vy: 0, scored: false }; flying = false; }
+  cv.onmousemove = (e) => { aim.x = e.offsetX; aim.y = e.offsetY; };
+  cv.onclick = () => {
+    if (left <= 0) { left = shots; score = 0; ready(); return; }
+    if (flying) return;
+    ball.vx = (aim.x - ball.x) / 30;
+    ball.vy = (aim.y - ball.y) / 30 - 4;
+    flying = true;
+    left--;
+  };
+
+  function update() {
+    if (!flying) return;
+    ball.vy += gravity;
+    ball.x += ball.vx; ball.y += ball.vy;
+    if (!ball.scored && ball.vy > 0 && Math.abs(ball.x - hoop.x) < 20 && Math.abs(ball.y - hoop.y) < 8) { ball.scored = true; score++; }
+    if (ball.y > H + 20 || ball.x > W + 20 || ball.x < -20) ready();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(hoop.x + 26, hoop.y - 60, 8, 90);
+    ctx.strokeStyle = "#e63946";
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(hoop.x - 24, hoop.y); ctx.lineTo(hoop.x + 26, hoop.y); ctx.stroke();
+    if (!flying) {
+      ctx.setLineDash([4, 6]);
+      ctx.strokeStyle = "#555";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ball.x, ball.y); ctx.lineTo(aim.x, aim.y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.font = "30px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🏀", ball.x, ball.y);
+    ctx.fillStyle = "#333";
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Masuk " + score + " · Sisa " + left, W / 2, 20);
+    if (left <= 0 && !flying) ctx.fillText("Selesai! " + score + " dari " + shots + " (klik = ulang)", W / 2, H / 2);
+  }
+
+  ready();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

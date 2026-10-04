@@ -1,0 +1,78 @@
+<!-- request: game labirin pake panah | maze kumpulin koin terus ke pintu keluar || maze game with arrow keys | a maze where you collect coins and reach the exit -->
+<!-- things: hero=robot:🤖 item=koin:🪙 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Labirin Robot</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #0e1116; color: #ddd; font-family: sans-serif; }
+  canvas { background: #1b2230; }
+</style>
+</head>
+<body>
+<canvas id="game" width="440" height="440"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const MAP = [
+    "###########",
+    "#P..#.....#",
+    "#.#.#.###.#",
+    "#.#...#c..#",
+    "#.#####.#.#",
+    "#...c...#.#",
+    "###.###.#.#",
+    "#c..#...#.#",
+    "#.###.#####",
+    "#.....c..E#",
+    "###########",
+  ];
+  const S = cv.width / MAP.length;
+  let hero, coins, won;
+
+  function reset() {
+    coins = [];
+    MAP.forEach((row, y) => [...row].forEach((ch, x) => {
+      if (ch === "P") hero = { x, y };
+      if (ch === "c") coins.push({ x, y });
+    }));
+    won = false;
+  }
+  const wall = (x, y) => MAP[y][x] === "#";
+
+  onkeydown = (e) => {
+    if (won) { if (e.key === " ") reset(); return; }
+    const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    const nx = hero.x + d[0], ny = hero.y + d[1];
+    if (wall(nx, ny)) return;
+    hero.x = nx; hero.y = ny;
+    coins = coins.filter((c) => c.x !== nx || c.y !== ny);
+    if (MAP[ny][nx] === "E" && !coins.length) won = true;
+    draw();
+  };
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    MAP.forEach((row, y) => [...row].forEach((ch, x) => {
+      if (ch === "#") { ctx.fillStyle = "#4a5a78"; ctx.fillRect(x * S, y * S, S, S); }
+      if (ch === "E") { ctx.fillStyle = coins.length ? "#553" : "#3c6"; ctx.fillRect(x * S + 4, y * S + 4, S - 8, S - 8); }
+    }));
+    ctx.font = S * 0.7 + "px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const c of coins) ctx.fillText("🪙", c.x * S + S / 2, c.y * S + S / 2);
+    ctx.fillText("🤖", hero.x * S + S / 2, hero.y * S + S / 2);
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px sans-serif";
+    if (won) ctx.fillText("Keluar! Menang 🎉 (spasi = ulang)", cv.width / 2, cv.height / 2);
+    else if (coins.length) ctx.fillText("Koin sisa: " + coins.length, cv.width / 2, S / 2);
+    else ctx.fillText("Pintu keluar kebuka!", cv.width / 2, S / 2);
+  }
+
+  reset();
+  draw();
+</script>
+</body>
+</html>

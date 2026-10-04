@@ -1,0 +1,38 @@
+<!-- request: aplikasi catatan | notes yang kesimpen otomatis || notes app | a notepad that saves automatically -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Catatan</title>
+<style>
+  body { margin: 0; height: 100vh; display: flex; background: #fdfcdc; font-family: sans-serif; }
+  aside { width: 200px; background: #fed9b7; padding: 10px; overflow: auto; }
+  aside div { padding: 8px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; }
+  aside div.on { background: #f07167; color: #fff; }
+  textarea { flex: 1; border: none; padding: 20px; font-size: 17px; background: transparent; outline: none; resize: none; }
+</style>
+</head>
+<body>
+<aside id="side"><button id="new">+ catatan baru</button></aside>
+<textarea id="text" placeholder="tulis sesuatu..."></textarea>
+<script>
+  let notes = JSON.parse(localStorage.getItem("catatan") || '[{"text":""}]'), cur = 0;
+  const side = document.getElementById("side"), text = document.getElementById("text");
+  function render() {
+    side.querySelectorAll("div").forEach((d) => d.remove());
+    notes.forEach((n, i) => {
+      const d = document.createElement("div");
+      d.textContent = (n.text.split("\n")[0] || "catatan kosong").slice(0, 22);
+      if (i === cur) d.className = "on";
+      d.onclick = () => { cur = i; text.value = notes[cur].text; render(); };
+      side.appendChild(d);
+    });
+  }
+  text.oninput = () => { notes[cur].text = text.value; localStorage.setItem("catatan", JSON.stringify(notes)); render(); };
+  document.getElementById("new").onclick = () => { notes.unshift({ text: "" }); cur = 0; text.value = ""; render(); text.focus(); };
+  text.value = notes[cur].text;
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!-- request: simulasi planet ngorbit matahari | tata surya animasi || planets orbiting the sun | solar system animation -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tata Surya</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  let timeSpeed = 1; // kecepatan waktu
+  const PLANETS = [
+    { name: "Merkurius", r: 4, dist: 50, speed: 4.1, color: "#b5b5b5" },
+    { name: "Venus", r: 7, dist: 80, speed: 1.6, color: "#e3bb76" },
+    { name: "Bumi", r: 8, dist: 115, speed: 1, color: "#4f9de8" },
+    { name: "Mars", r: 6, dist: 150, speed: 0.53, color: "#d1603d" },
+    { name: "Jupiter", r: 16, dist: 210, speed: 0.08, color: "#d8ca9d" },
+    { name: "Saturnus", r: 13, dist: 270, speed: 0.03, color: "#e5d8a5" },
+  ];
+  const stars = Array.from({ length: 200 }, () => [Math.random() * cv.width, Math.random() * cv.height]);
+  let t = 0;
+
+  function loop() {
+    t += 0.01 * timeSpeed;
+    const cx = cv.width / 2, cy = cv.height / 2;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = "#555";
+    for (const [x, y] of stars) ctx.fillRect(x, y, 1, 1);
+    ctx.fillStyle = "#ffd60a";
+    ctx.shadowColor = "#ffb703";
+    ctx.shadowBlur = 30;
+    ctx.beginPath(); ctx.arc(cx, cy, 24, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.font = "11px sans-serif";
+    for (const p of PLANETS) {
+      ctx.strokeStyle = "#222";
+      ctx.beginPath(); ctx.arc(cx, cy, p.dist, 0, Math.PI * 2); ctx.stroke();
+      const x = cx + Math.cos(t * p.speed) * p.dist, y = cy + Math.sin(t * p.speed) * p.dist;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(x, y, p.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#aaa";
+      ctx.fillText(p.name, x + p.r + 3, y);
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+</script>
+</body>
+</html>

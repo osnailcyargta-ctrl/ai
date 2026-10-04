@@ -1,0 +1,39 @@
+<!-- request: generator password acak | bikin password random || random password generator | generate a strong password -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Password Generator</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #1d3557; color: #f1faee; font-family: monospace; text-align: center; }
+  #out { font-size: 24px; background: #0b1d33; padding: 12px; border-radius: 8px; min-width: 320px; word-break: break-all; }
+  label { display: block; margin: 6px; }
+  button { font-size: 18px; padding: 8px 18px; margin: 8px; border-radius: 8px; border: none; background: #e63946; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<div>
+  <h2>Password Generator 🔐</h2>
+  <div id="out"></div>
+  <label>Panjang <input id="len" type="range" min="6" max="32" value="14"> <span id="lenVal">14</span></label>
+  <label><input id="sym" type="checkbox" checked> pake simbol</label>
+  <button id="gen">bikin</button><button id="copy">salin</button>
+</div>
+<script>
+  const out = document.getElementById("out"), len = document.getElementById("len");
+  function make() {
+    let chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    if (document.getElementById("sym").checked) chars += "!@#$%&*?";
+    let pw = "";
+    for (let i = 0; i < len.value; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+    out.textContent = pw;
+    document.getElementById("lenVal").textContent = len.value;
+  }
+  document.getElementById("gen").onclick = make;
+  len.oninput = make;
+  document.getElementById("copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(out.textContent).catch(() => {});
+  make();
+</script>
+</body>
+</html>

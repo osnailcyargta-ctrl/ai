@@ -1,0 +1,67 @@
+<!-- request: game susun balok setinggi mungkin | stack tower || stack the blocks as high as you can | tower stacking game -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Susun Balok</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #22223b; color: #fff; font-family: sans-serif; }
+  canvas { background: linear-gradient(#4a4e69, #9a8c98); border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="360" height="480"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, BH = 24;
+  let moveSpeed = 3; // kecepatan balok
+  let stack, cur, dir, over;
+
+  function reset() {
+    stack = [{ x: W / 2 - 80, w: 160 }];
+    cur = { x: 0, w: 160 };
+    dir = 1; over = false;
+  }
+
+  function drop() {
+    if (over) return reset();
+    const top = stack[stack.length - 1];
+    const left = Math.max(cur.x, top.x), right = Math.min(cur.x + cur.w, top.x + top.w);
+    if (right <= left) { over = true; return; }
+    stack.push({ x: left, w: right - left });
+    cur = { x: dir > 0 ? 0 : W - (right - left), w: right - left };
+  }
+  onkeydown = (e) => { if (e.key === " ") drop(); };
+  cv.onclick = drop;
+
+  function update() {
+    if (over) return;
+    cur.x += dir * (moveSpeed + stack.length * 0.15);
+    if (cur.x < 0 || cur.x + cur.w > W) dir *= -1;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const shift = Math.max(0, stack.length * BH - H / 2);
+    stack.forEach((b, i) => {
+      ctx.fillStyle = "hsl(" + (i * 25) % 360 + ", 70%, 60%)";
+      ctx.fillRect(b.x, H - (i + 1) * BH + shift, b.w, BH - 2);
+    });
+    if (!over) {
+      ctx.fillStyle = "hsl(" + (stack.length * 25) % 360 + ", 70%, 60%)";
+      ctx.fillRect(cur.x, H - (stack.length + 1) * BH + shift, cur.w, BH - 2);
+    }
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 28px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(stack.length - 1, W / 2, 40);
+    if (over) { ctx.font = "20px sans-serif"; ctx.fillText("Jatuh! spasi buat ulang", W / 2, H / 2); }
+  }
+
+  reset();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

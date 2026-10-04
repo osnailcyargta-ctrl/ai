@@ -1,0 +1,69 @@
+<!-- request: game ritme panah jatuh | game musik pencet pas nada || rhythm game with falling arrows | press the keys on the beat -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ritme</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #10002b; color: #fff; font-family: sans-serif; }
+  canvas { background: #240046; }
+</style>
+</head>
+<body>
+<canvas id="game" width="320" height="480"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, LINE = H - 60;
+  let noteSpeed = 3; // kecepatan nada
+  const KEYS = ["ArrowLeft", "ArrowDown", "ArrowUp", "ArrowRight"], ARROWS = ["←", "↓", "↑", "→"], COLORS = ["#c77dff", "#4cc9f0", "#80ffdb", "#ff6d00"];
+  const LW = W / 4;
+  let notes = [], score = 0, combo = 0, flash = ["", 0];
+
+  setInterval(() => notes.push({ lane: Math.floor(Math.random() * 4), y: -20 }), 450);
+
+  onkeydown = (e) => {
+    const lane = KEYS.indexOf(e.key);
+    if (lane < 0) return;
+    e.preventDefault();
+    const n = notes.find((o) => o.lane === lane && Math.abs(o.y - LINE) < 30);
+    if (n) {
+      const perfect = Math.abs(n.y - LINE) < 10;
+      n.hit = true; combo++;
+      score += perfect ? 3 : 1;
+      flash = [perfect ? "PERFECT" : "OK", 20];
+    } else { combo = 0; flash = ["MISS", 20]; }
+  };
+
+  function update() {
+    for (const n of notes) {
+      n.y += noteSpeed;
+      if (!n.hit && n.y > H) { n.hit = true; combo = 0; flash = ["MISS", 20]; }
+    }
+    notes = notes.filter((n) => !n.hit);
+    if (flash[1] > 0) flash[1]--;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (let l = 0; l < 4; l++) {
+      ctx.fillStyle = l % 2 ? "#2d0b5a" : "#260950";
+      ctx.fillRect(l * LW, 0, LW, H);
+    }
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, LINE - 2, W, 4);
+    ctx.font = "34px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const n of notes) { ctx.fillStyle = COLORS[n.lane]; ctx.fillText(ARROWS[n.lane], n.lane * LW + LW / 2, n.y); }
+    ctx.fillStyle = "#fff";
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Skor " + score + "  Combo " + combo, W / 2, 20);
+    if (flash[1] > 0) { ctx.font = "28px sans-serif"; ctx.fillText(flash[0], W / 2, H / 2); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

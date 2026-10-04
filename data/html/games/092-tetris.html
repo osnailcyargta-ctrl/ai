@@ -1,0 +1,75 @@
+<!-- request: game tetris | susun balok tetris || tetris | falling block puzzle -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tetris</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #1a1a1a; color: #fff; font-family: monospace; text-align: center; }
+  canvas { background: #000; border: 2px solid #555; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="200" height="400"></canvas>
+  <p id="info">Skor 0</p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d"), info = document.getElementById("info");
+  const COLS = 10, ROWS = 20, S = 20;
+  let dropMs = 500; // kecepatan jatuh
+  const SHAPES = [[[1, 1, 1, 1]], [[1, 1], [1, 1]], [[0, 1, 0], [1, 1, 1]], [[1, 0, 0], [1, 1, 1]], [[0, 0, 1], [1, 1, 1]], [[1, 1, 0], [0, 1, 1]], [[0, 1, 1], [1, 1, 0]]];
+  const COLORS = ["#00f0f0", "#f0f000", "#a000f0", "#0000f0", "#f0a000", "#00f000", "#f00000"];
+  let board = Array.from({ length: ROWS }, () => Array(COLS).fill(0)), piece, score = 0, over = false;
+
+  function spawn() {
+    const k = Math.floor(Math.random() * SHAPES.length);
+    piece = { m: SHAPES[k], c: k + 1, x: 3, y: 0 };
+    if (hits(piece.m, piece.x, piece.y)) over = true;
+  }
+  function hits(m, px, py) {
+    return m.some((row, y) => row.some((v, x) => v && (px + x < 0 || px + x >= COLS || py + y >= ROWS || (board[py + y] && board[py + y][px + x]))));
+  }
+  const rotate = (m) => m[0].map((_, i) => m.map((row) => row[i]).reverse());
+
+  function lock() {
+    piece.m.forEach((row, y) => row.forEach((v, x) => { if (v) board[piece.y + y][piece.x + x] = piece.c; }));
+    const before = board.length;
+    board = board.filter((row) => row.some((v) => !v));
+    const cleared = before - board.length;
+    while (board.length < ROWS) board.unshift(Array(COLS).fill(0));
+    score += [0, 100, 300, 500, 800][cleared];
+    spawn();
+  }
+  function down() {
+    if (over) return;
+    if (!hits(piece.m, piece.x, piece.y + 1)) piece.y++;
+    else lock();
+  }
+
+  onkeydown = (e) => {
+    if (over) { if (e.key === "Enter") { board = board.map((r) => r.fill(0)); score = 0; over = false; spawn(); } return; }
+    if (e.key === "ArrowLeft" && !hits(piece.m, piece.x - 1, piece.y)) piece.x--;
+    if (e.key === "ArrowRight" && !hits(piece.m, piece.x + 1, piece.y)) piece.x++;
+    if (e.key === "ArrowDown") down();
+    if (e.key === "ArrowUp") { const r = rotate(piece.m); if (!hits(r, piece.x, piece.y)) piece.m = r; }
+    if (e.key === " ") { while (!hits(piece.m, piece.x, piece.y + 1)) piece.y++; lock(); }
+    draw();
+  };
+
+  function draw() {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    board.forEach((row, y) => row.forEach((v, x) => { if (v) { ctx.fillStyle = COLORS[v - 1]; ctx.fillRect(x * S, y * S, S - 1, S - 1); } }));
+    ctx.fillStyle = COLORS[piece.c - 1];
+    piece.m.forEach((row, y) => row.forEach((v, x) => { if (v) ctx.fillRect((piece.x + x) * S, (piece.y + y) * S, S - 1, S - 1); }));
+    info.textContent = over ? "GAME OVER · skor " + score + " · Enter" : "Skor " + score;
+  }
+
+  spawn();
+  setInterval(() => { down(); draw(); }, dropMs);
+  draw();
+</script>
+</body>
+</html>

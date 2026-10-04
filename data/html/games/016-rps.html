@@ -1,0 +1,47 @@
+<!-- request: suit lawan komputer | batu gunting kertas || rock paper scissors against the computer | rock paper scissors -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Batu Gunting Kertas</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fff8e7; color: #333; font-family: sans-serif; text-align: center; }
+  button { font-size: 48px; margin: 8px; padding: 10px 18px; border-radius: 14px; border: 2px solid #ccc; background: #fff; cursor: pointer; }
+  button:hover { border-color: #f4a261; }
+  #result { font-size: 22px; min-height: 60px; }
+</style>
+</head>
+<body>
+<div>
+  <h1>Batu Gunting Kertas</h1>
+  <div id="choices"></div>
+  <p id="result">pilih satu!</p>
+  <p id="score">Kamu 0 - 0 Komputer</p>
+</div>
+<script>
+  const OPTIONS = [{ name: "batu", icon: "✊" }, { name: "gunting", icon: "✌️" }, { name: "kertas", icon: "✋" }];
+  const result = document.getElementById("result"), scoreEl = document.getElementById("score");
+  let me = 0, cpu = 0;
+
+  OPTIONS.forEach((opt, i) => {
+    const b = document.createElement("button");
+    b.textContent = opt.icon;
+    b.title = opt.name;
+    b.onclick = () => play(i);
+    document.getElementById("choices").appendChild(b);
+  });
+
+  function play(i) {
+    const j = Math.floor(Math.random() * 3);
+    const a = OPTIONS[i], b = OPTIONS[j];
+    let text;
+    if (i === j) text = "Seri!";
+    else if ((i + 1) % 3 === j) { text = "Kamu menang!"; me++; }
+    else { text = "Komputer menang!"; cpu++; }
+    result.textContent = a.icon + " vs " + b.icon + " — " + text;
+    scoreEl.textContent = "Kamu " + me + " - " + cpu + " Komputer";
+  }
+</script>
+</body>
+</html>

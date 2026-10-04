@@ -1,0 +1,40 @@
+<!-- request: flashcard belajar bahasa inggris | kartu hafalan bolak balik || flashcards for learning english | flip cards to study -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Flashcard</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f0efeb; font-family: sans-serif; text-align: center; }
+  .card { width: 300px; height: 180px; perspective: 800px; cursor: pointer; margin: 0 auto; }
+  .inner { position: relative; width: 100%; height: 100%; transition: transform 0.5s; transform-style: preserve-3d; }
+  .card.flip .inner { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; display: grid; place-items: center; font-size: 32px; border-radius: 14px; backface-visibility: hidden; background: #fff; box-shadow: 0 4px 12px #0002; }
+  .back { transform: rotateY(180deg); background: #ffd6a5; }
+  button { font-size: 16px; padding: 8px 16px; margin: 14px 4px; }
+</style>
+</head>
+<body>
+<div>
+  <p id="count"></p>
+  <div class="card" id="card"><div class="inner"><div class="face" id="front"></div><div class="face back" id="back"></div></div></div>
+  <button id="prev">◀</button><button id="next">▶</button>
+</div>
+<script>
+  const CARDS = [["kucing", "cat"], ["rumah", "house"], ["air", "water"], ["buku", "book"], ["merah", "red"], ["makan", "eat"], ["besar", "big"], ["teman", "friend"]];
+  const card = document.getElementById("card");
+  let i = 0;
+  function show() {
+    card.classList.remove("flip");
+    document.getElementById("front").textContent = CARDS[i][0];
+    document.getElementById("back").textContent = CARDS[i][1];
+    document.getElementById("count").textContent = (i + 1) + " / " + CARDS.length + " · klik kartu buat balik";
+  }
+  card.onclick = () => card.classList.toggle("flip");
+  document.getElementById("next").onclick = () => { i = (i + 1) % CARDS.length; show(); };
+  document.getElementById("prev").onclick = () => { i = (i - 1 + CARDS.length) % CARDS.length; show(); };
+  show();
+</script>
+</body>
+</html>

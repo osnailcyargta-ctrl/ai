@@ -1,0 +1,79 @@
+<!-- request: game kayak mario injek musuh | platformer injek kumbang || stomp the enemies like mario | platformer where you jump on bugs -->
+<!-- things: hero=tukang:👨‍🔧 foe=kumbang:🐞 item=koin:🪙 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tukang Injek Kumbang</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #5c94fc; color: #fff; font-family: sans-serif; }
+  canvas { background: #6b8cff; border: 3px solid #000; }
+</style>
+</head>
+<body>
+<canvas id="game" width="560" height="320"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, FLOOR = H - 40;
+  let speed = 3.5; // kecepatan jalan
+  let jumpPower = 10; // kekuatan lompat
+  let gravity = 0.5; // gravitasi
+  let hero, foes, coins, score, lives, hurt;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (lives <= 0 && e.key === "Enter") reset(); };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function reset() {
+    hero = { x: 40, y: FLOOR, vy: 0, ground: true };
+    foes = [{ x: 300, dir: -1 }, { x: 460, dir: 1 }];
+    coins = [{ x: 200, y: FLOOR - 90 }, { x: 380, y: FLOOR - 90 }];
+    score = 0; lives = 3; hurt = 0;
+  }
+
+  function update() {
+    if (lives <= 0) return;
+    if (keys["ArrowLeft"]) hero.x -= speed;
+    if (keys["ArrowRight"]) hero.x += speed;
+    hero.x = Math.max(12, Math.min(W - 12, hero.x));
+    if ((keys[" "] || keys["ArrowUp"]) && hero.ground) { hero.vy = -jumpPower; hero.ground = false; }
+    hero.vy += gravity;
+    hero.y += hero.vy;
+    if (hero.y >= FLOOR) { hero.y = FLOOR; hero.vy = 0; hero.ground = true; }
+    for (const f of foes) {
+      f.x += f.dir * 1.2;
+      if (f.x < 20 || f.x > W - 20) f.dir *= -1;
+      const close = Math.abs(f.x - hero.x) < 22 && Math.abs(FLOOR - hero.y) < 24;
+      if (close && hero.vy > 0) { f.dead = true; score += 100; hero.vy = -6; }
+      else if (close && hurt <= 0) { lives--; hurt = 60; }
+    }
+    if (hurt > 0) hurt--;
+    foes = foes.filter((f) => !f.dead);
+    if (foes.length < 2 && Math.random() < 0.01) foes.push({ x: Math.random() < 0.5 ? 20 : W - 20, dir: Math.random() < 0.5 ? 1 : -1 });
+    for (const c of coins) if (Math.hypot(c.x - hero.x, c.y - hero.y) < 22) { c.x = 40 + Math.random() * (W - 80); score += 10; }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#c84c0c";
+    ctx.fillRect(0, FLOOR + 14, W, H - FLOOR - 14);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.font = "24px serif";
+    for (const c of coins) ctx.fillText("🪙", c.x, c.y);
+    for (const f of foes) ctx.fillText("🐞", f.x, FLOOR + 14);
+    ctx.font = "30px serif";
+    if (hurt % 10 < 5) ctx.fillText("👨‍🔧", hero.x, hero.y + 14);
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("SKOR " + score + "   NYAWA " + lives, 10, 10);
+    if (lives <= 0) { ctx.textAlign = "center"; ctx.fillText("GAME OVER - Enter buat ulang", W / 2, H / 2); }
+  }
+
+  reset();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

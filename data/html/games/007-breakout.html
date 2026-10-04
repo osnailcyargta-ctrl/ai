@@ -1,0 +1,79 @@
+<!-- request: game breakout | hancurin bata pake bola | game mantulin bola ke balok || breakout game | break the bricks with a ball | brick breaker -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Breakout</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #14101f; color: #fff; font-family: sans-serif; }
+  canvas { background: #221a35; border-radius: 6px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let paddleSpeed = 7; // kecepatan papan
+  let ballSpeed = 4; // kecepatan bola
+  let rows = 5; // jumlah baris bata
+  let lives = 3; // nyawa
+  const COLS = 8, BW = W / COLS, BH = 18;
+  const COLORS = ["#ff595e", "#ffca3a", "#8ac926", "#1982c4", "#6a4c93"];
+  let bricks = [], score = 0;
+  const pad = { x: W / 2, w: 80 };
+  const ball = { x: W / 2, y: H - 60, vx: ballSpeed, vy: -ballSpeed };
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (e.key === " " && (lives <= 0 || !bricks.length)) start(); };
+  onkeyup = (e) => { keys[e.key] = false; };
+  cv.onmousemove = (e) => { pad.x = e.offsetX; };
+
+  function start() {
+    bricks = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < COLS; c++) bricks.push({ x: c * BW, y: 40 + r * BH, color: COLORS[r % COLORS.length] });
+    lives = 3; score = 0; resetBall();
+  }
+  function resetBall() { ball.x = W / 2; ball.y = H - 60; ball.vx = ballSpeed * (Math.random() < 0.5 ? -1 : 1); ball.vy = -ballSpeed; }
+
+  function update() {
+    if (lives <= 0 || !bricks.length) return;
+    if (keys["ArrowLeft"]) pad.x -= paddleSpeed;
+    if (keys["ArrowRight"]) pad.x += paddleSpeed;
+    pad.x = Math.max(pad.w / 2, Math.min(W - pad.w / 2, pad.x));
+    ball.x += ball.vx; ball.y += ball.vy;
+    if (ball.x < 6 || ball.x > W - 6) ball.vx *= -1;
+    if (ball.y < 6) ball.vy *= -1;
+    if (ball.y > H - 30 && ball.y < H - 18 && Math.abs(ball.x - pad.x) < pad.w / 2 && ball.vy > 0) {
+      ball.vy *= -1;
+      ball.vx = (ball.x - pad.x) / (pad.w / 2) * ballSpeed;
+    }
+    for (const b of bricks) {
+      if (!b.hit && ball.x > b.x && ball.x < b.x + BW && ball.y > b.y && ball.y < b.y + BH) { b.hit = true; ball.vy *= -1; score += 10; }
+    }
+    bricks = bricks.filter((b) => !b.hit);
+    if (ball.y > H) { lives--; resetBall(); }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (const b of bricks) { ctx.fillStyle = b.color; ctx.fillRect(b.x + 2, b.y + 2, BW - 4, BH - 4); }
+    ctx.fillStyle = "#eee";
+    ctx.fillRect(pad.x - pad.w / 2, H - 24, pad.w, 10);
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = "15px sans-serif";
+    ctx.fillText("Skor " + score + "   Nyawa " + lives, 10, 22);
+    ctx.textAlign = "center";
+    if (!bricks.length) ctx.fillText("Semua bata hancur! spasi = ulang", W / 2, H / 2);
+    if (lives <= 0) ctx.fillText("Game over, spasi = ulang", W / 2, H / 2);
+    ctx.textAlign = "left";
+  }
+
+  start();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

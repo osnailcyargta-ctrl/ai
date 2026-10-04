@@ -1,0 +1,60 @@
+<!-- request: plinko jatuhin bola ke paku | game bola jatuh mantul paku || plinko | drop a ball through the pegs -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Plinko</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #14213d; color: #fff; font-family: sans-serif; text-align: center; }
+  canvas { background: #000; border-radius: 8px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="400" height="460"></canvas>
+  <p id="info">klik di atas buat jatuhin bola · poin 0</p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d"), info = document.getElementById("info");
+  const W = cv.width, H = cv.height;
+  let gravity = 0.2; // gravitasi
+  const SLOTS = [10, 5, 2, 1, 0, 1, 2, 5, 10];
+  const pegs = [];
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 9; c++) pegs.push({ x: 25 + c * 44 + (r % 2 ? 22 : 0), y: 60 + r * 34 });
+  let balls = [], points = 0;
+
+  cv.onclick = (e) => balls.push({ x: e.offsetX, y: 10, vx: 0, vy: 0 });
+
+  function update() {
+    for (const b of balls) {
+      b.vy += gravity;
+      b.x += b.vx; b.y += b.vy;
+      for (const p of pegs) {
+        const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
+        if (d < 10) { const nx = dx / d, ny = dy / d; b.x = p.x + nx * 10; b.y = p.y + ny * 10; const dot = b.vx * nx + b.vy * ny; b.vx = (b.vx - 2 * dot * nx) * 0.6 + (Math.random() - 0.5); b.vy = (b.vy - 2 * dot * ny) * 0.6; }
+      }
+      if (b.x < 5 || b.x > W - 5) b.vx *= -1;
+      if (b.y > H - 30 && !b.done) { b.done = true; points += SLOTS[Math.max(0, Math.min(SLOTS.length - 1, Math.floor(b.x / (W / SLOTS.length))))]; info.textContent = "poin " + points; }
+    }
+    balls = balls.filter((b) => b.y < H + 10);
+  }
+
+  function draw() {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#fca311";
+    for (const p of pegs) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); }
+    const sw = W / SLOTS.length;
+    ctx.font = "14px sans-serif";
+    ctx.textAlign = "center";
+    SLOTS.forEach((v, i) => { ctx.fillStyle = v >= 5 ? "#e63946" : "#457b9d"; ctx.fillRect(i * sw + 2, H - 30, sw - 4, 30); ctx.fillStyle = "#fff"; ctx.fillText(v, i * sw + sw / 2, H - 10); });
+    ctx.fillStyle = "#fff";
+    for (const b of balls) { ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI * 2); ctx.fill(); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

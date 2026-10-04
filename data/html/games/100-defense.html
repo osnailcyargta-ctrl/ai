@@ -1,0 +1,74 @@
+<!-- request: tower defense taruh menara | jaga benteng dari musuh lewat jalan || tower defense placing towers | defend the base from enemies on a path -->
+<!-- things: foe=slime:🟢 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tower Defense</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #283618; color: #fff; font-family: sans-serif; text-align: center; }
+  canvas { background: #606c38; border-radius: 8px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="game" width="560" height="360"></canvas>
+  <p id="info"></p>
+</div>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d"), info = document.getElementById("info");
+  const W = cv.width, H = cv.height;
+  let towerCost = 25; // harga menara
+  let range = 80; // jangkauan menara
+  const PATH = [[0, 60], [420, 60], [420, 180], [120, 180], [120, 300], [560, 300]];
+  let foes = [], towers = [], shots = [], money = 60, lives = 10, wave = 0, t = 0;
+
+  function pos(d) {
+    for (let i = 0; i < PATH.length - 1; i++) {
+      const [x1, y1] = PATH[i], [x2, y2] = PATH[i + 1], len = Math.hypot(x2 - x1, y2 - y1);
+      if (d <= len) return { x: x1 + (x2 - x1) * d / len, y: y1 + (y2 - y1) * d / len };
+      d -= len;
+    }
+    return null;
+  }
+  cv.onclick = (e) => { if (money >= towerCost && lives > 0) { towers.push({ x: e.offsetX, y: e.offsetY, cool: 0 }); money -= towerCost; } };
+
+  function update() {
+    if (lives <= 0) return;
+    t++;
+    if (t % 600 === 1) wave++;
+    if (t % 600 < 300 && t % 40 === 0) foes.push({ d: 0, hp: 2 + wave, speed: 0.8 + wave * 0.1 });
+    for (const f of foes) { f.d += f.speed; f.p = pos(f.d); if (!f.p) { f.dead = true; lives--; } }
+    for (const tw of towers) {
+      if (tw.cool > 0) { tw.cool--; continue; }
+      const target = foes.find((f) => f.p && !f.dead && Math.hypot(f.p.x - tw.x, f.p.y - tw.y) < range);
+      if (target) { target.hp--; shots.push({ x1: tw.x, y1: tw.y, x2: target.p.x, y2: target.p.y, t: 5 }); tw.cool = 25; if (target.hp <= 0) { target.dead = true; money += 5; } }
+    }
+    foes = foes.filter((f) => !f.dead);
+    for (const s of shots) s.t--;
+    shots = shots.filter((s) => s.t > 0);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = "#dda15e";
+    ctx.lineWidth = 30;
+    ctx.beginPath();
+    PATH.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.stroke();
+    ctx.font = "22px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const f of foes) if (f.p) ctx.fillText("🟢", f.p.x, f.p.y);
+    for (const tw of towers) ctx.fillText("🗼", tw.x, tw.y);
+    ctx.strokeStyle = "#ffd60a";
+    ctx.lineWidth = 2;
+    for (const s of shots) { ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke(); }
+    info.textContent = lives > 0 ? "Gelombang " + wave + " · Uang " + money + " · Nyawa " + lives + " · klik = taruh menara (" + towerCost + ")" : "Benteng jebol di gelombang " + wave;
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

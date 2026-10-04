@@ -1,0 +1,64 @@
+<!-- request: game simon says | ingat urutan warna || simon says memory game | repeat the colour sequence -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Simon</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111; color: #fff; font-family: sans-serif; text-align: center; }
+  .pads { display: grid; grid-template-columns: repeat(2, 120px); gap: 12px; }
+  .pad { width: 120px; height: 120px; border-radius: 16px; opacity: 0.45; cursor: pointer; }
+  .pad.lit { opacity: 1; box-shadow: 0 0 24px #fff8; }
+</style>
+</head>
+<body>
+<div>
+  <h2 id="msg">klik pad mana aja buat mulai</h2>
+  <div class="pads" id="pads"></div>
+</div>
+<script>
+  const COLORS = ["#e74c3c", "#2ecc71", "#3498db", "#f1c40f"];
+  const msg = document.getElementById("msg");
+  let seq = [], pos = 0, busy = false;
+  const pads = COLORS.map((c, i) => {
+    const p = document.createElement("div");
+    p.className = "pad";
+    p.style.background = c;
+    p.onclick = () => press(i);
+    document.getElementById("pads").appendChild(p);
+    return p;
+  });
+
+  function flash(i, ms) {
+    pads[i].classList.add("lit");
+    setTimeout(() => pads[i].classList.remove("lit"), ms);
+  }
+
+  function playSeq() {
+    busy = true;
+    seq.forEach((i, k) => setTimeout(() => flash(i, 350), 600 * k + 400));
+    setTimeout(() => { busy = false; pos = 0; msg.textContent = "giliran kamu (" + seq.length + ")"; }, 600 * seq.length + 400);
+  }
+
+  function nextRound() {
+    seq.push(Math.floor(Math.random() * 4));
+    msg.textContent = "perhatiin...";
+    playSeq();
+  }
+
+  function press(i) {
+    if (busy) return;
+    if (!seq.length) return nextRound();
+    flash(i, 200);
+    if (i !== seq[pos]) {
+      msg.textContent = "salah! kamu dapet " + (seq.length - 1) + " ronde. klik buat ulang";
+      seq = [];
+      return;
+    }
+    pos++;
+    if (pos === seq.length) setTimeout(nextRound, 600);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!-- request: catatan pengeluaran | aplikasi keuangan pemasukan pengeluaran || expense tracker | track income and spending -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Catatan Keuangan</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: start center; padding-top: 40px; background: #f4f4f9; font-family: sans-serif; }
+  .app { width: 360px; background: #fff; padding: 18px; border-radius: 12px; box-shadow: 0 4px 16px #0001; }
+  #balance { font-size: 32px; font-weight: bold; }
+  input { font-size: 15px; padding: 6px; width: 44%; }
+  li { list-style: none; display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; }
+  .plus { color: #2a9d8f; } .minus { color: #e63946; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div>Saldo</div>
+  <div id="balance">Rp0</div>
+  <p><input id="desc" placeholder="keterangan"> <input id="amount" type="number" placeholder="jumlah (- = keluar)"></p>
+  <button id="add">tambah</button>
+  <ul id="list"></ul>
+</div>
+<script>
+  let items = JSON.parse(localStorage.getItem("keuangan") || "[]");
+  const fmt = (n) => (n < 0 ? "-" : "") + "Rp" + Math.abs(n).toLocaleString("id-ID");
+  function render() {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    items.forEach((it, i) => {
+      const li = document.createElement("li");
+      li.innerHTML = "<span>" + it.desc + "</span><span class='" + (it.amount < 0 ? "minus" : "plus") + "'>" + fmt(it.amount) + " <a href='#'>✕</a></span>";
+      li.querySelector("a").onclick = (e) => { e.preventDefault(); items.splice(i, 1); save(); };
+      list.appendChild(li);
+    });
+    document.getElementById("balance").textContent = fmt(items.reduce((s, it) => s + it.amount, 0));
+  }
+  function save() { localStorage.setItem("keuangan", JSON.stringify(items)); render(); }
+  document.getElementById("add").onclick = () => {
+    const desc = document.getElementById("desc").value.trim(), amount = Number(document.getElementById("amount").value);
+    if (!desc || !amount) return;
+    items.unshift({ desc, amount });
+    document.getElementById("desc").value = "";
+    document.getElementById("amount").value = "";
+    save();
+  };
+  render();
+</script>
+</body>
+</html>

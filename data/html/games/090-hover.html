@@ -1,0 +1,27 @@
+<!-- request: efek hover kartu | kartu yang gerak pas mouse lewat || hover effect cards | cards that animate on hover -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hover</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; gap: 24px; justify-content: center; align-items: center; flex-wrap: wrap; background: #0f172a; font-family: sans-serif; }
+  .card { width: 160px; height: 210px; border-radius: 16px; background: #1e293b; color: #e2e8f0; display: grid; place-items: center; font-size: 56px; transition: transform 0.25s, box-shadow 0.25s, background 0.25s; cursor: pointer; }
+  .card:hover { transform: translateY(-12px) rotate(-2deg); box-shadow: 0 20px 40px #38bdf855; background: #334155; }
+  .card span { display: block; font-size: 16px; text-align: center; }
+</style>
+</head>
+<body>
+<script>
+  const ITEMS = [["🚀", "Roket"], ["🎮", "Game"], ["🎧", "Musik"], ["📸", "Foto"]];
+  for (const [icon, name] of ITEMS) {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = "<div>" + icon + "<span>" + name + "</span></div>";
+    c.onclick = () => { c.style.background = "hsl(" + Math.random() * 360 + ", 60%, 35%)"; };
+    document.body.appendChild(c);
+  }
+</script>
+</body>
+</html>

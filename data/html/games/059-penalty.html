@@ -1,0 +1,65 @@
+<!-- request: adu penalti sepak bola | tendang bola ke gawang lawan kiper || football penalty shootout | kick the ball past the goalkeeper -->
+<!-- things: item=bola:⚽ -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Penalti</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #081c15; color: #fff; font-family: sans-serif; }
+  canvas { background: #2d6a4f; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let keeperSpeed = 0.06; // kecepatan kiper
+  const goal = { x: 100, y: 40, w: 280, h: 110 };
+  let ball, keeper = { x: W / 2, dive: 0 }, goals = 0, saves = 0, msg = "klik di gawang buat nendang";
+
+  function ready() { ball = { x: W / 2, y: 300, tx: 0, ty: 0, t: 1 }; keeper.x = W / 2; keeper.dive = 0; }
+  cv.onclick = (e) => {
+    if (ball.t < 1) return;
+    ball.tx = e.offsetX; ball.ty = e.offsetY; ball.t = 0;
+    keeper.dive = goal.x + Math.random() * goal.w;
+  };
+
+  function update() {
+    if (ball.t >= 1) return;
+    ball.t = Math.min(1, ball.t + 0.04);
+    keeper.x += (keeper.dive - keeper.x) * keeperSpeed;
+    if (ball.t >= 1) {
+      const inGoal = ball.tx > goal.x && ball.tx < goal.x + goal.w && ball.ty > goal.y && ball.ty < goal.y + goal.h;
+      if (!inGoal) msg = "Melenceng! 😬";
+      else if (Math.abs(keeper.x - ball.tx) < 40) { saves++; msg = "Ditangkap kiper! 🧤"; }
+      else { goals++; msg = "GOOOL! ⚽"; }
+      setTimeout(ready, 900);
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 5;
+    ctx.strokeRect(goal.x, goal.y, goal.w, goal.h);
+    ctx.font = "44px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🧍", keeper.x, goal.y + goal.h - 30);
+    const x = ball.x + (ball.tx - ball.x) * (ball.t < 1 ? ball.t : 0), y = ball.y + (ball.ty - ball.y) * (ball.t < 1 ? ball.t : 0);
+    ctx.font = 30 - (ball.t < 1 ? ball.t * 12 : 0) + "px serif";
+    ctx.fillText("⚽", x, y);
+    ctx.fillStyle = "#fff";
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Gol " + goals + " · Ditepis " + saves, W / 2, 20);
+    ctx.fillText(msg, W / 2, H - 20);
+  }
+
+  ready();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

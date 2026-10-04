@@ -1,0 +1,42 @@
+<!-- request: lempar dadu | dadu 6 sisi | kocok dadu || dice roller | roll a six sided die -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Lempar Dadu</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b3d2e; color: #fff; font-family: sans-serif; text-align: center; }
+  #die { width: 120px; height: 120px; margin: 20px auto; background: #fff; color: #222; border-radius: 18px; font-size: 64px; display: grid; place-items: center; box-shadow: 0 6px 0 #ccc; }
+  button { font-size: 20px; padding: 10px 24px; border-radius: 10px; border: none; background: #f4d35e; cursor: pointer; }
+</style>
+</head>
+<body>
+<div>
+  <h1>Lempar Dadu</h1>
+  <div id="die">?</div>
+  <button id="roll">Lempar!</button>
+  <p id="history">riwayat: -</p>
+</div>
+<script>
+  let sides = 6; // jumlah sisi dadu
+  const die = document.getElementById("die"), historyEl = document.getElementById("history");
+  const rolls = [];
+
+  document.getElementById("roll").onclick = () => {
+    let spins = 0;
+    const t = setInterval(() => {
+      die.textContent = 1 + Math.floor(Math.random() * sides);
+      die.style.transform = "rotate(" + (Math.random() * 40 - 20) + "deg)";
+      if (++spins < 10) return;
+      clearInterval(t);
+      die.style.transform = "";
+      const n = 1 + Math.floor(Math.random() * sides);
+      die.textContent = n;
+      rolls.unshift(n);
+      historyEl.textContent = "riwayat: " + rolls.slice(0, 10).join(", ");
+    }, 50);
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!-- request: lampu lalu lintas | lampu merah kuning hijau || traffic light | a traffic light animation -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Lampu Lalu Lintas</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #8ecae6; font-family: sans-serif; text-align: center; }
+  .pole { background: #222; padding: 14px; border-radius: 20px; display: inline-grid; gap: 12px; }
+  .lamp { width: 80px; height: 80px; border-radius: 50%; background: #444; }
+</style>
+</head>
+<body>
+<div>
+  <div class="pole">
+    <div class="lamp" id="red"></div>
+    <div class="lamp" id="yellow"></div>
+    <div class="lamp" id="green"></div>
+  </div>
+  <p id="label"></p>
+</div>
+<script>
+  let redMs = 3000; // lama lampu merah
+  let yellowMs = 1000; // lama lampu kuning
+  let greenMs = 3000; // lama lampu hijau
+  const STEPS = [["red", "#ff3b30", "BERHENTI"], ["green", "#34c759", "JALAN"], ["yellow", "#ffcc00", "HATI-HATI"]];
+  const label = document.getElementById("label");
+  let k = 0;
+
+  function next() {
+    for (const [id] of STEPS) document.getElementById(id).style.background = "#444";
+    const [id, color, text] = STEPS[k];
+    document.getElementById(id).style.background = color;
+    document.getElementById(id).style.boxShadow = "0 0 30px " + color;
+    label.textContent = text;
+    setTimeout(() => {
+      document.getElementById(id).style.boxShadow = "";
+      k = (k + 1) % STEPS.length;
+      next();
+    }, id === "red" ? redMs : id === "green" ? greenMs : yellowMs);
+  }
+  next();
+</script>
+</body>
+</html>

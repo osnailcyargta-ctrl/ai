@@ -1,0 +1,36 @@
+<!-- request: kalkulator bmi | hitung berat badan ideal || bmi calculator | body mass index calculator -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kalkulator BMI</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #e0fbfc; color: #293241; font-family: sans-serif; }
+  .box { width: 300px; background: #fff; padding: 20px; border-radius: 14px; box-shadow: 0 4px 14px #0001; }
+  label { display: block; margin-top: 10px; }
+  input { width: 100%; font-size: 18px; padding: 6px; box-sizing: border-box; }
+  #out { margin-top: 16px; font-size: 22px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h2>BMI</h2>
+  <label>Berat (kg) <input id="w" type="number" value="60"></label>
+  <label>Tinggi (cm) <input id="h" type="number" value="170"></label>
+  <div id="out"></div>
+</div>
+<script>
+  const w = document.getElementById("w"), h = document.getElementById("h"), out = document.getElementById("out");
+  function calc() {
+    const m = Number(h.value) / 100, bmi = Number(w.value) / (m * m);
+    if (!isFinite(bmi) || bmi <= 0) { out.textContent = "isi yang bener"; return; }
+    const [label, color] = bmi < 18.5 ? ["kurus", "#3d5a80"] : bmi < 25 ? ["normal", "#2a9d8f"] : bmi < 30 ? ["gemuk", "#f4a261"] : ["obesitas", "#e63946"];
+    out.innerHTML = "BMI " + bmi.toFixed(1) + "<br><b style='color:" + color + "'>" + label + "</b>";
+  }
+  w.oninput = calc;
+  h.oninput = calc;
+  calc();
+</script>
+</body>
+</html>

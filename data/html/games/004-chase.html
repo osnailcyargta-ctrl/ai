@@ -1,0 +1,72 @@
+<!-- request: game tikus dikejar kucing sambil ngumpulin keju | kabur dari kucing || a mouse chased by a cat collecting cheese | run from the cat and grab cheese -->
+<!-- things: hero=tikus:🐭 foe=kucing:🐱 item=keju:🧀 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tikus vs Kucing</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #1a1410; color: #eee; font-family: sans-serif; }
+  canvas { background: #c9b48a; border-radius: 10px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 3.2; // kecepatan pemain
+  let foeSpeed = 1.6; // kecepatan musuh
+  let goal = 10; // target skor
+  let score = 0, over = false;
+  const player = { x: 60, y: H / 2 };
+  const foe = { x: W - 60, y: H / 2 };
+  let item = spot();
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (over && e.key === " ") { over = false; score = 0; player.x = 60; foe.x = W - 60; foeSpeed = 1.6; } };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function spot() { return { x: 30 + Math.random() * (W - 60), y: 30 + Math.random() * (H - 60) }; }
+
+  function update() {
+    if (over) return;
+    if (keys["ArrowLeft"] || keys["a"]) player.x -= speed;
+    if (keys["ArrowRight"] || keys["d"]) player.x += speed;
+    if (keys["ArrowUp"] || keys["w"]) player.y -= speed;
+    if (keys["ArrowDown"] || keys["s"]) player.y += speed;
+    player.x = Math.max(14, Math.min(W - 14, player.x));
+    player.y = Math.max(14, Math.min(H - 14, player.y));
+    const a = Math.atan2(player.y - foe.y, player.x - foe.x);
+    foe.x += Math.cos(a) * foeSpeed;
+    foe.y += Math.sin(a) * foeSpeed;
+    if (Math.hypot(item.x - player.x, item.y - player.y) < 24) { score++; item = spot(); foeSpeed += 0.15; }
+    if (Math.hypot(foe.x - player.x, foe.y - player.y) < 24) over = true;
+    if (score >= goal) over = true;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = "28px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🧀", item.x, item.y);
+    ctx.fillText("🐭", player.x, player.y);
+    ctx.fillText("🐱", foe.x, foe.y);
+    ctx.fillStyle = "#3b2a14";
+    ctx.font = "16px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Keju: " + score + "/" + goal, 10, 18);
+    if (over) {
+      ctx.textAlign = "center";
+      ctx.font = "28px sans-serif";
+      ctx.fillText(score >= goal ? "Kenyang! Kamu menang" : "Ketangkep kucing!", W / 2, H / 2);
+      ctx.font = "15px sans-serif";
+      ctx.fillText("spasi = main lagi", W / 2, H / 2 + 30);
+    }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!-- request: game memori cocokin kartu | tebak pasangan kartu || memory card matching game | find the matching pairs -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Memory</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #264653; color: #fff; font-family: sans-serif; }
+  .grid { display: grid; grid-template-columns: repeat(4, 80px); gap: 10px; }
+  .card { width: 80px; height: 80px; border-radius: 10px; background: #2a9d8f; font-size: 40px; display: grid; place-items: center; cursor: pointer; user-select: none; }
+  .card.open, .card.done { background: #e9c46a; }
+  .card.done { opacity: 0.6; }
+  p { text-align: center; font-size: 18px; }
+</style>
+</head>
+<body>
+<div>
+  <p id="info">Langkah: 0</p>
+  <div class="grid" id="grid"></div>
+</div>
+<script>
+  const grid = document.getElementById("grid"), info = document.getElementById("info");
+  const ICONS = ["🍕", "🐶", "🚗", "⚽", "🎸", "🌵", "🍩", "🐸"];
+  let deck = ICONS.concat(ICONS).sort(() => Math.random() - 0.5);
+  let open = [], moves = 0, found = 0;
+
+  deck.forEach((icon, i) => {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.onclick = () => flip(c, icon);
+    grid.appendChild(c);
+  });
+
+  function flip(c, icon) {
+    if (open.length === 2 || c.classList.contains("open") || c.classList.contains("done")) return;
+    c.classList.add("open");
+    c.textContent = icon;
+    open.push({ c, icon });
+    if (open.length < 2) return;
+    moves++;
+    const [a, b] = open;
+    if (a.icon === b.icon) {
+      a.c.classList.add("done"); b.c.classList.add("done");
+      open = [];
+      found++;
+      info.textContent = found === ICONS.length ? "Selesai dalam " + moves + " langkah! 🎉" : "Langkah: " + moves;
+    } else {
+      info.textContent = "Langkah: " + moves;
+      setTimeout(() => {
+        for (const o of open) { o.c.classList.remove("open"); o.c.textContent = ""; }
+        open = [];
+      }, 700);
+    }
+  }
+</script>
+</body>
+</html>

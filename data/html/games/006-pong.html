@@ -1,0 +1,66 @@
+<!-- request: pong lawan komputer | game pingpong || pong against the computer | ping pong game -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pong</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #000; color: #fff; font-family: monospace; }
+  canvas { background: #111; border: 2px solid #444; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="320"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let paddleSpeed = 6; // kecepatan raket
+  let aiSpeed = 3.6; // kecepatan komputer
+  let winScore = 7; // skor buat menang
+  const PW = 10, PH = 64;
+  let left = H / 2, right = H / 2, me = 0, cpu = 0;
+  const ball = { x: W / 2, y: H / 2, vx: 4, vy: 2.5 };
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (e.key === " " && (me >= winScore || cpu >= winScore)) { me = 0; cpu = 0; } };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function serve(dir) { ball.x = W / 2; ball.y = H / 2; ball.vx = 4 * dir; ball.vy = (Math.random() * 4 - 2) || 1; }
+
+  function update() {
+    if (me >= winScore || cpu >= winScore) return;
+    if (keys["ArrowUp"] || keys["w"]) left -= paddleSpeed;
+    if (keys["ArrowDown"] || keys["s"]) left += paddleSpeed;
+    right += Math.sign(ball.y - right) * Math.min(aiSpeed, Math.abs(ball.y - right));
+    left = Math.max(PH / 2, Math.min(H - PH / 2, left));
+    right = Math.max(PH / 2, Math.min(H - PH / 2, right));
+    ball.x += ball.vx; ball.y += ball.vy;
+    if (ball.y < 6 || ball.y > H - 6) ball.vy *= -1;
+    if (ball.x < 20 + PW && Math.abs(ball.y - left) < PH / 2 && ball.vx < 0) { ball.vx = -ball.vx * 1.05; ball.vy += (ball.y - left) / 12; }
+    if (ball.x > W - 20 - PW && Math.abs(ball.y - right) < PH / 2 && ball.vx > 0) { ball.vx = -ball.vx * 1.05; ball.vy += (ball.y - right) / 12; }
+    if (ball.x < 0) { cpu++; serve(1); }
+    if (ball.x > W) { me++; serve(-1); }
+  }
+
+  function draw() {
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#555";
+    for (let y = 0; y < H; y += 20) ctx.fillRect(W / 2 - 1, y, 2, 10);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(20, left - PH / 2, PW, PH);
+    ctx.fillRect(W - 20 - PW, right - PH / 2, PW, PH);
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = "28px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(me + "   " + cpu, W / 2, 34);
+    if (me >= winScore || cpu >= winScore) ctx.fillText(me > cpu ? "KAMU MENANG" : "KOMPUTER MENANG", W / 2, H / 2);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

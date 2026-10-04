@@ -1,0 +1,67 @@
+<!-- request: kelinci lari kumpulin wortel lompatin batu | endless runner ambil wortel || a rabbit running and collecting carrots | endless runner collecting items -->
+<!-- things: hero=kelinci:🐰 item=wortel:🥕 foe=batu:🪨 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kelinci Lari</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #d8f3dc; font-family: sans-serif; }
+  canvas { background: linear-gradient(#caf0f8, #fefae0); border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="560" height="260"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, GROUND = H - 40;
+  let runSpeed = 5; // kecepatan lari
+  let jumpPower = 11; // kekuatan lompat
+  let hero, things, score, over, t;
+
+  function reset() { hero = { y: GROUND, vy: 0 }; things = []; score = 0; over = false; t = 0; }
+  onkeydown = (e) => {
+    if (e.key !== " " && e.key !== "ArrowUp") return;
+    if (over) return reset();
+    if (hero.y >= GROUND) hero.vy = -jumpPower;
+  };
+  cv.onclick = () => onkeydown({ key: " " });
+
+  function update() {
+    if (over) return;
+    t++;
+    hero.vy += 0.6;
+    hero.y = Math.min(GROUND, hero.y + hero.vy);
+    if (t % 70 === 0) things.push({ x: W + 20, y: GROUND, bad: true });
+    if (t % 45 === 0) things.push({ x: W + 20, y: GROUND - 40 - Math.random() * 60, bad: false });
+    for (const o of things) {
+      o.x -= runSpeed + t / 2000;
+      if (Math.abs(o.x - 70) < 22 && Math.abs(o.y - hero.y) < 26) {
+        if (o.bad) over = true;
+        else { o.got = true; score++; }
+      }
+    }
+    things = things.filter((o) => !o.got && o.x > -30);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#95d5b2";
+    ctx.fillRect(0, GROUND + 16, W, H);
+    ctx.font = "30px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const o of things) ctx.fillText(o.bad ? "🪨" : "🥕", o.x, o.y);
+    ctx.fillText("🐰", 70, hero.y);
+    ctx.fillStyle = "#1b4332";
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Wortel: " + score, W / 2, 20);
+    if (over) ctx.fillText("Nabrak batu! spasi buat ulang", W / 2, H / 2);
+  }
+
+  reset();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

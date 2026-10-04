@@ -1,0 +1,55 @@
+<!-- request: game pelihara hewan kasih makan | tamagotchi anjing || virtual pet game feed and play | a tamagotchi dog -->
+<!-- things: critter=anjing:🐶 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Peliharaan Anjing</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fde2e4; color: #333; font-family: sans-serif; text-align: center; }
+  #pet { font-size: 120px; transition: transform 0.2s; }
+  .bar { width: 220px; height: 14px; background: #eee; border-radius: 7px; margin: 4px auto 12px; overflow: hidden; }
+  .bar div { height: 100%; background: #ff8fab; transition: width 0.3s; }
+  button { font-size: 18px; margin: 4px; padding: 8px 14px; border-radius: 10px; border: none; background: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<div>
+  <div id="pet">🐶</div>
+  <p id="mood"></p>
+  <div>Kenyang</div><div class="bar"><div id="food"></div></div>
+  <div>Senang</div><div class="bar"><div id="fun"></div></div>
+  <div>Energi</div><div class="bar"><div id="energy"></div></div>
+  <button id="feed">🍖 makan</button>
+  <button id="play">🎾 main</button>
+  <button id="sleep">💤 tidur</button>
+</div>
+<script>
+  let drain = 1; // seberapa cepet laper
+  const stats = { food: 70, fun: 70, energy: 70 };
+  const pet = document.getElementById("pet"), mood = document.getElementById("mood");
+  const clamp = (v) => Math.max(0, Math.min(100, v));
+
+  function render() {
+    for (const k in stats) document.getElementById(k).style.width = stats[k] + "%";
+    const low = Object.entries(stats).sort((a, b) => a[1] - b[1])[0];
+    if (low[1] <= 0) mood.textContent = "Anjing kabur karena ga diurus 😢";
+    else if (low[1] < 30) mood.textContent = { food: "laper banget...", fun: "bosen nih", energy: "ngantuk..." }[low[0]];
+    else mood.textContent = "Anjing lagi happy!";
+  }
+  function bounce() { pet.style.transform = "scale(1.2)"; setTimeout(() => { pet.style.transform = ""; }, 200); }
+
+  document.getElementById("feed").onclick = () => { stats.food = clamp(stats.food + 20); bounce(); render(); };
+  document.getElementById("play").onclick = () => { stats.fun = clamp(stats.fun + 20); stats.energy = clamp(stats.energy - 10); bounce(); render(); };
+  document.getElementById("sleep").onclick = () => { stats.energy = clamp(stats.energy + 30); stats.food = clamp(stats.food - 5); bounce(); render(); };
+
+  setInterval(() => {
+    stats.food = clamp(stats.food - drain);
+    stats.fun = clamp(stats.fun - drain * 0.8);
+    stats.energy = clamp(stats.energy - drain * 0.5);
+    render();
+  }, 1000);
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!-- request: ayam nyebrang jalan | game nyebrang jalan hindarin mobil || chicken crossing the road | cross the road and avoid the cars -->
+<!-- things: hero=ayam:🐔 foe=mobil:🚗 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ayam Nyebrang</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #2b2b2b; font-family: sans-serif; }
+  canvas { background: #555; }
+</style>
+</head>
+<body>
+<canvas id="game" width="440" height="440"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, LANE = 40;
+  let carSpeed = 2; // kecepatan mobil
+  let lanes = 8; // jumlah jalur
+  const hero = { col: 5, row: 10 };
+  let cars = [], score = 0, dead = false;
+  for (let l = 1; l <= lanes; l++) {
+    const dir = l % 2 ? 1 : -1, sp = (carSpeed + Math.random() * 1.5) * dir;
+    for (let k = 0; k < 3; k++) cars.push({ x: Math.random() * W, row: l + 1, vx: sp });
+  }
+
+  onkeydown = (e) => {
+    if (dead) { if (e.key === " ") { dead = false; hero.row = 10; score = 0; } return; }
+    if (e.key === "ArrowUp") hero.row--;
+    if (e.key === "ArrowDown") hero.row = Math.min(10, hero.row + 1);
+    if (e.key === "ArrowLeft") hero.col = Math.max(0, hero.col - 1);
+    if (e.key === "ArrowRight") hero.col = Math.min(10, hero.col + 1);
+    if (hero.row <= 0) { score++; hero.row = 10; }
+  };
+
+  function update() {
+    if (dead) return;
+    for (const c of cars) {
+      c.x += c.vx;
+      if (c.x > W + 30) c.x = -30;
+      if (c.x < -30) c.x = W + 30;
+      if (c.row === hero.row && Math.abs(c.x - (hero.col * LANE + LANE / 2)) < 28) dead = true;
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = "#4caf50";
+    ctx.fillRect(0, 0, W, LANE * 2);
+    ctx.fillRect(0, H - LANE, W, LANE);
+    ctx.fillStyle = "#555";
+    ctx.fillRect(0, LANE * 2, W, H - LANE * 3);
+    ctx.fillStyle = "#ddd";
+    for (let r = 2; r < 10; r++) for (let x = 0; x < W; x += 40) ctx.fillRect(x, r * LANE, 20, 2);
+    ctx.font = "28px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const c of cars) {
+      ctx.save(); ctx.translate(c.x, c.row * LANE + LANE / 2); if (c.vx > 0) ctx.scale(-1, 1); ctx.fillText("🚗", 0, 0); ctx.restore();
+    }
+    ctx.fillText("🐔", hero.col * LANE + LANE / 2, hero.row * LANE + LANE / 2);
+    ctx.fillStyle = "#fff";
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Nyebrang: " + score, W / 2, 20);
+    if (dead) ctx.fillText("Ketabrak mobil! spasi = ulang", W / 2, H / 2);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

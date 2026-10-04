@@ -1,0 +1,52 @@
+<!-- request: game cocokin warna tulisan | tes stroop warna || colour match stroop test | does the word match its colour -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Warna</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f1f1f1; font-family: sans-serif; text-align: center; }
+  #word { font-size: 64px; font-weight: bold; margin: 20px; }
+  button { font-size: 20px; padding: 10px 24px; margin: 6px; border-radius: 10px; border: 2px solid #333; background: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<div>
+  <p id="info">Waktu 20 · Skor 0</p>
+  <p>tulisan sama warnanya cocok?</p>
+  <div id="word"></div>
+  <button id="yes">cocok</button>
+  <button id="no">beda</button>
+</div>
+<script>
+  let seconds = 20; // lama main
+  const COLORS = [["MERAH", "#e63946"], ["BIRU", "#1d4ed8"], ["HIJAU", "#2a9d8f"], ["KUNING", "#e9c46a"], ["UNGU", "#7b2cbf"]];
+  const wordEl = document.getElementById("word"), info = document.getElementById("info");
+  let match, score = 0, left = seconds;
+
+  function next() {
+    const a = Math.floor(Math.random() * COLORS.length);
+    const b = Math.random() < 0.5 ? a : Math.floor(Math.random() * COLORS.length);
+    match = a === b;
+    wordEl.textContent = COLORS[a][0];
+    wordEl.style.color = COLORS[b][1];
+  }
+  function answer(v) {
+    if (left <= 0) return;
+    score += v === match ? 1 : -1;
+    info.textContent = "Waktu " + left + " · Skor " + score;
+    next();
+  }
+  document.getElementById("yes").onclick = () => answer(true);
+  document.getElementById("no").onclick = () => answer(false);
+  onkeydown = (e) => { if (e.key === "ArrowLeft") answer(true); if (e.key === "ArrowRight") answer(false); };
+  const t = setInterval(() => {
+    left--;
+    info.textContent = "Waktu " + left + " · Skor " + score;
+    if (left <= 0) { clearInterval(t); wordEl.textContent = "Skor " + score; wordEl.style.color = "#333"; }
+  }, 1000);
+  next();
+</script>
+</body>
+</html>

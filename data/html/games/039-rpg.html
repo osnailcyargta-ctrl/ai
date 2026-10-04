@@ -1,0 +1,70 @@
+<!-- request: rpg pertarungan giliran | game battle turn based lawan monster || turn based rpg battle | fight a monster turn by turn -->
+<!-- things: hero=penyihir:🧙 foe=goblin:👺 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Battle RPG</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #1d2d44; color: #f0ebd8; font-family: monospace; }
+  .arena { display: flex; justify-content: space-between; width: 420px; font-size: 64px; text-align: center; }
+  .bar { width: 140px; height: 12px; background: #333; margin: 4px auto; }
+  .bar div { height: 100%; background: #6c4; }
+  .actions button { font-size: 16px; padding: 8px 12px; margin: 4px; border-radius: 6px; border: none; cursor: pointer; }
+  #log { height: 80px; width: 420px; overflow: auto; font-size: 14px; background: #0d1321; padding: 6px; }
+</style>
+</head>
+<body>
+<div>
+  <div class="arena">
+    <div>🧙<div class="bar"><div id="hpMe"></div></div></div>
+    <div>👺<div class="bar"><div id="hpFoe"></div></div></div>
+  </div>
+  <div class="actions">
+    <button id="attack">⚔️ serang</button>
+    <button id="magic">✨ sihir (3 mana)</button>
+    <button id="heal">💚 sembuh</button>
+  </div>
+  <p id="mana"></p>
+  <div id="log"></div>
+</div>
+<script>
+  let myMax = 40; // darah pemain
+  let foeMax = 50; // darah musuh
+  let me = myMax, foe = foeMax, mana = 6, over = false;
+  const log = document.getElementById("log");
+  const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+
+  function say(text) { log.innerHTML = text + "<br>" + log.innerHTML; }
+  function render() {
+    document.getElementById("hpMe").style.width = Math.max(0, me / myMax * 100) + "%";
+    document.getElementById("hpFoe").style.width = Math.max(0, foe / foeMax * 100) + "%";
+    document.getElementById("mana").textContent = "Darah " + me + "/" + myMax + " · Mana " + mana;
+  }
+
+  function foeTurn() {
+    if (foe <= 0) { over = true; say("🏆 Goblin kalah! Kamu menang"); return; }
+    const dmg = rand(3, 9);
+    me -= dmg;
+    say("Goblin nyerang, kamu kena " + dmg);
+    if (me <= 0) { over = true; say("💀 Kamu kalah..."); }
+  }
+
+  function act(kind) {
+    if (over) return;
+    if (kind === "attack") { const d = rand(4, 10); foe -= d; say("Kamu nyerang: " + d + " damage"); }
+    if (kind === "magic") {
+      if (mana < 3) { say("Mana kurang!"); return; }
+      mana -= 3;
+      const d = rand(10, 16); foe -= d; say("Bola api! " + d + " damage");
+    }
+    if (kind === "heal") { const h = rand(6, 12); me = Math.min(myMax, me + h); mana++; say("Kamu sembuh " + h); }
+    foeTurn();
+    render();
+  }
+  for (const k of ["attack", "magic", "heal"]) document.getElementById(k).onclick = () => act(k);
+  say("Goblin liar muncul!");
+  render();
+</script>
+</body>
+</html>

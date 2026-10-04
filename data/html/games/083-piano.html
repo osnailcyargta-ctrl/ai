@@ -1,0 +1,52 @@
+<!-- request: piano pake keyboard | main piano di browser || piano you play with the keyboard | a playable piano -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Piano</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #2d3436; color: #fff; font-family: sans-serif; text-align: center; }
+  .keys { display: flex; }
+  .key { width: 50px; height: 180px; background: #fff; color: #555; border: 1px solid #333; border-radius: 0 0 6px 6px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px; cursor: pointer; user-select: none; }
+  .key.on { background: #74b9ff; }
+</style>
+</head>
+<body>
+<div>
+  <h2>Piano 🎹</h2>
+  <div class="keys" id="keys"></div>
+  <p>pake tombol A S D F G H J K</p>
+</div>
+<script>
+  let volume = 0.3; // volume
+  const NOTES = [["C", 261.6, "a"], ["D", 293.7, "s"], ["E", 329.6, "d"], ["F", 349.2, "f"], ["G", 392, "g"], ["A", 440, "h"], ["B", 493.9, "j"], ["C", 523.3, "k"]];
+  let audio = null;
+  const els = {};
+
+  function play(freq, el) {
+    audio = audio || new AudioContext();
+    const osc = audio.createOscillator(), gain = audio.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 1);
+    osc.connect(gain).connect(audio.destination);
+    osc.start();
+    osc.stop(audio.currentTime + 1);
+    el.classList.add("on");
+    setTimeout(() => el.classList.remove("on"), 150);
+  }
+
+  for (const [name, freq, key] of NOTES) {
+    const el = document.createElement("div");
+    el.className = "key";
+    el.textContent = name + " (" + key.toUpperCase() + ")";
+    el.onmousedown = () => play(freq, el);
+    document.getElementById("keys").appendChild(el);
+    els[key] = [freq, el];
+  }
+  onkeydown = (e) => { if (els[e.key] && !e.repeat) play(...els[e.key]); };
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!-- request: game lompat ke atas kayak doodle jump | katak lompat lompat ke atas || jump up the platforms like doodle jump | a frog jumping higher and higher -->
+<!-- things: hero=katak:🐸 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Katak Lompat</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #f6f1d1; font-family: sans-serif; }
+  canvas { background: #fffdf0; border: 2px solid #ccc; }
+</style>
+</head>
+<body>
+<canvas id="game" width="320" height="480"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let bounce = -10; // kekuatan pantul
+  let gravity = 0.35; // gravitasi
+  let speed = 4; // kecepatan geser
+  let hero, plats, score, over;
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; if (over && e.key === " ") reset(); };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function reset() {
+    hero = { x: W / 2, y: H - 80, vy: bounce };
+    plats = [];
+    for (let i = 0; i < 9; i++) plats.push({ x: Math.random() * (W - 60), y: H - i * 55 - 20 });
+    score = 0; over = false;
+  }
+
+  function update() {
+    if (over) return;
+    if (keys["ArrowLeft"]) hero.x -= speed;
+    if (keys["ArrowRight"]) hero.x += speed;
+    if (hero.x < -10) hero.x = W + 10;
+    if (hero.x > W + 10) hero.x = -10;
+    hero.vy += gravity;
+    hero.y += hero.vy;
+    if (hero.vy > 0) for (const p of plats) if (hero.x > p.x - 10 && hero.x < p.x + 70 && hero.y > p.y - 14 && hero.y < p.y + 4) hero.vy = bounce;
+    if (hero.y < H / 2) {
+      const dy = H / 2 - hero.y;
+      hero.y = H / 2;
+      score += Math.round(dy);
+      for (const p of plats) { p.y += dy; if (p.y > H) { p.y -= H + 20; p.x = Math.random() * (W - 60); } }
+    }
+    if (hero.y > H + 30) over = true;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#6a994e";
+    for (const p of plats) ctx.fillRect(p.x, p.y, 60, 10);
+    ctx.font = "30px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("🐸", hero.x, hero.y);
+    ctx.fillStyle = "#333";
+    ctx.font = "16px sans-serif";
+    ctx.textBaseline = "top";
+    ctx.fillText("Tinggi: " + Math.floor(score / 10), W / 2, 8);
+    if (over) ctx.fillText("Jatuh! spasi = ulang", W / 2, H / 2);
+  }
+
+  reset();
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

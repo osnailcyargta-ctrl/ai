@@ -1,0 +1,67 @@
+<!-- request: potong buah pake mouse | game fruit ninja || slice the fruit with the mouse | fruit ninja game -->
+<!-- things: item=semangka:🍉 foe=bom:💣 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Potong Semangka</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #3c1518; color: #fff; font-family: sans-serif; }
+  canvas { background: #69140e; border-radius: 10px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="520" height="380"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let gravity = 0.15; // gravitasi
+  let lives = 3; // nyawa
+  let things = [], trail = [], score = 0;
+
+  function toss() {
+    const bad = Math.random() < 0.2;
+    things.push({ x: 60 + Math.random() * (W - 120), y: H + 20, vx: Math.random() * 4 - 2, vy: -8 - Math.random() * 3, bad, cut: false });
+  }
+  setInterval(() => { if (lives > 0) toss(); }, 800);
+
+  cv.onmousemove = (e) => {
+    trail.push({ x: e.offsetX, y: e.offsetY, t: 10 });
+    if (lives <= 0) return;
+    for (const f of things) if (!f.cut && Math.hypot(f.x - e.offsetX, f.y - e.offsetY) < 26) {
+      f.cut = true;
+      if (f.bad) lives = 0; else score++;
+    }
+  };
+  cv.onclick = () => { if (lives <= 0) { lives = 3; score = 0; things = []; } };
+
+  function update() {
+    for (const f of things) { f.vy += gravity; f.x += f.vx; f.y += f.vy; }
+    for (const f of things) if (!f.cut && !f.bad && f.y > H + 30 && f.vy > 0) { f.cut = true; lives--; }
+    things = things.filter((f) => f.y < H + 40);
+    for (const p of trail) p.t--;
+    trail = trail.filter((p) => p.t > 0);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "36px serif";
+    for (const f of things) ctx.fillText(f.cut && !f.bad ? "💦" : f.bad ? "💣" : "🍉", f.x, f.y);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    trail.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "18px sans-serif";
+    ctx.fillText("Skor " + score + "   " + "❤️".repeat(Math.max(0, lives)), W / 2, 20);
+    if (lives <= 0) ctx.fillText("Game over! klik buat ulang", W / 2, H / 2);
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>

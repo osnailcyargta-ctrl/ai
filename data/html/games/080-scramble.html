@@ -1,0 +1,44 @@
+<!-- request: game susun huruf acak | tebak kata dari huruf diacak || word scramble | unscramble the letters -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Susun Kata</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #006d77; color: #edf6f9; font-family: sans-serif; text-align: center; }
+  #letters { font-size: 44px; letter-spacing: 10px; margin: 16px; }
+  input { font-size: 24px; padding: 6px; width: 220px; text-align: center; border-radius: 8px; border: none; }
+</style>
+</head>
+<body>
+<div>
+  <p id="score">Skor 0</p>
+  <div id="letters"></div>
+  <input id="guess" placeholder="jawaban" autofocus>
+  <p id="msg">enter buat jawab · ketik "skip" buat lewat</p>
+</div>
+<script>
+  const WORDS = ["kelinci", "sekolah", "mangga", "pantai", "gunung", "kamera", "roket", "durian", "piano", "naga"];
+  const letters = document.getElementById("letters"), guess = document.getElementById("guess"), msg = document.getElementById("msg"), scoreEl = document.getElementById("score");
+  let word, score = 0;
+
+  function next() {
+    word = WORDS[Math.floor(Math.random() * WORDS.length)];
+    let mixed;
+    do mixed = [...word].sort(() => Math.random() - 0.5).join(""); while (mixed === word);
+    letters.textContent = mixed.toUpperCase();
+  }
+  guess.onkeydown = (e) => {
+    if (e.key !== "Enter") return;
+    const v = guess.value.trim().toLowerCase();
+    if (v === word) { score++; msg.textContent = "✅ " + word + "!"; next(); }
+    else if (v === "skip") { msg.textContent = "jawabannya: " + word; next(); }
+    else msg.textContent = "❌ belum bener, coba lagi";
+    scoreEl.textContent = "Skor " + score;
+    guess.value = "";
+  };
+  next();
+</script>
+</body>
+</html>

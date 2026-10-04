@@ -1,0 +1,41 @@
+<!-- request: gambar spirograph | animasi pola spiral warna warni || spirograph drawing | colourful spiral pattern animation -->
+<!-- things: -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Spirograph</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #0d1b2a; font-family: sans-serif; color: #fff; text-align: center; }
+  canvas { background: #000; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div>
+  <canvas id="c" width="420" height="420"></canvas>
+  <p>klik buat pola baru</p>
+</div>
+<script>
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  let R, r, d, t, hue;
+  function fresh() {
+    R = 150; r = 20 + Math.floor(Math.random() * 90); d = 30 + Math.random() * 80; t = 0; hue = Math.random() * 360;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+  }
+  const point = (a) => [210 + (R - r) * Math.cos(a) + d * Math.cos((R - r) / r * a), 210 + (R - r) * Math.sin(a) - d * Math.sin((R - r) / r * a)];
+  cv.onclick = fresh;
+
+  function loop() {
+    for (let k = 0; k < 20; k++) {
+      const [x1, y1] = point(t), [x2, y2] = point(t + 0.02);
+      ctx.strokeStyle = "hsl(" + (hue + t * 4) % 360 + ", 90%, 60%)";
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      t += 0.02;
+    }
+    requestAnimationFrame(loop);
+  }
+  fresh();
+  loop();
+</script>
+</body>
+</html>

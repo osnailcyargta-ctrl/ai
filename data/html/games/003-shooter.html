@@ -1,0 +1,74 @@
+<!-- request: tembak alien pake laser | game pesawat nembak alien || shoot the aliens with a laser | space shooter against aliens -->
+<!-- things: ride=pesawat:🚀 foe=alien:👾 -->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pesawat vs Alien</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #05060f; color: #eee; font-family: monospace; }
+  canvas { background: #0b0d22; border: 2px solid #3a3f7a; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="360"></canvas>
+<script>
+  const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  let speed = 5; // kecepatan pesawat
+  let shotSpeed = 8; // kecepatan peluru
+  let lives = 3; // nyawa
+  let score = 0, cooldown = 0;
+  const player = { x: W / 2, y: H - 30 };
+  let shots = [], foes = [];
+  const stars = Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: Math.random() * H }));
+  const keys = {};
+  onkeydown = (e) => { keys[e.key] = true; };
+  onkeyup = (e) => { keys[e.key] = false; };
+
+  function update() {
+    if (lives <= 0) { if (keys["Enter"]) { lives = 3; score = 0; foes = []; shots = []; } return; }
+    if (keys["ArrowLeft"]) player.x -= speed;
+    if (keys["ArrowRight"]) player.x += speed;
+    player.x = Math.max(16, Math.min(W - 16, player.x));
+    if (cooldown > 0) cooldown--;
+    if (keys[" "] && cooldown === 0) { shots.push({ x: player.x, y: player.y - 16 }); cooldown = 12; }
+    if (Math.random() < 0.02) foes.push({ x: 20 + Math.random() * (W - 40), y: -20, vy: 1 + Math.random() * 1.5 });
+    for (const s of shots) s.y -= shotSpeed;
+    for (const f of foes) {
+      f.y += f.vy;
+      for (const s of shots) if (!s.done && Math.abs(s.x - f.x) < 16 && Math.abs(s.y - f.y) < 16) { s.done = f.done = true; score += 10; }
+      if (f.y > H) { f.done = true; lives--; }
+    }
+    shots = shots.filter((s) => !s.done && s.y > -10);
+    foes = foes.filter((f) => !f.done);
+    for (const st of stars) { st.y += 0.5; if (st.y > H) st.y = 0; }
+  }
+
+  function draw() {
+    ctx.fillStyle = "#0b0d22";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#99a";
+    for (const st of stars) ctx.fillRect(st.x, st.y, 2, 2);
+    ctx.font = "26px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🚀", player.x, player.y);
+    for (const f of foes) ctx.fillText("👾", f.x, f.y);
+    ctx.fillStyle = "#6ff";
+    for (const s of shots) ctx.fillRect(s.x - 2, s.y - 8, 4, 12);
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("SKOR " + score + "  NYAWA " + lives, 10, 18);
+    if (lives <= 0) {
+      ctx.textAlign = "center";
+      ctx.fillText("ALIEN MENANG. ENTER BUAT ULANG", W / 2, H / 2);
+    }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+  loop();
+</script>
+</body>
+</html>
