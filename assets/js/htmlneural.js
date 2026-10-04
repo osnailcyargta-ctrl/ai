@@ -128,7 +128,7 @@
     async write(prefix, slots, opts = {}) {
       const g = this.gpt, V = g.vocab.length;
       const rand = opts.rand || Math.random, temp = opts.temperature || 0.7, topP = opts.topP || 0.92;
-      const maxTok = opts.maxTokens || 2600;
+      const maxTok = opts.maxTokens || 3200;
       const pre = this.encode(prefix);
       const out = [];
       let cache = g.newCache(), pos = 0, logits = null, logp = 0, shape = new Shape(), sawHtmlEnd = false;
@@ -143,20 +143,48 @@
       const END = g.index.get("<end>");
       const lines = [];
       let line = [];
+      // history for backtracking: when the page gets stuck (or the model badly wants a token the
+      // page can't take, meaning it went wrong a bit earlier), step back a few tokens and resample,
+      // like deleting a typo. Only inside the current window (the KV cache is just truncated).
+      const hist = [];
+      const bans = new Map();
+      let winStart = 0, backtracks = 0, afterEnd = 0;
+      const truncate = (p) => { for (const c of cache) { c.k.length = p; c.v.length = p; } pos = p; };
+      const back = (k) => {
+        k = Math.min(k, out.length - winStart, hist.length);
+        if (k <= 0 || backtracks >= 60) return false;
+        backtracks++;
+        let e = null;
+        for (let i = 0; i < k; i++) { e = hist.pop(); out.pop(); }
+        truncate(pos - k);
+        shape = e.shape; logits = e.logits; sawHtmlEnd = e.saw;
+        const at = out.length;
+        if (!bans.has(at)) bans.set(at, new Set());
+        bans.get(at).add(e.w);
+        line = [];
+        return true;
+      };
       for (let n = 0; n < maxTok; n++) {
         if (pos >= g.ctx) {
           cache = g.newCache(); pos = 0;
           const keep = out.slice(-Math.floor((g.ctx - pre.length) * 0.6));
           feed(pre); feed(keep);
+          winStart = out.length; hist.length = 0;
         }
         const z = Float32Array.from(logits);
+        const ban = bans.get(out.length);
         let m = -Infinity;
-        for (let i = 0; i < V; i++) { if (banned[i]) z[i] = -1e9; z[i] /= temp; if (z[i] > m) m = z[i]; }
+        for (let i = 0; i < V; i++) { if (banned[i] || (ban && ban.has(i))) z[i] = -1e9; z[i] /= temp; if (z[i] > m) m = z[i]; }
         let s = 0;
         for (let i = 0; i < V; i++) { z[i] = Math.exp(z[i] - m); s += z[i]; }
         const cand = [];
         for (let i = 0; i < V; i++) { z[i] /= s; if (z[i] > 1e-6) cand.push(i); }
         cand.sort((a, b) => z[b] - z[a]);
+        const top = cand[0];
+        // after </html> there is nothing left to write
+        if (sawHtmlEnd && (top === END || ++afterEnd > 6)) break;
+        // the model is sure about a token the page can't take: it went wrong a bit earlier
+        if (top !== END && z[top] > 0.6 && !shape.clone().feed(g.vocab[top]) && back(6)) continue;
         // sample from the nucleus; a token that would break the page is thrown away and we sample again
         let w = -1, next = null;
         const tried = new Set();
@@ -172,9 +200,16 @@
           const sh = shape.clone();
           if (sh.feed(g.vocab[pickI])) { w = pickI; next = sh; }
         }
-        if (w < 0) { const f = cand.find((c) => c !== END && shape.clone().feed(g.vocab[c])); if (f == null) break; w = f; next = shape.clone(); next.feed(g.vocab[w]); }
+        if (w < 0) {
+          if (back(4)) continue;
+          const f = cand.find((c) => c !== END && shape.clone().feed(g.vocab[c]));
+          if (f == null) break;
+          w = f; next = shape.clone(); next.feed(g.vocab[w]);
+        }
         logp += Math.log(z[w] + 1e-12);
         if (w === END) break;
+        hist.push({ w, shape, logits, saw: sawHtmlEnd });
+        if (hist.length > 24) hist.shift();
         shape = next;
         const t = g.vocab[w];
         if (/^⏎/.test(t)) {
@@ -191,7 +226,10 @@
       }
       const tokens = out.map((i) => g.vocab[i]);
       if (opts.onToken) opts.onToken(tokens);
-      return { tokens, html: Tok.detokenize(tokens, slots), logp: logp / (out.length + 1), closed: !shape.stack.length && !shape.quote && sawHtmlEnd };
+      let html = Tok.detokenize(tokens, slots);
+      const endAt = html.indexOf("</html>");
+      if (endAt >= 0) html = html.slice(0, endAt + 7) + "\n";
+      return { tokens, html, logp: logp / (out.length + 1), closed: sawHtmlEnd, balanced: !shape.stack.length && !shape.quote };
     }
   }
 
