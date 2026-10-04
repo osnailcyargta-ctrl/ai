@@ -16,9 +16,12 @@
   // ---------------------------------------------------------------- settings
   const settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: true, roastGen: true, codeNeural: true, deepthink: false, htmlMode: false, brain: false, theme: "auto" }, load("sybau_settings", {}));
   delete settings.learn; // old setting, removed
+  const THEMES = ["auto", "classic", "light", "terminal", "cyberpunk", "dracula", "amber", "ocean", "paper"];
+  if (settings.theme === "dark") settings.theme = "classic";
+  if (!THEMES.includes(settings.theme)) settings.theme = "auto";
   const CONNECT_KEY = "sybau-ck-7f3a9c2e1b8d4f60a5e3"; // same everywhere, forever (see sdk/core.js)
   const SITE = location.origin + location.pathname.replace(/[^/]*$/, "");
-  let learner = null, pixels = null, pending = null; // pending = last uploaded file
+  let pixels = null;
   const uiLang = () => (settings.lang === "en" ? "en" : "id");
 
   const T = {
@@ -27,7 +30,7 @@
       help: "/help buat bantuan, /settings buat pengaturan", cwd: "cwd: ~/ur-life (cooked)",
       tipsHead: "Tips biar ga keliatan cupu:",
       tips: ["Tanya apa aja: \"ibukota kazakhstan\", \"berapa umur elon musk\"", "\"gambar kucing\" (beta, 16x16, masih bego)",
-        "Upload file pake + file, terus /learn biar gw baca isinya", "/connect buat pake sybau di app lain", "Typo dikit, polisi grammar dateng", "Tab sc di atas = sybau code, buat bikin game/program STS"],
+        "/connect buat pake sybau di app lain", "Typo dikit, polisi grammar dateng", "Tab sc di atas = sybau code, buat bikin game HTML/JS/CSS"],
       placeholder: "Coba \"ibukota kazakhstan\" atau \"roast gw\"", hint: "? buat shortcut", busyHint: "esc buat stop",
       verbs: ["Roasting", "Nge-judge", "Masak lu", "Mikirin hinaan", "Aura farming", "Ngetawain lu", "Ngumpulin dendam", "Fanum tax", "Mewing", "Crash out", "Ngeliatin typo lu"],
       searching: "Nyari di Wikipedia + Wikidata", interrupted: "Dihentiin. bagus, gw juga males jawab",
@@ -44,7 +47,7 @@
       thinking: "mikir", understanding: "Cari arti",
       sLang: ["Bahasa balesan", "auto = ngikutin bahasa lu"], sSearch: ["Auto search", "nanya fakta → otomatis cari di Wikipedia/Wikidata"],
       sGrammar: ["Polisi grammar", "roast typo & salah ejaan"], sBrain: ["Tampilin otak", "liat intent, confidence, bahasa (debug)"],
-      sTheme: ["Tema", "auto ngikutin sistem"],
+      sTheme: ["Tema", "classic, light, terminal (ijo jadul), cyberpunk (neon), dracula, amber (monitor jadul), ocean, paper. auto ngikutin sistem"],
       sConnect: ["Connect key", "enter = liat key + kode buat app lain"],
       on: "on", off: "off", hate: "hate",
       drawing: "Ngegambar", reading: "Baca file", learning: "Belajar",
@@ -58,7 +61,7 @@
       help: "/help for help, /settings for settings", cwd: "cwd: ~/ur-life (cooked)",
       tipsHead: "Tips for getting started (and roasted):",
       tips: ["Ask anything: \"capital of kazakhstan\", \"how old is elon musk\"", "\"draw a cat\" (beta, 16x16, still dumb)",
-        "Upload a file with + file, then /learn so i read it", "/connect to use sybau in other apps", "Make a typo and the grammar police shows up", "The sc tab up top = sybau code, it builds STS games/programs"],
+        "/connect to use sybau in other apps", "Make a typo and the grammar police shows up", "The sc tab up top = sybau code, it builds HTML/JS/CSS games"],
       placeholder: "Try \"capital of kazakhstan\" or \"roast me\"", hint: "? for shortcuts", busyHint: "esc to interrupt",
       verbs: ["Roasting", "Judging", "Cooking u", "Yapping", "Aura farming", "Crashing out", "Fanum taxing", "Mewing", "Glazing (jk)", "Clowning", "Reading ur typos"],
       searching: "Searching Wikipedia + Wikidata", interrupted: "Interrupted by user. good, didn't wanna answer anyway",
@@ -75,7 +78,7 @@
       thinking: "thinking", understanding: "Look up",
       sLang: ["Reply language", "auto = match whatever u type"], sSearch: ["Auto search", "factual questions → look up Wikipedia/Wikidata"],
       sGrammar: ["Grammar police", "roast typos & bad spelling"], sBrain: ["Show brain", "intent, confidence, language (debug)"],
-      sTheme: ["Theme", "auto follows ur system"],
+      sTheme: ["Theme", "classic, light, terminal (green crt), cyberpunk (neon), dracula, amber (old monitor), ocean, paper. auto follows ur system"],
       sConnect: ["Connect key", "enter = show key + code for other apps"],
       on: "on", off: "off", hate: "hate",
       drawing: "Drawing", reading: "Reading file", learning: "Learning",
@@ -95,7 +98,7 @@
   function applySettings() {
     if (bot) bot.settings = { lang: settings.lang, search: settings.search, grammar: settings.grammar, experimental: !!settings.experimental, roastGen: settings.roastGen !== false };
     if (settings.theme === "auto") document.documentElement.removeAttribute("data-theme");
-    else document.documentElement.setAttribute("data-theme", settings.theme);
+    else document.documentElement.setAttribute("data-theme", settings.theme === "classic" ? "dark" : settings.theme);
     document.body.classList.toggle("brain-on", !!settings.brain);
     document.documentElement.lang = uiLang();
     input.placeholder = t().placeholder;
@@ -305,13 +308,10 @@
     { name: "/search", choices: BOOL, desc: { id: "auto search on | off", en: "auto search on | off" }, run: (a) => setOpt("search", a) },
     { name: "/grammar", choices: BOOL, desc: { id: "polisi grammar on | off", en: "grammar police on | off" }, run: (a) => setOpt("grammar", a) },
     { name: "/brain", choices: BOOL, desc: { id: "tampilin isi otak (debug)", en: "show the neural net's thoughts" }, run: (a) => setOpt("brain", a) },
-    { name: "/theme", choices: ["auto", "dark", "light"], desc: { id: "tema: auto | dark | light", en: "theme: auto | dark | light" }, run: (a) => setOpt("theme", a, ["auto", "dark", "light"]) },
+    { name: "/theme", choices: THEMES, desc: { id: "tema: " + THEMES.join(" | "), en: "theme: " + THEMES.join(" | ") }, run: (a) => setOpt("theme", a, THEMES) },
     { name: "/memory", desc: { id: "liat berkas lu yang gw simpen", en: "show what i remember about u" }, run: cmdMemory },
     { name: "/stats", desc: { id: "spesifikasi otak gw", en: "model stats" }, run: cmdStats },
     { name: "/draw", desc: { id: "gambar pixel art: /draw kucing [32]", en: "draw pixel art: /draw cat [32]" }, run: (a) => chat((uiLang() === "id" ? "gambar " : "draw ") + (a || "random"), true) },
-    { name: "/learn", desc: { id: "pelajarin file yang lu upload (/learn NAMA buat gambar)", en: "learn the uploaded file (/learn NAME for pictures)" }, run: cmdLearn },
-    { name: "/unlearn", desc: { id: "hapus semua file & gambar yang gw pelajarin", en: "forget all learned files & pictures" }, run: cmdUnlearn },
-    { name: "/upload", desc: { id: "upload file (png, jpg, txt, md, csv, json)", en: "upload a file (png, jpg, txt, md, csv, json)" }, run: () => $("file").click() },
     { name: "/connect", desc: { id: "connect key + kode buat pake sybau di app lain", en: "connect key + code to use sybau in other apps" }, run: cmdConnect },
     { name: "/roast", desc: { id: "minta di-roast", en: "get roasted" }, run: () => chat(uiLang() === "id" ? "roast gw" : "roast me", true) },
     { name: "/clear", desc: { id: "bersihin layar (memori tetep)", en: "clear screen (keeps memory)" }, run: cmdClear },
@@ -536,147 +536,6 @@
     ]);
   }
 
-  // ---------------------------------------------------------------- files: upload, read, learn
-  const TEXT_EXT = /\.(txt|md|csv|tsv|json|log|html?|js|py|css|xml|ya?ml)$/i;
-  function readAs(file, how) {
-    return new Promise((res, rej) => {
-      const fr = new FileReader();
-      fr.onload = () => res(fr.result);
-      fr.onerror = () => rej(fr.error);
-      if (how === "url") fr.readAsDataURL(file); else fr.readAsText(file);
-    });
-  }
-  function loadImage(src) {
-    return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("not an image")); im.src = src; });
-  }
-  function pixelsOf(img, w, h) {
-    const cv = document.createElement("canvas");
-    cv.width = w; cv.height = h;
-    const ctx = cv.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, 0, 0, w, h);
-    return ctx.getImageData(0, 0, w, h).data;
-  }
-
-  // ---- attachment: a picked/dropped/pasted file waits above the prompt until Enter
-  let attached = null;
-  const chipEl = el("div", "chip-row");
-  chipEl.hidden = true;
-  form.parentNode.insertBefore(chipEl, form);
-  function attach(file) {
-    if (!file) return;
-    attached = file;
-    chipEl.textContent = "";
-    const chip = el("span", "file-chip");
-    chip.append(el("span", "accent", "[file] "), document.createTextNode(file.name + " (" + Math.max(1, Math.round(file.size / 1024)) + " KB)"));
-    const x = el("button", "chip-x", "×");
-    x.type = "button";
-    x.title = uiLang() === "id" ? "hapus lampiran" : "remove attachment";
-    x.addEventListener("click", detach);
-    chip.appendChild(x);
-    chipEl.append(chip, el("span", "dim chip-hint", uiLang() === "id" ? "enter = buka · /learn = pelajarin · atau tanya soal file ini" : "enter = open · /learn = learn it · or ask about it"));
-    chipEl.hidden = false;
-    input.focus();
-  }
-  function detach() { attached = null; chipEl.hidden = true; chipEl.textContent = ""; input.focus(); }
-
-  async function handleFile(file, opts = {}) {
-    if (!file || busy || !bot) return;
-    const id = uiLang() === "id";
-    const kb = Math.max(1, Math.round(file.size / 1024));
-    userEcho("[file] " + file.name + " (" + kb + " KB)" + (opts.text ? "  " + opts.text : ""));
-    busy = true;
-    form.classList.add("busy");
-    const sp = spinner(t().reading);
-    try {
-      if (/^image\//.test(file.type)) {
-        const src = await readAs(file, "url");
-        const img = await loadImage(src);
-        const w = img.naturalWidth, h = img.naturalHeight;
-        const sw = Math.min(256, w), sh = Math.max(1, Math.round(sw * h / w));
-        const info = PixelLib.describeImage(pixelsOf(img, sw, sh), sw, sh);
-        info.width = w; info.height = h;
-        const grid = pixels ? pixels.quantize(pixelsOf(img, 16, 16)) : null;
-        pending = { kind: "image", name: file.name, grid };
-        sp.stop();
-        const { body } = row("tool");
-        toolHead(body, "Read", file.name);
-        const thumb = el("img", "upload-thumb"); thumb.src = src; thumb.alt = file.name;
-        const colors = info.colors.map((c) => (id ? c.id : c.en) + " " + c.pct + "%").join(", ");
-        const lines = [thumb, el("span", null, w + "x" + h + " px · " + (id ? "warna: " : "colors: ") + colors + " · " + (id ? "terang " : "brightness ") + info.brightness + "%" + (info.transparentPct ? " · " + (id ? "transparan " : "transparent ") + info.transparentPct + "%" : ""))];
-        if (grid) { lines.push(el("span", "dim", id ? "yang gw liat (16x16):" : "what i see (16x16):")); lines.push(pictureNode(grid, 16, file.name.replace(/\.\w+$/, ""))); }
-        if (!opts.quiet) lines.push(el("span", "yellow", t().learnHint));
-        outBlock(body, lines);
-        const summary = w + "x" + h + ", " + (id ? "kebanyakan " : "mostly ") + (info.colors[0] ? (id ? info.colors[0].id : info.colors[0].en) : "?");
-        await botSay(bot.fileOpened("image", summary), { intent: "file_image", source: "transformer", lang: bot._lang() });
-      } else if (TEXT_EXT.test(file.name) || /^text\//.test(file.type) || file.type === "application/json") {
-        if (file.size > 2 * 1024 * 1024) throw new Error(id ? "file kegedean (max 2 MB)" : "file too big (max 2 MB)");
-        const text = await readAs(file, "text");
-        pending = { kind: "text", name: file.name, text };
-        sp.stop();
-        const lines = text.split("\n");
-        const { body } = row("tool");
-        toolHead(body, "Read", file.name);
-        outBlock(body, [el("span", null, lines.length + (id ? " baris · " : " lines · ") + text.length + (id ? " karakter" : " chars")),
-          el("span", "code", lines.slice(0, 10).join("\n").slice(0, 900) + (lines.length > 10 ? "\n…" : ""))].concat(opts.quiet ? [] : [el("span", "yellow", t().learnHintText)]));
-        await botSay(bot.fileOpened("text", lines.length + (id ? " baris" : " lines")), { intent: "file_text", source: "transformer", lang: bot._lang() });
-      } else {
-        throw new Error(id ? "format ga didukung. bisa: png, jpg, gif, webp, txt, md, csv, json" : "unsupported format. try png, jpg, gif, webp, txt, md, csv, json");
-      }
-    } catch (e) {
-      sp.stop();
-      sys([e.message], "red");
-    }
-    busy = false;
-    form.classList.remove("busy");
-    refreshStatus();
-    input.focus();
-  }
-
-  async function cmdLearn(arg, auto) {
-    const id = uiLang() === "id";
-    if (!pending) return sys([t().nothingToLearn], "yellow");
-    const sp = spinner(t().learning);
-    await sleep(40);
-    if (pending.kind === "image") {
-      if (!pixels || !pending.grid) { sp.stop(); return sys(["image generator not loaded"], "red"); }
-      const name = (arg || pending.name.replace(/\.\w+$/, "")).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ")[0] || "thing";
-      const r = pixels.learn(pending.grid);
-      pixels.addLearned([{ name, z: r.z }]);
-      learner.addImage(name, r.z, pending.grid);
-      sp.stop();
-      const { body } = row("tool");
-      toolHead(body, "Learn", name);
-      outBlock(body, [pictureNode(r.preview, 16, name), el("span", "dim", (id ? "akurasi rekonstruksi " : "reconstruction accuracy ") + Math.round(r.acc * 100) + "% · " + (id ? "coba: gambar " : "try: draw ") + name)]);
-      await botSay(bot.learnedImage(name), { intent: "learned_image", source: "transformer", lang: bot._lang() });
-    } else {
-      const sum = learner.learnText(pending.name, pending.text);
-      sp.stop();
-      const { body } = row("tool");
-      toolHead(body, "Learn", pending.name);
-      const desc = sum.kind === "notes" ? sum.chunks + (id ? " potongan catatan (tanya aja isinya)" : " passages of notes (ask me about it)") + (sum.truncated ? (id ? " · dipotong, kegedean" : " · truncated, too big") : "")
-        : sum.pairs + (id ? " pasangan tanya-jawab (" : " question/answer pairs (") + sum.kind + ")";
-      outBlock(body, [el("span", "green", desc)].concat(sum.saveFailed ? [el("span", "red", id ? "storage browser penuh, sebagian ga kesimpen" : "browser storage full, some of it wasn't saved")] : []));
-      if (!auto) await botSay(bot.fileOpened("text", desc), { intent: "file_text", source: "transformer", lang: bot._lang() });
-    }
-    pending = null;
-  }
-
-  function cmdUnlearn() {
-    learner.wipe();
-    if (pixels) pixels.labels = pixels.labels.filter((l) => l.builtin);
-    sys([uiLang() === "id" ? "semua yang gw pelajarin dari lu udah dihapus. otak gw bersih lagi" : "forgot everything i learned from u. clean brain again"]);
-  }
-
-  $("attach").addEventListener("click", () => $("file").click());
-  $("file").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; attach(f); });
-  let dragDepth = 0;
-  window.addEventListener("dragenter", (e) => { if (!(window.SybauCode && window.SybauCode.tab === "sc") && [...(e.dataTransfer.types || [])].includes("Files")) { dragDepth++; $("dropzone").hidden = false; e.preventDefault(); } });
-  window.addEventListener("dragover", (e) => { if ([...(e.dataTransfer.types || [])].includes("Files")) e.preventDefault(); });
-  window.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $("dropzone").hidden = true; });
-  window.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; $("dropzone").hidden = true; if (window.SybauCode && window.SybauCode.tab === "sc") return; const f = e.dataTransfer.files[0]; if (f) attach(f); });
-  document.addEventListener("paste", (e) => { if (window.SybauCode && window.SybauCode.tab === "sc") return; const f = e.clipboardData && [...e.clipboardData.files][0]; if (f) { e.preventDefault(); attach(f); } });
 
   // ---------------------------------------------------------------- input: history, autocomplete, keys
   const history = load("sybau_cmd_history", []);
@@ -738,28 +597,7 @@
 
   async function submit() {
     const text = input.value.replace(/\s+$/, "");
-    if ((!text.trim() && !attached) || busy || !bot) return;
-    if (attached) {
-      // send the file together with whatever was typed: nothing, /learn [name], or a question
-      const file = attached, msg = text.trim();
-      const learnCmd = /^\/learn\b/i.test(msg) || /^(?:tolong\s+)?(?:pelajarin|pelajari|belajar|pahamin|learn|study)\b/i.test(msg);
-      detach();
-      input.value = "";
-      autoresize();
-      suggestEl.hidden = true;
-      shortcutsEl.hidden = true;
-      await handleFile(file, { text: msg, quiet: learnCmd });
-      if (!pending) return; // file could not be read
-      if (learnCmd) await cmdLearn(/^\/learn\b/i.test(msg) ? msg.replace(/^\/learn\s*/i, "") : "");
-      else if (msg.startsWith("/")) runCommand(msg);
-      else if (msg) {
-        if (pending && pending.kind === "text") await cmdLearn("", true); // so the question can be answered from the file
-        await chat(msg, true);
-      }
-      scrollDown(true);
-      input.focus();
-      return;
-    }
+    if (!text.trim() || busy || !bot) return;
     input.value = "";
     autoresize();
     suggestEl.hidden = true;
@@ -767,7 +605,6 @@
     if (history[history.length - 1] !== text) { history.push(text); if (history.length > 50) history.shift(); save("sybau_cmd_history", history); }
     hIndex = -1;
     if (text.trim().startsWith("/")) { userEcho(text.trim()); runCommand(text.trim()); scrollDown(true); input.focus(); }
-    else if (pending && /^(?:tolong\s+)?(?:pelajarin|pelajari|belajar|pahamin|learn|study)\b/i.test(text.trim())) { userEcho(text.trim()); cmdLearn(""); }
     else chat(text.trim());
   }
 
@@ -780,7 +617,6 @@
   input.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       if (busy) { interrupted = true; e.preventDefault(); return; }
-      if (attached && !input.value && suggestEl.hidden) { detach(); return; }
       if (!suggestEl.hidden) { suggestEl.hidden = true; return; }
       if (!shortcutsEl.hidden) { shortcutsEl.hidden = true; return; }
     }
@@ -835,7 +671,7 @@
     { key: "htmlMode", label: () => t().sHtml },
     { key: "connect", action: () => { closeSettings(); cmdConnect(); }, label: () => t().sConnect, value: () => CONNECT_KEY.slice(0, 13) + "…" },
     { key: "brain", label: () => t().sBrain },
-    { key: "theme", choices: ["auto", "dark", "light"], label: () => t().sTheme },
+    { key: "theme", choices: THEMES, label: () => t().sTheme },
   ];
   let sIndex = 0;
 
@@ -920,15 +756,12 @@
   applySettings();
   const grammarP = GrammarLib.loadGrammar("model/lexicon.json").catch(() => null);
   const pixelsP = PixelLib.loadPixels("model/pixels.json").catch(() => null);
-  learner = new LearnLib.Learner(storage);
   BrainLib.loadBrain("model/brain.json").then(async (brain) => {
     $("boot-1").textContent = "  ⎿ " + brain.paramCount.toLocaleString("en-US") + " params · " + brain.clsTags.length + " intents · " + brain.vocab.length + " words";
     const grammar = await grammarP;
     $("boot-2").textContent = "  ⎿ grammar police " + (grammar ? "ready (80k words)" : "failed to load") + " · image gen " + ((await pixelsP) ? "ready (beta)" : "failed to load");
     pixels = await pixelsP;
-    if (pixels) pixels.addLearned(learner.data.images);
-    learner._index(); // re-index with the brain's slang table loaded
-    bot = new BotLib.RoastBot(brain, { storage, grammar, learner,
+    bot = new BotLib.RoastBot(brain, { storage, grammar,
       settings: { lang: settings.lang, search: settings.search, grammar: settings.grammar, experimental: !!settings.experimental, roastGen: settings.roastGen !== false } });
     await sleep(reduced ? 0 : 350);
     screen.textContent = "";
