@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .venv/
 data/html/corpus.jsonl
+model/htmlcode.json
