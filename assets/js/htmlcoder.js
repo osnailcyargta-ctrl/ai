@@ -290,16 +290,30 @@
       step("prompt: " + prefix.join(" "));
       if (unk.length) step((id ? "kata yang belum pernah gw liat: " : "words i've never seen: ") + unk.join(", ") + (slots.length ? (id ? " (bendanya tetep gw salin)" : " (things still get copied)") : ""));
       const tries = o.deepthink ? 6 : 3;
-      let best = null;
+      let best = null, base = null;
       for (let k = 0; k < tries; k++) {
         const writer = this.writers[k % this.writers.length];
-        step((id ? "transformer nulis, percobaan " : "transformer writing, attempt ") + (k + 1) + "/" + tries + (this.writers.length > 1 ? " (" + writer.name + ")" : ""));
-        const res = await writer.write(prefix, slots, { temperature: k === 0 ? 0.6 : 0.75 + 0.05 * k, topP: 0.92, rand: o.rand, onToken: o.onCode ? (toks) => o.onCode(k + 1, toks, slots) : null, signal: o.signal });
+        // after an error, keep the SAME page and continue it from the broken line, instead of a new game
+        let forced = null;
+        if (base && base.line) {
+          const starts = [];
+          base.tokens.forEach((t, i) => { if (/^⏎\d+$/.test(t)) starts.push(i); });
+          const at = starts[base.line - 1];
+          if (at > 0) forced = base.tokens.slice(0, at);
+        }
+        step(forced ? (id ? "percobaan " + (k + 1) + "/" + tries + ": game yang sama, ditulis ulang mulai baris " + base.line : "attempt " + (k + 1) + "/" + tries + ": same game, rewritten from line " + base.line)
+          : (id ? "transformer nulis, percobaan " : "transformer writing, attempt ") + (k + 1) + "/" + tries);
+        const res = await writer.write(prefix, slots, { forced, temperature: forced ? 0.55 + 0.05 * k : 0.6, topP: 0.92, rand: o.rand, onToken: o.onCode ? (toks) => o.onCode(k + 1, toks, slots) : null, signal: o.signal });
         if (res.closed && writer.rewriteLine) await this._repair(writer, prefix, slots, res, step, id, o);
         const verdict = await this._verify(res, slots);
         step((verdict.ok ? "✓ " : "× ") + verdict.note);
         if (!best || verdict.score > best.verdict.score) best = { res, verdict };
         if (verdict.ok && verdict.score >= 3 && !o.deepthink) break;
+        if (verdict.ok) continue;
+        if (res.closed) {
+          const bad = await this._findBad(res.tokens, slots);
+          if (bad && bad.line) base = { tokens: res.tokens, line: bad.line };
+        }
         if (o.signal && o.signal.stop) break;
       }
       const { res, verdict } = best;
@@ -314,11 +328,23 @@
       return this._result(res.html, id, steps, { neural: true, request });
     }
 
+    /** the first broken line of a page: a JavaScript syntax error, or where it crashes when run */
+    async _findBad(toks, slots) {
+      const lib = root.HtmlNeuralLib || (typeof require === "function" ? require("./htmlneural.js") : null);
+      const html = Tok.detokenize(toks, slots);
+      const sl = lib.syntaxErrorLine(html);
+      if (sl) return { line: sl, kind: "syntax" };
+      if (!this.check) return null;
+      const c = await this.check(html);
+      if (c.ok) return null;
+      return { line: c.line || 0, kind: "runtime", error: c.error };
+    }
+
     /** fix a page line by line instead of writing it all again: find the line with the error,
      *  let the transformer write just that line again (it sees everything above it), keep the rest */
     async _repair(writer, prefix, slots, res, step, id, o) {
-      const lib = root.HtmlNeuralLib || (typeof require === "function" ? require("./htmlneural.js") : null);
-      const findBad = async (toks) => {
+      const findBad = (toks) => this._findBad(toks, slots);
+      const unusedFindBad = async (toks) => {
         const html = Tok.detokenize(toks, slots);
         const sl = lib.syntaxErrorLine(html);
         if (sl) return { line: sl, kind: "syntax" };

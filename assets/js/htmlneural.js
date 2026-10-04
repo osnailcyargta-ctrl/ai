@@ -150,6 +150,22 @@
       const bans = new Map();
       let winStart = 0, backtracks = 0, afterEnd = 0, lineStartHist = -1, lineBans = 0, lineIndent = 0, scriptAt = -1, goodAt = -1, parseFails = 0;
       const declared = new Set();
+      // continue a page that is already partly written (keep everything above the bad line)
+      if (opts.forced && opts.forced.length) {
+        const ids = this.encode(opts.forced);
+        const room = g.ctx - 200 - pre.length;
+        const sh = new Shape();
+        opts.forced.forEach((t, i) => {
+          sh.feed(t);
+          if (sh.text.endsWith("<script>")) { scriptAt = i + 1; goodAt = i + 1; }
+          if (sh.text.endsWith("</script>")) scriptAt = -1;
+        });
+        shape = sh;
+        for (const id of ids) out.push(id);
+        feed(ids.slice(-room));
+        winStart = out.length;
+        if (goodAt >= 0) goodAt = Math.max(goodAt, out.length);
+      }
       const truncate = (p) => { for (const c of cache) { c.k.length = p; c.v.length = p; } pos = p; };
       const back = (k, noBan) => {
         k = Math.min(k, out.length - winStart, hist.length);
