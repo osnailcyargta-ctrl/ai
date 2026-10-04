@@ -7,7 +7,7 @@ Two neural networks get trained on the files in ../data:
    Indonesian slang gets normalised first (data/slang_id.json), so "gk", "ga",
    "nggak" all look the same to the network.
 2. Response generator - a small GPT-style TRANSFORMER (training/transformer.py:
-   4 layers, 4 attention heads, d=160, causal self-attention, GELU feed-forward).
+   5 layers, 4 attention heads, d=208, causal self-attention, GELU feed-forward).
    It is conditioned on the intent AND the language with prefix tokens
    (<i:insult> <l:id> <s> ...), so it replies in the language you typed in.
    Writes the reply word by word.
@@ -39,8 +39,8 @@ LEX_OUT = os.path.join(ROOT, "model", "lexicon.json")
 
 FEAT_DIM = 4096
 CLS_HIDDEN = 320
-GEN_D = 160
-GEN_LAYERS = 4
+GEN_D = 208
+GEN_LAYERS = 5
 GEN_HEADS = 4
 GEN_DROPOUT = 0.15
 GEN_REPEAT = 6                 # hand-written replies per epoch (the roast corpus is seen once)

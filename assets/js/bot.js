@@ -605,6 +605,10 @@
         if (!filled || recent.has(filled)) continue;
         let score = g.logp;
         if (gen) score -= 2.5 * this._overlap(g.tokens) + (g.tokens.length < 4 ? 1 : 0);
+        // replies that are just "idk / idc / sybau" filler lose; replies that pick up what the user said win
+        const bare = g.text.replace(/[^\w\s{}']/g, " ").trim().split(/\s+/);
+        if (bare.length <= 5 && /^(idk|idc|sybau|stfu|ok|k|who asked|ratio|L|mid|bruh)\b/i.test(bare.join(" "))) score -= 1.2;
+        if (/\{(thing|like|hate|name|choice|other|query|insult)\}/.test(g.text)) score += 0.6;
         if (this.recentRaw.includes(g.text)) score -= 1.5;
         // the generator is conditioned on language, but double-check and prefer a match
         if (Lib.detectLang(Lib.normalize(g.text.replace(/\{\w+\}/g, " "))) !== lang) score -= 0.6;

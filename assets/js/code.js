@@ -5,7 +5,7 @@
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   let ui = null, coder = null, previewVM = null, loading = null, busy = false, running = null;
 
-  const settings = () => { try { return JSON.parse(localStorage.getItem("sybau_settings") || "{}"); } catch (e) { return {}; } };
+  const settings = () => { if (window.SybauSettings) return window.SybauSettings.get(); try { return JSON.parse(localStorage.getItem("sybau_settings") || "{}"); } catch (e) { return {}; } };
   const lang = () => (settings().lang === "en" ? "en" : "id");
   const T = {
     id: { title: "sybau code", sub: "bikin program STS · dicek compiler STS asli", ph: "mau bikin apa? contoh: game hindarin meteor pake 3 nyawa", foot: "enter kirim · shift+enter baris baru · tab s di atas buat balik ngobrol",
@@ -59,17 +59,68 @@
     input.setAttribute("aria-label", "sybau code");
     form.append(el("span", "caret", ">"), input);
     const foot = el("div", "cx-foot dim");
-    view.append(log, form, foot);
+    const footText = el("span");
+    const deep = el("button", "cx-deep");
+    deep.type = "button";
+    deep.addEventListener("click", () => {
+      const on = !settings().deepthink;
+      if (window.SybauSettings) window.SybauSettings.set("deepthink", on);
+      else { const st = settings(); st.deepthink = on; try { localStorage.setItem("sybau_settings", JSON.stringify(st)); } catch (e) { /* ignore */ } }
+      relabel(); input.focus();
+    });
+    foot.append(deep, footText);
+    const ask = el("div", "cx-ask");
+    ask.hidden = true;
+    ask.setAttribute("role", "dialog");
+    view.append(log, ask, form, foot);
     form.addEventListener("submit", (e) => { e.preventDefault(); send(); });
     input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
     input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; });
     log.addEventListener("click", () => { if (!window.getSelection().toString() && !(running && document.activeElement && document.activeElement.tagName === "CANVAS")) input.focus(); });
-    ui = { view, log, input, foot };
+    ui = { view, log, input, foot, footText, deep, ask };
+    input.addEventListener("keydown", (e) => {
+      if (ui.ask.hidden) return;
+      if (e.key === "Escape") { e.preventDefault(); closeAsk(); }
+      else if (/^[1-4]$/.test(e.key) && !input.value) { const b = ui.ask.querySelectorAll(".cx-opt")[+e.key - 1]; if (b) { e.preventDefault(); b.click(); } }
+    }, true);
     relabel();
   }
   function relabel() {
     ui.input.placeholder = t().ph;
-    ui.foot.textContent = t().foot;
+    ui.footText.textContent = t().foot;
+    const on = !!settings().deepthink;
+    ui.deep.textContent = (on ? "◆ " : "◇ ") + "deepthink " + (on ? "on" : "off");
+    ui.deep.classList.toggle("on", on);
+    ui.deep.title = lang() === "id" ? "mikir lebih lama: lebih banyak percobaan, dicek kritikus, dan nanya kalo kurang paham" : "think longer: more attempts, a critic checks them, and it asks when unsure";
+  }
+
+  // ---------------------------------------------------------------- questions with choices (like claude)
+  let asking = null;
+  function closeAsk() { ui.ask.hidden = true; ui.ask.textContent = ""; asking = null; }
+  function showAsk(res, origText, extra) {
+    asking = { origText, extra };
+    ui.ask.textContent = "";
+    ui.ask.appendChild(el("div", "cx-ask-q", res.question));
+    const row = el("div", "cx-ask-opts");
+    res.options.slice(0, 4).forEach((o, i) => {
+      const b = el("button", "cx-opt");
+      b.type = "button";
+      b.append(el("span", "cx-opt-n", String(i + 1)), document.createTextNode(o.label));
+      b.addEventListener("click", () => {
+        const a = asking; closeAsk();
+        if (o.retry && o.retry.accept) { acceptBest(o.label); return; }
+        const more = Object.assign({}, a.extra, { asked: (a.extra.asked || 0) + 1 }, o.retry || {});
+        run(o.add ? a.origText + ", " + o.add : a.origText, o.label, more);
+      });
+      row.appendChild(b);
+    });
+    ui.ask.append(row, el("div", "cx-ask-hint dim", lang() === "id" ? "pencet 1-" + Math.min(4, res.options.length) + ", atau ketik jawaban sendiri · esc tutup" : "press 1-" + Math.min(4, res.options.length) + ", or type your own answer · esc to close"));
+    ui.ask.hidden = false;
+  }
+  function acceptBest(label) {
+    const u = el("div", "u"); u.append(el("span", "gt", ">"), document.createTextNode(label)); put(u);
+    const res = coder.acceptPending();
+    if (res) showResult(res);
   }
   const put = (n) => { ui.log.appendChild(n); ui.log.scrollTop = ui.log.scrollHeight; return n; };
   function say(text) {
@@ -151,13 +202,22 @@
   window.SybauCode = { setTab, focus: () => ui && ui.input.focus(), get tab() { return document.body.dataset.tab || "s"; } };
 
   async function send() {
-    const text = ui.input.value.trim();
-    if (!text || busy) return;
-    busy = true;
+    const typed = ui.input.value.trim();
+    if (!typed || busy) return;
     ui.input.value = "";
     ui.input.style.height = "auto";
+    if (asking) {   // a typed answer to the open question
+      const a = asking; closeAsk();
+      return run(a.origText + ", " + typed, typed, Object.assign({}, a.extra, { asked: (a.extra.asked || 0) + 1 }));
+    }
+    return run(typed, typed, {});
+  }
+
+  async function run(text, shown, extra) {
+    if (busy) return;
+    busy = true;
     const u = el("div", "u");
-    u.append(el("span", "gt", ">"), document.createTextNode(text));
+    u.append(el("span", "gt", ">"), document.createTextNode(shown));
     put(u);
     const think = el("details", "cx-think");
     think.open = true;
@@ -167,10 +227,10 @@
     put(think);
     const t0 = performance.now();
     let res, live = null;
-    remember({ role: "u", text });
+    remember({ role: "u", text: shown });
     try {
       await ensure();
-      res = await coder.handle(text, { experimental: !!settings().experimental, search: settings().search !== false, lang: lang(), neural: settings().codeNeural !== false,
+      res = await coder.handle(text, Object.assign({ experimental: !!settings().experimental, search: settings().search !== false, lang: lang(), neural: settings().codeNeural !== false, deepthink: !!settings().deepthink }, extra, {
         onStep: (s) => { lines.appendChild(el("div", "line dim", s)); ui.log.scrollTop = ui.log.scrollHeight; },
         // the transformer "typing" its code, live
         onCode: (attempt, toks, slots) => {
@@ -179,7 +239,7 @@
           live.lastChild.innerHTML = highlight(StsTokLib.detokenize(toks, slots));
           live.lastChild.scrollTop = live.lastChild.scrollHeight;
           ui.log.scrollTop = ui.log.scrollHeight;
-        } });
+        } }));
     } catch (e) {
       lines.appendChild(el("div", "line red", "error: " + e.message));
       busy = false;
@@ -190,7 +250,11 @@
     sum.textContent = "✻ " + t().think + " · " + res.steps.length + (lang() === "id" ? " langkah · " : " steps · ") + ((performance.now() - t0) / 1000).toFixed(1) + "s";
     if (res.steps.length > 6) think.open = false;
     const L = LINES[res.lang === "en" ? "en" : "id"];
-    if (res.kind === "cant" || res.kind === "memory") {
+    if (res.kind === "ask") {
+      say(res.question);
+      remember({ role: "b", text: res.question });
+      showAsk(res, text, extra);
+    } else if (res.kind === "cant" || res.kind === "memory") {
       say(res.text);
       remember({ role: "b", text: res.text });
     } else if (res.kind === "docs") {
@@ -200,19 +264,23 @@
       d.append(el("div", "bold", res.head), el("div", "cx-doc-body", res.body));
       put(d);
       remember({ role: "b", text: line }); remember({ role: "doc", head: res.head, body: res.body });
-    } else {
-      const n = res.program.roots.reduce((s, r) => s + r.code.split("\n").length, 0);
-      const failed = (res.tests || []).filter((x) => !x.ok).length;
-      let line = res.compiled === true ? (failed ? pick(L.tests).replace("{k}", failed) : res.fixes.length ? pick(L.fixed).replace("{k}", res.fixes.length) : pick(L.ok)) : res.compiled === "runtime" ? pick(L.runtime) : pick(L.fail);
-      if (res.program && res.features.length === 1 && res.features[0] === "shapes" && /ga ada yang gw kenal|nothing i recognise/.test(res.steps.join(" "))) line = pick(L.guess);
-      if (res.neural) line = (res.lang === "en" ? "written by the transformer itself, token by token. " : "ini ditulis transformer-nya sendiri, token per token. ") + line;
-      say(line.replace("{n}", n));
-      put(codeBlock(res, n));
-      remember({ role: "b", text: line.replace("{n}", n) });
-      remember({ role: "code", res: { file: res.file, sts: res.sts, program: res.program, compiled: res.compiled, tests: res.tests, fixes: res.fixes, lang: res.lang } });
-    }
+    } else showResult(res);
     busy = false;
     ui.input.focus();
+  }
+
+  function showResult(res) {
+    const L = LINES[res.lang === "en" ? "en" : "id"];
+    const n = res.program.roots.reduce((s, r) => s + r.code.split("\n").length, 0);
+    const failed = (res.tests || []).filter((x) => !x.ok).length;
+    let line = res.compiled === true ? (failed ? pick(L.tests).replace("{k}", failed) : res.fixes.length ? pick(L.fixed).replace("{k}", res.fixes.length) : pick(L.ok)) : res.compiled === "runtime" ? pick(L.runtime) : pick(L.fail);
+    if (res.program && res.features.length === 1 && res.features[0] === "shapes" && /ga ada yang gw kenal|nothing i recognise/.test(res.steps.join(" "))) line = pick(L.guess);
+    if (res.neural) line = (res.lang === "en" ? "written by the transformer itself, token by token. " : "ini ditulis transformer-nya sendiri, token per token. ") + line;
+    say(line.replace("{n}", n));
+    put(codeBlock(res, n));
+    remember({ role: "b", text: line.replace("{n}", n) });
+    remember({ role: "code", res: { file: res.file, sts: res.sts, program: res.program, compiled: res.compiled, tests: res.tests, fixes: res.fixes, lang: res.lang } });
+
   }
 
   function codeBlock(res, n) {

@@ -76,7 +76,19 @@ const requests = process.argv.length > 2 ? process.argv.slice(2) : [
   check(res.design.maze && res.design.entities.some((e) => e.key === "hantu" && e.count === 4) && res.design.entities.some((e) => e.role === "item"), "pacman from its article: maze + 4 ghosts chasing + dots to eat");
   coder.last = null;
   res = await coder.handle("asdfgh qwerty");
-  check(res.kind === "cant", "gibberish -> asks what to build instead of drawing random shapes");
+  check(res.kind === "cant" || (res.kind === "ask" && res.options.length >= 2 && res.options.length <= 4), "gibberish -> asks what to build (2-4 choices) instead of drawing random shapes");
+  // reading the intent: new vs edit vs question
+  coder.last = null;
+  await coder.handle("game kucing makan ikan, hindarin anjing yang ngejar");
+  res = await coder.handle("hapus dan bikin game baru: tangkap apel yang jatuh");
+  check(res.kind === "code" && !res.design.entities.some((e) => e.key === "anjing") && res.design.entities.some((e) => e.key === "apel"), "'hapus dan bikin game baru' starts over (no dog left)");
+  res = await coder.handle("gimana cara mainnya?");
+  check(res.kind === "memory" && /kontrol|controls/.test(res.text), "'gimana cara mainnya?' explains the current game");
+  res = await coder.handle("tambahin 2 meteor");
+  check(res.kind === "code" && res.design.entities.some((e) => e.key === "apel") && res.design.entities.some((e) => e.key === "meteor"), "'tambahin 2 meteor' edits the apple game");
+  coder.last = null;
+  res = await coder.handle("bikin tictactoe", { deepthink: true });
+  check(res.kind === "ask" && res.options.length === 2, "deepthink asks 'tic tac toe vs who?' with 2 choices");
   console.log(bad ? bad + " failed" : "all passed");
   process.exit(bad ? 1 : 0);
 })();

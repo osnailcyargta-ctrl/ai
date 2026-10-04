@@ -14,7 +14,7 @@
   const save = (k, v) => { try { storage && storage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
 
   // ---------------------------------------------------------------- settings
-  const settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: false, roastGen: true, codeNeural: true, brain: false, theme: "auto" }, load("sybau_settings", {}));
+  const settings = Object.assign({ lang: "auto", search: true, grammar: true, experimental: true, roastGen: true, codeNeural: true, deepthink: false, brain: false, theme: "auto" }, load("sybau_settings", {}));
   delete settings.learn; // old setting, removed
   const CONNECT_KEY = "sybau-ck-7f3a9c2e1b8d4f60a5e3"; // same everywhere, forever (see sdk/core.js)
   const SITE = location.origin + location.pathname.replace(/[^/]*$/, "");
@@ -38,6 +38,7 @@
       sTitle: "Settings", sFoot: "↑↓ pilih · enter/spasi ganti · ←→ ganti · esc tutup",
       sExp: ["Eksperimental: pahamin semua kata", "kalo ga ngerti, mikir dulu: benerin typo, cari kalimat mirip, cari arti kata asing. masih beta"],
       sRoastGen: ["Roast generatif (tanpa contoh jadi)", "transformer harus ngarang kalimat baru, yang sama persis kayak data training dibuang"],
+      sDeep: ["sybau code: deepthink", "mikir lebih lama: sampe 6 versi kode, dicek kritikus, dan nanya pake pilihan kalo kurang paham"],
       sCodeNeural: ["sybau code: AI murni", "transformer nulis kode STS-nya sendiri token per token. off = pake perencana (lebih rapi, tapi itu yang lu bilang template)"],
       thinking: "mikir", understanding: "Cari arti",
       sLang: ["Bahasa balesan", "auto = ngikutin bahasa lu"], sSearch: ["Auto search", "nanya fakta → otomatis cari di Wikipedia/Wikidata"],
@@ -67,6 +68,7 @@
       sTitle: "Settings", sFoot: "↑↓ navigate · enter/space change · ←→ cycle · esc close",
       sExp: ["Experimental: understand any word", "when lost, think first: fix typos, find a similar sentence, look up unknown words. beta"],
       sRoastGen: ["Generative roasts (no stock lines)", "the transformer must write a new sentence; exact copies of the training data are thrown away"],
+      sDeep: ["sybau code: deepthink", "think longer: up to 6 versions, checked by a critic, and it asks with choices when unsure"],
       sCodeNeural: ["sybau code: pure AI", "the transformer writes the STS code itself, token by token. off = the planner (neater, but that's the one u called a template)"],
       thinking: "thinking", understanding: "Look up",
       sLang: ["Reply language", "auto = match whatever u type"], sSearch: ["Auto search", "factual questions → look up Wikipedia/Wikidata"],
@@ -83,6 +85,11 @@
   };
   const t = () => T[uiLang()];
 
+  // one settings object for both tabs (sybau code reads and changes it through this)
+  window.SybauSettings = {
+    get: () => Object.assign({}, settings),
+    set: (key, val) => { settings[key] = val; applySettings(); if (!$("settings").hidden) renderSettings(); },
+  };
   function applySettings() {
     if (bot) bot.settings = { lang: settings.lang, search: settings.search, grammar: settings.grammar, experimental: !!settings.experimental, roastGen: settings.roastGen !== false };
     if (settings.theme === "auto") document.documentElement.removeAttribute("data-theme");
@@ -822,6 +829,7 @@
     { key: "experimental", label: () => t().sExp },
     { key: "roastGen", label: () => t().sRoastGen },
     { key: "codeNeural", label: () => t().sCodeNeural },
+    { key: "deepthink", label: () => t().sDeep },
     { key: "connect", action: () => { closeSettings(); cmdConnect(); }, label: () => t().sConnect, value: () => CONNECT_KEY.slice(0, 13) + "…" },
     { key: "brain", label: () => t().sBrain },
     { key: "theme", choices: ["auto", "dark", "light"], label: () => t().sTheme },

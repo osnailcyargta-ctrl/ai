@@ -296,3 +296,18 @@ body.brain-on .meta { display: block; }
 @media (max-width: 560px) { .cx-log { padding: 12px; } .cx-prompt { margin: 6px 12px 0; } .cx-code, .cx-doc { margin-left: 0; } }
 .cx-live .cx-pre { max-height: 240px; }
 .cx-live .cx-code-head { color: var(--accent); }
+/* sybau code: deepthink switch + question popup (sits centred just above the prompt) */
+.cx-view { position: relative; }
+.cx-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cx-deep { padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--dim); font: inherit; font-size: 11.5px; cursor: pointer; }
+.cx-deep.on { border-color: var(--accent); color: var(--accent); }
+.cx-ask { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); z-index: 5;
+  background: var(--bg-2); border: 1px solid var(--accent); border-radius: 10px; padding: 12px 12px 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .35); }
+.cx-ask[hidden] { display: none; }
+.cx-ask-q { font-weight: 700; margin-bottom: 8px; }
+.cx-ask-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.cx-opt { display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; cursor: pointer; }
+.cx-opt:hover, .cx-opt:focus-visible { border-color: var(--accent); }
+.cx-opt-n { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; background: var(--faint); color: var(--fg); font-size: 11px; font-weight: 700; }
+.cx-ask-hint { font-size: 11px; margin-top: 6px; }
+@media (max-width: 560px) { .cx-ask { bottom: 100px; } .cx-ask-opts { grid-template-columns: 1fr 1fr; } }

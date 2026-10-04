@@ -1167,6 +1167,22 @@
     }
   }
 
+  // ------------------------------------------------------------------ the critic
+  // what a program that really does X has to contain. Used only to JUDGE what the transformer
+  // wrote (a dice request that comes back as a maze is rejected), never to write code.
+  const MECH_SIGNS = {
+    dice: /randint\(1,\s*\d+\)/, tictactoe: /\bs9\b/, snake: /\bbadan\d|\bpanjang\b/, rps: /randint\(1,\s*3\)/, quiz: /anspopup/, guess: /\brahasia\b|tebak/i,
+    calculator: /\bhasil\d\b|anspopup[\s\S]*anspopup/, clicker: /onclick/, shop: /harga|upgrade/i, counter: /\bangka\b/, traffic: /lampu/i, shoot: /tembak|pvx\d/, maze: /tembok|dinding|solid/,
+    jump: /diTanah|vy/, flappy: /\bvy\b/, pong: /\bbola\b|bvx/, collect: /destroy\(|\bdapat\w*|skor = skor \+/, dodge: /nyawa|kena\(|tamat\(/, chase: /get\(id, "x"\) [<>] get\(/,
+    whack: /onclick/, password: /sandi/, greet: /\bnama\b/, colorchange: /choose\("#/, bounce: /abs\(|pantul/, popup: /show\.popup/, hover: /onhover/, stopwatch: /stopwatch/,
+    countdown: /countdown/, survive: /countdown/, lives: /nyawa/, catch: /move\(id, 0, /, move: /key\("(left|right)"\)/,
+  };
+  function critic(code, mech) {
+    const want = [...mech].filter((m) => MECH_SIGNS[m]);
+    const have = want.filter((m) => MECH_SIGNS[m].test(code));
+    return { want, have, missing: want.filter((m) => !have.includes(m)) };
+  }
+
   // ------------------------------------------------------------------ the code transformer's input
   /** what the code model reads: request words (things -> slots) + what research says about each slot.
    *  tools/make_sts_corpus.js builds its training data with this same function. */
@@ -1328,10 +1344,11 @@
       }
       const useSearch = opts.search !== false;
       const lower = " " + text.toLowerCase() + " ";
-      const isEdit = !!this.last && /\b(tambah\w*|add|ganti\w*|ubah|change|jadiin|hapus|remove|tanpa|without|make it|lebih|buang|kasih)\b/.test(lower) &&
-        !/\b(bikin(in)?|buat(in)?|make|create|build)\b.{0,20}\b(game|program|aplikasi|app|kuis|quiz)\b/.test(lower.replace(/make it/, ""))
-      // short follow-ups ("musuhnya 5", "lebih cepet", "warnanya biru") also edit the last program
-      const shortFollow = !!this.last && !isEdit && text.trim().split(/\s+/).length <= 6 && !/\b(bikin\w*|buat\w*|make|create|build|game|permainan)\b/.test(lower);
+      // what does the user want? a NEW program, an EDIT of the last one, or a QUESTION about it
+      const act = this._intent(text, lower);
+      if (act === "new" && this.last) { say(/\b(new|another|start|from scratch)\b/.test(lower) ? "0. new program: the old one is put aside" : "0. bikin baru: project yang tadi gw tutup dulu"); this.last = null; }
+      if (act === "explain") return this._explain(lower, steps);
+      const isEdit = act === "edit", shortFollow = false;
       let A = analyze(text, this.reader, this.kb, { experimental: opts.experimental });
       const L = (a, b) => (A.lang === "en" ? b : a);
       say(L("1. baca permintaan", "1. reading the request") + (isEdit || shortFollow ? L(` (ngedit "${this.last.title || "program"}" yang tadi)`, ` (editing "${this.last.title || "the program"}" from before)`) : ""));
@@ -1363,6 +1380,11 @@
       // defaults the design may add (koin, meteor...) come from the offline base only
       for (const w of ["koin", "coin", "apel", "apple", "meteor", "alien", "zombie", "tikus", "mouse", "finish", "pipa", "pipe", "batu", "rock", "peluru", "bullet", "raket", "ikan", "udang", "cacing", "bunga", "anjing", "kucing"]) if (!know[w]) { const k = this.kb.find(w); if (k) know[w] = { cat: k.entry.cat, color: k.entry.color, shape: k.entry.shape, size: k.entry.size }; }
       if (A.mech.has("quiz")) know.__quiz = await this._quiz(A, useSearch, say);
+      // not sure what was meant? ask (with 2-4 choices) instead of guessing
+      if ((opts.asked || 0) < 2) {
+        const qn = this._clarify(A, know, opts);
+        if (qn) { say(L("   ❓ gw kurang yakin, mending gw tanya dulu", "   ❓ not sure, better to ask first")); return Object.assign({ kind: "ask", steps, lang: A.lang }, qn); }
+      }
       if (!A.mech.size && A.things.length && A.things.every((th) => !th.roles.length)) A.things[0].topic = true;   // "kucing sama anjing" -> a game about them
       if (!A.mech.size && !A.things.length) {
         say(L("   gw ga nemu apa yang mau dibikin, jadi gw ga mau asal ngarang", "   i couldn't work out what to build, so i won't just make something up"));
@@ -1410,6 +1432,40 @@
       return { kind: "code", steps, program: prog, design: d, sts, file: name + ".sts", compiled, fixes, tests, features: [...A.mech], lang: A.lang };
     }
 
+    /** new | edit | explain : read the user's intent before anything else */
+    _intent(text, lower) {
+      const NEW = /\b(bikin(in)?|buat(in)?|make|create|build)\b.{0,25}\b(baru|lain|yang lain|new|another|different)\b|\b(game|program|project) (baru|lain|yang lain)\b|\b(new|another|different) (game|program|one)\b|\b(hapus|buang|delete|scrap|lupain|forget)\b.{0,30}\b(bikin|buat|make|ganti|create)\b|\b(ganti|switch)\b.{0,12}\b(game|jadi game|ke game)\b|\bmulai (dari )?(baru|awal|nol)\b|\bstart over\b|\bfrom scratch\b|\bdari nol\b/;
+      const FULL = /^\s*(tolong |pls |coba )?(bikin(in)?|buat(in)?|make|create|build|gw mau|aku mau|i want)\b.{0,20}\b(game|kuis|quiz|program|aplikasi|app|kalkulator|calculator|tictactoe|snake|pong|maze|labirin|clicker)\b/;
+      const EDIT = /\b(tambah\w*|add|ganti\w*|ubah\w*|change|jadiin|hapus\w*|remove|tanpa|without|make it|lebih|kurang\w*|buang|kasih|benerin|fix|perbaiki|cepetin|lambatin|gedein|kecilin|warnanya|musuhnya|nyawanya|waktunya)\b/;
+      const ASK = /^\s*(gimana|bagaimana|kenapa|kok|apa|how|why|what)\b.{0,40}\b(main(nya)?|kontrol\w*|control\w*|menang|kalah|play|win|lose|ini|itu|game(nya)?|kode(nya)?|code)\b.*\??$|\bcara main\w*\b|\bhow (do|to) (i )?play\b|^\s*(kenapa|kok|why|what does|apa fungsi)\b.*$/;
+      if (!this.last) return "new";
+      if (NEW.test(lower)) return "new";
+      if (ASK.test(lower) && !EDIT.test(lower)) return "explain";
+      if (EDIT.test(lower) && !FULL.test(lower)) return "edit";
+      if (FULL.test(lower)) return "new";
+      // short follow-ups ("musuhnya 5", "lebih cepet") edit; a long new description is a new program
+      return text.trim().split(/\s+/).length <= 6 ? "edit" : "new";
+    }
+
+    /** questions about the program we just made */
+    _explain(lower, steps) {
+      const id = !/\b(how|why|what|play|win|lose)\b/.test(lower);
+      const L = (a, b) => (id ? a : b), l = this.last;
+      const lines = [];
+      if (l.d && l.d.help) lines.push(L("kontrol: ", "controls: ") + l.d.help);
+      if (l.d && l.d.reasons) lines.push(...l.d.reasons.slice(0, 6));
+      if (!lines.length) {
+        const code = l.sts || "";
+        if (/key\("left"\)|key\("right"\)/.test(code)) lines.push(L("gerak pake panah / wasd", "move with the arrows / wasd"));
+        if (/key\("space"\)/.test(code)) lines.push(L("spasi buat aksi (lompat / nembak)", "space for the action (jump / shoot)"));
+        if (/onclick/.test(code)) lines.push(L("ada yang bisa diklik", "some things can be clicked"));
+        if (/nyawa/.test(code)) lines.push(L("ada nyawa, abis = kalah", "u have lives, none left = game over"));
+        if (/countdown/.test(code)) lines.push(L("ada batas waktu", "there's a time limit"));
+        if (/cekMenang|tamat\("MENANG/.test(code)) lines.push(L("ada target skor buat menang", "there's a target score to win"));
+      }
+      return { kind: "memory", steps, lang: id ? "id" : "en", text: L(`soal "${l.title || "program"}" yang tadi: `, `about "${l.title || "the program"}": `) + (lines.join(" · ") || L("gw ga yakin, jalanin aja terus liat 🥀", "not sure, just run it and see 🥀")) + " 🥀" };
+    }
+
     /** memory that survives a reload (code.js keeps it in localStorage) */
     saveState() {
       if (!this.last) return null;
@@ -1422,6 +1478,39 @@
       this.last = { A, d: st.reasons ? { reasons: st.reasons } : null, sts: st.sts, title: st.title, file: st.file, neural: st.neural };
     }
 
+    /** a question with 2-4 choices when the request is unclear (always when nothing is understood, more often in deepthink) */
+    _clarify(A, know, opts) {
+      const L = (a, b) => (A.lang === "en" ? b : a);
+      const deep = !!opts.deepthink, m = A.mech;
+      const gameMech = [...m].filter((f) => !/^(score|countdown|lives|shapes)$/.test(f));
+      if (!gameMech.length && !A.things.length) return { question: L("lu mau bikin apa?", "what do u want to build?"), options: [
+        { label: L("game hindarin musuh", "a dodging game"), add: L("game hindarin meteor", "a game where u dodge meteors") },
+        { label: L("game ngumpulin barang", "a collecting game"), add: L("game ngumpulin koin", "a game where u collect coins") },
+        { label: "tic tac toe", add: "tictactoe" }, { label: L("kuis", "a quiz"), add: L("kuis matematika 5 soal", "maths quiz 5 questions") }] };
+      if (deep && m.has("tictactoe") && !A.twoPlayer && !/komputer|computer|\bai\b|bot/.test(A.t)) return { question: L("tic tac toe lawan siapa?", "tic tac toe against who?"), options: [
+        { label: L("lawan komputer", "vs the computer"), add: L("lawan komputer", "vs computer") }, { label: L("2 pemain (gantian)", "2 players"), add: L("2 pemain", "2 players") }] };
+      const loose = A.things.filter((th) => !th.roles.length && !th.hero);
+      if (!gameMech.length && loose.length && (deep || loose.length > 1)) {
+        const w = loose[0].word;
+        return { question: L(`'${w}' itu apa di game-nya?`, `what is the '${w}' in the game?`), options: [
+          { label: L("yang gw mainin", "the one i play"), add: L("jadi " + w, "play as " + w) }, { label: L("musuh, dihindarin", "an enemy to dodge"), add: L("hindarin " + w, "dodge " + w) },
+          { label: L("barang, dikumpulin", "an item to collect"), add: L("kumpulin " + w, "collect " + w) }, { label: L("target, ditembak", "a target to shoot"), add: L("tembak " + w, "shoot " + w) }] };
+      }
+      if (!deep) return null;
+      const unknown = A.things.find((th) => !th.roles.length && (!know[th.word] || (know[th.word].cat === "object" && !know[th.word].source)));
+      if (unknown) return { question: L(`gw ga nemu apa itu '${unknown.word}'. di game-nya dia apa?`, `i couldn't find what '${unknown.word}' is. what is it in the game?`), options: [
+        { label: L("musuh", "an enemy"), add: L("hindarin " + unknown.word, "dodge " + unknown.word) }, { label: L("barang", "an item"), add: L("kumpulin " + unknown.word, "collect " + unknown.word) },
+        { label: L("pemain", "the player"), add: L("jadi " + unknown.word, "play as " + unknown.word) }] };
+      const harmful = m.has("dodge") || m.has("chase") || m.has("shoot") || A.things.some((th) => th.roles.includes("enemy") || th.roles.includes("chaser"));
+      if (harmful && !A.lives && !A.noLives && !A.seconds && !m.has("survive")) return { question: L("kalahnya gimana?", "how do u lose?"), options: [
+        { label: L("3 nyawa", "3 lives"), add: L("pake 3 nyawa", "with 3 lives") }, { label: L("sekali kena langsung kalah", "one hit and it's over"), add: L("sekali kena langsung kalah", "one hit") },
+        { label: L("bertahan 30 detik", "survive 30 seconds"), add: L("bertahan 30 detik", "survive 30 seconds") }] };
+      if (m.has("quiz") && !A.topic) return { question: L("kuisnya soal apa?", "a quiz about what?"), options: [
+        { label: L("matematika", "maths"), add: L("matematika", "maths") }, { label: L("sejarah indonesia", "indonesian history"), add: L("tentang majapahit", "about the roman empire") },
+        { label: L("tata surya", "the solar system"), add: L("tentang tata surya", "about the solar system") }] };
+      return null;
+    }
+
     /** the code transformer writes the program itself, token by token */
     async _neural(A, know, steps, say, opts) {
       const L = (a, b) => (A.lang === "en" ? b : a);
@@ -1431,9 +1520,11 @@
       say("   input: " + prefix.join(" "));
       if (unk.length) say(L("   kata yang belum pernah dia liat: ", "   words it has never seen: ") + unk.join(", ") + L(" (dia tetep nyoba dari sisa kalimat + riset)", " (it still tries, from the rest + the research)"));
       let best = null;
-      for (let attempt = 1; attempt <= (opts.attempts || 3); attempt++) {
+      const tries = opts.deepthink ? 6 : 3, temps = opts.deepthink ? [0.2, 0.35, 0.45, 0.55, 0.65, 0.8] : [0.25, 0.45, 0.65];
+      if (opts.deepthink) say(L(`   🧠 deepthink: nulis sampe ${tries} versi, tiap versi dicek compiler, dites, terus dinilai kritikus (beneran sesuai request ga?)`, `   🧠 deepthink: up to ${tries} versions, each compiled, tested and judged by a critic (does it really do what was asked?)`));
+      for (let attempt = 1; attempt <= tries; attempt++) {
         const t0 = Date.now();
-        const w = await this.neural.write(prefix, slots, { rand: this.rand, temperature: [0.25, 0.45, 0.65][attempt - 1] || 0.6, onToken: opts.onCode ? (toks) => opts.onCode(attempt, toks, slots) : null });
+        const w = await this.neural.write(prefix, slots, { rand: this.rand, temperature: temps[attempt - 1] || 0.6, onToken: opts.onCode ? (toks) => opts.onCode(attempt, toks, slots) : null });
         const roots = [{ index: 0, name: "main", code: w.code }];
         const lines = w.code.split("\n").length;
         say(L(`   percobaan ${attempt}: nulis ${w.tokens.length} token (${lines} baris) dalam ${((Date.now() - t0) / 1000).toFixed(1)}s`, `   attempt ${attempt}: wrote ${w.tokens.length} tokens (${lines} lines) in ${((Date.now() - t0) / 1000).toFixed(1)}s`));
@@ -1460,10 +1551,32 @@
         const echoed = words.filter((x) => low.includes(x)).length;
         const relevance = used * 3 + Math.min(4, echoed);
         if (slots.length || words.length) say(L(`     relevan: ${used}/${slots.length} benda dipake, ${echoed}/${words.length} kata request muncul`, `     relevance: ${used}/${slots.length} things used, ${echoed}/${words.length} request words appear`));
-        const score = (compiled ? 10 : 0) + tests.filter((x) => x.ok).length * 2 - fixes.length - (tests.some((x) => !x.ok) ? 3 : 0) + relevance;
-        if (!best || score > best.score) best = { roots, tests, fixes, compiled, score, attempt };
-        if (compiled && !fixes.length && tests.every((x) => x.ok) && used === slots.length && (echoed > 0 || !words.length)) break;
+        const cr = critic(roots[0].code, A.mech);
+        if (cr.want.length) say(L(`     kritikus: ${cr.have.length}/${cr.want.length} yang diminta ada`, `     critic: ${cr.have.length}/${cr.want.length} of what was asked is there`) + (cr.missing.length ? L(" (kurang: ", " (missing: ") + cr.missing.join(", ") + ")" : " ✓"));
+        const score = (compiled ? 10 : 0) + tests.filter((x) => x.ok).length * 2 - fixes.length - (tests.some((x) => !x.ok) ? 3 : 0) + relevance + cr.have.length * 4 - cr.missing.length * 6;
+        if (!best || score > best.score) best = { roots, tests, fixes, compiled, score, attempt, cr };
+        if (compiled && tests.every((x) => x.ok) && !cr.missing.length && used === slots.length && (opts.deepthink ? fixes.length <= 1 : !fixes.length)) break;
       }
+      // nothing it wrote does what was asked: say so and let the user choose, instead of handing over a wrong game
+      if (best.cr && best.cr.missing.length === best.cr.want.length && best.cr.want.length && (opts.asked || 0) < 2) {
+        say(L("   ✗ ga ada versi yang beneran sesuai request", "   ✗ none of the versions really does what was asked"));
+        return { kind: "ask", steps, lang: A.lang, question: L(`jujur, transformer-nya belum bisa nulis ${best.cr.missing.join("/")} dengan bener. mau gimana?`, `honestly, the transformer can't write ${best.cr.missing.join("/")} properly yet. what now?`),
+          options: [{ label: L("coba lagi (deepthink)", "try again (deepthink)"), retry: { deepthink: true } }, { label: L("pake perencana (pasti jalan)", "use the planner (works for sure)"), retry: { neural: false } },
+            { label: L("kasih kode terbaiknya aja", "just give me the best attempt"), retry: { accept: true } }] , pendingBest: true, _keep: (this._pending = { best, A, steps }) && null };
+      }
+      return this._finishNeural(best, A, steps, say);
+    }
+
+    /** "just give me the best attempt" after an honest ask */
+    acceptPending() {
+      if (!this._pending) return null;
+      const { best, A, steps } = this._pending;
+      this._pending = null;
+      return this._finishNeural(best, A, steps.slice(), () => {});
+    }
+
+    _finishNeural(best, A, steps, say) {
+      const L = (a, b) => (A.lang === "en" ? b : a);
       const title = ((best.roots[0].code.match(/draw text "([^"]{2,40})" 2\d/) || [])[1]) || "sybau neural";
       const prog = { roots: best.roots, stage: { w: 520, h: 360 }, title };
       const name = camel(title).slice(0, 24) || "sybauNeural";

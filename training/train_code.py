@@ -28,7 +28,7 @@ from train import Adam, quant, dequant
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CORPUS = os.path.join(ROOT, "data", "sts", "corpus.jsonl")
 OUT = os.path.join(ROOT, "model", "stscode.json")
-D, LAYERS, HEADS, CTX, ACT = 160, 4, 4, 384, "relu"
+D, LAYERS, HEADS, CTX, ACT = 240, 5, 4, 384, "relu"
 TOKENS_PER_BATCH = 6144
 
 
@@ -50,6 +50,7 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--resume", action="store_true", help="keep training model/stscode.json (new tokens get fresh rows)")
     ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--max-programs", type=int, default=4000, help="random subset of the corpus (keeps an epoch near an hour)")
     args = ap.parse_args()
     args.prev_epochs = 0
     if args.resume and os.path.exists(OUT):
@@ -59,6 +60,8 @@ def main():
     data = load()
     if args.limit:
         data = data[:args.limit]
+    if args.max_programs and len(data) > args.max_programs:
+        data = [data[i] for i in sorted(rng.choice(len(data), args.max_programs, replace=False))]
     counts = {}
     for pre, code in data:
         for t in pre + code:
