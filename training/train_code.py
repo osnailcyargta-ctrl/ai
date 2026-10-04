@@ -50,8 +50,13 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--resume", action="store_true", help="keep training model/stscode.json (new tokens get fresh rows)")
     ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--d", type=int, default=0, help="model width (default from the file / resumed model)")
+    ap.add_argument("--layers", type=int, default=0)
     ap.add_argument("--max-programs", type=int, default=4000, help="random subset of the corpus (keeps an epoch near an hour)")
     args = ap.parse_args()
+    global D, LAYERS
+    if args.d: D = args.d
+    if args.layers: LAYERS = args.layers
     args.prev_epochs = 0
     if args.resume and os.path.exists(OUT):
         args.prev_epochs = json.load(open(OUT, encoding="utf-8")).get("epochs", 0)

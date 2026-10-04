@@ -80,6 +80,32 @@ const prefixOf = (A, know) => Coder.buildPrefix(A, know);
     out.push({ request: req, slots, prefix, code, n: toks.length, stage: prog.stage });
     if (out.length % 500 === 0) console.log(out.length, "programs");
   }
+  // hand-written programs (data/sts/handmade): the most valuable data, many variations each
+  const HAND = path.join(ROOT, "data/sts/handmade");
+  const PALETTE = ["#e63946", "#2a9d8f", "#457b9d", "#f4a261", "#ffd166", "#06d6a0", "#ef476f", "#118ab2", "#8338ec", "#ff006e", "#3a86ff", "#fb5607", "#ffbe0b", "#8ac926"];
+  const OPEN_ID = ["", "bikin ", "bikinin ", "tolong bikin ", "buat ", "gw mau ", "pls bikinin "], OPEN_EN = ["", "make ", "build ", "please make ", "i want ", "create "];
+  let hand = 0;
+  if (fs.existsSync(HAND)) for (const f of fs.readdirSync(HAND).filter((x) => x.endsWith(".sts")).sort()) {
+    const code0 = fs.readFileSync(path.join(HAND, f), "utf8");
+    const m = code0.match(/^\/\/ request: (.+?) \|\| (.+)$/m);
+    if (!m) continue;
+    for (let v = 0; v < +(process.env.HAND_VARIANTS || 30); v++) {
+      const en = v % 3 === 2;
+      let req = (en ? pick(OPEN_EN) : pick(OPEN_ID)) + (en ? m[2] : m[1]);
+      // recolour some of the colours so it learns colours are free, not part of the program
+      let code = code0;
+      if (v) code = code.replace(/"#[0-9a-fA-F]{6}"/g, (c) => (rand() < 0.35 ? '"' + pick(PALETTE) + '"' : c));
+      const A = Coder.analyze(req, reader, kb, {});
+      const know = {};
+      for (const th of A.things) { const k = kb.find(th.word); if (k) know[th.word] = { cat: k.entry.cat, color: k.entry.color }; }
+      if (!vm.compile([{ index: 0, code }]).ok) continue;
+      const { slots, prefix } = prefixOf(A, know);
+      const toks = Tok.tokenize(code, slots);
+      out.push({ request: req, slots, prefix, code, n: toks.length, stage: { w: 520, h: 360 }, hand: f });
+      hand++;
+    }
+  }
+  console.log("hand-written variations:", hand);
   fs.writeFileSync(ROOT + "/data/sts/corpus.jsonl", out.map((r) => JSON.stringify(r)).join("\n") + "\n");
   const avg = out.reduce((s, r) => s + r.n, 0) / out.length;
   console.log(`wrote ${out.length} programs (avg ${Math.round(avg)} tokens, max ${Math.max(...out.map((r) => r.n))}), ${failed} designs failed to compile and were dropped`);
