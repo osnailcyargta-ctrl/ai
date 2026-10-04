@@ -308,7 +308,8 @@
         const verdict = await this._verify(res, slots);
         step((verdict.ok ? "✓ " : "× ") + verdict.note);
         if (!best || verdict.score > best.verdict.score) best = { res, verdict };
-        if (verdict.ok && verdict.score >= 3 && !o.deepthink) break;
+        // it works: stop and show it (deepthink keeps trying for a better one)
+        if (verdict.ok && !o.deepthink) break;
         if (verdict.ok) continue;
         if (res.closed) {
           const bad = await this._findBad(res.tokens, slots);
