@@ -374,6 +374,8 @@ def build_generator_set(intents, extra, rng=None, fillers=None):
 
 def prefix_ids(vocab, tag, lang, user=()):
     w2i = {w: i for i, w in enumerate(vocab)}
+    if "<u>" not in w2i:   # older models: intent + language only
+        return [w2i["<i:" + tag + ">"], w2i["<l:" + lang + ">"], 1]
     return [w2i["<i:" + tag + ">"], w2i["<l:" + lang + ">"], w2i["<u>"]] + [w2i.get(w, 3) for w in list(user)[:MAX_USER]] + [w2i["</u>"], 1]
 
 
