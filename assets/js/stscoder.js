@@ -1260,7 +1260,10 @@
       this.rand = opts.rand || Math.random;
       this.last = null;
       this.cache = new Map();
-      this.neural = opts.neuralModel ? new (root.StsNeuralLib || require("./stsneural.js")).NeuralCoder(opts.neuralModel) : null;
+      // one or more code transformers; they take turns writing versions and the critic picks
+      const NC = (root.StsNeuralLib || (typeof require === "function" ? require("./stsneural.js") : null) || {}).NeuralCoder;
+      this.neurals = [].concat(opts.neuralModel || [], opts.neuralModels || []).filter(Boolean).map((m) => new NC(m));
+      this.neural = this.neurals[0] || null;
     }
 
     _askDocs(text) {
@@ -1516,7 +1519,8 @@
       const L = (a, b) => (A.lang === "en" ? b : a);
       const { slots, prefix } = buildPrefix(A, know);
       const unk = this.neural.unknown(prefix.slice(1, prefix.indexOf("</req>"))).filter((w) => !/^<t\d>$/.test(w));
-      say(L(`3. transformer nulis kodenya sendiri, token per token (${(this.neural.params / 1e6).toFixed(1)} juta parameter, tanpa desain/template)`, `3. the transformer writes the code itself, token by token (${(this.neural.params / 1e6).toFixed(1)}M params, no design/template)`));
+      const total = this.neurals.reduce((n, m) => n + m.params, 0);
+      say(L(`3. transformer nulis kodenya sendiri, token per token (${this.neurals.length > 1 ? this.neurals.length + " model gantian, " : ""}${(total / 1e6).toFixed(1)} juta parameter, tanpa desain/template)`, `3. the transformer writes the code itself, token by token (${this.neurals.length > 1 ? this.neurals.length + " models taking turns, " : ""}${(total / 1e6).toFixed(1)}M params, no design/template)`));
       say("   input: " + prefix.join(" "));
       if (unk.length) say(L("   kata yang belum pernah dia liat: ", "   words it has never seen: ") + unk.join(", ") + L(" (dia tetep nyoba dari sisa kalimat + riset)", " (it still tries, from the rest + the research)"));
       let best = null;
@@ -1524,10 +1528,11 @@
       if (opts.deepthink) say(L(`   🧠 deepthink: nulis sampe ${tries} versi, tiap versi dicek compiler, dites, terus dinilai kritikus (beneran sesuai request ga?)`, `   🧠 deepthink: up to ${tries} versions, each compiled, tested and judged by a critic (does it really do what was asked?)`));
       for (let attempt = 1; attempt <= tries; attempt++) {
         const t0 = Date.now();
-        const w = await this.neural.write(prefix, slots, { rand: this.rand, temperature: temps[attempt - 1] || 0.6, onToken: opts.onCode ? (toks) => opts.onCode(attempt, toks, slots) : null });
+        const model = this.neurals[(attempt - 1) % this.neurals.length];
+        const w = await model.write(prefix, slots, { rand: this.rand, temperature: temps[attempt - 1] || 0.6, onToken: opts.onCode ? (toks) => opts.onCode(attempt, toks, slots) : null });
         const roots = [{ index: 0, name: "main", code: w.code }];
         const lines = w.code.split("\n").length;
-        say(L(`   percobaan ${attempt}: nulis ${w.tokens.length} token (${lines} baris) dalam ${((Date.now() - t0) / 1000).toFixed(1)}s`, `   attempt ${attempt}: wrote ${w.tokens.length} tokens (${lines} lines) in ${((Date.now() - t0) / 1000).toFixed(1)}s`));
+        say((this.neurals.length > 1 ? L(`   [model ${(model.params / 1e6).toFixed(1)}jt] `, `   [${(model.params / 1e6).toFixed(1)}M model] `) : "") + L(`percobaan ${attempt}: nulis ${w.tokens.length} token (${lines} baris) dalam ${((Date.now() - t0) / 1000).toFixed(1)}s`, `attempt ${attempt}: wrote ${w.tokens.length} tokens (${lines} lines) in ${((Date.now() - t0) / 1000).toFixed(1)}s`));
         const fixes = [];
         let compiled = false;
         if (this.vm) {

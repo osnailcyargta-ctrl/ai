@@ -137,9 +137,9 @@
         fetch("model/coder.json").then((r) => r.json()), fetch("data/sts/docs.md").then((r) => r.text()), fetch("data/sts/things.json").then((r) => r.json())]);
       const vm = await StsLib.StsVM.load(wasm);
       previewVM = await StsLib.StsVM.load(wasm2, { onPopup: (k, txt) => running && running.popup(k, txt), onBackground: (c) => { if (running) running.bg = c; } });
-      let neuralModel = null;
-      try { neuralModel = await fetch("model/stscode.json").then((r) => (r.ok ? r.json() : null)); } catch (e) { neuralModel = null; }
-      coder = new StsCoderLib.StsCoder({ coderModel: model, vm, docs, things, search: window.SearchLib, neuralModel });
+      const get = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const [neuralModel, bigModel] = await Promise.all([get("model/stscode.json"), get("model/stscode_big.json")]);
+      coder = new StsCoderLib.StsCoder({ coderModel: model, vm, docs, things, search: window.SearchLib, neuralModels: [neuralModel, bigModel] });
       try { coder.loadState(JSON.parse(localStorage.getItem(MEM_KEY) || "null")); } catch (e) { /* ignore */ }
       return coder;
     })();
